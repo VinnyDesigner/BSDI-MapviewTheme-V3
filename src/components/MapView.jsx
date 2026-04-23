@@ -22,11 +22,22 @@ const ArcGISMap = ({ layerVisibility, onViewReady }) => {
       const view = new MapView({
         container: mapDiv.current,
         map: map,
-        center: [-98, 39], // Center of US
-        zoom: 4,
+        center: [50.55, 26.22], // Center of Bahrain
+        zoom: 9,
+        constraints: {
+          minZoom: 6,
+          maxZoom: 18
+        },
         ui: {
           components: [] // Remove all default UI components
         }
+      });
+
+      view.when(() => {
+        view.goTo({
+          center: [50.55, 26.22],
+          zoom: 9
+        });
       });
 
       if (onViewReady) {

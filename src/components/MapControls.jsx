@@ -18,8 +18,8 @@ const MapControls = ({ view, activeTool, onToolSelect }) => {
   const handleHome = () => {
     if (view) {
       view.goTo({
-        center: [-98, 39],
-        zoom: 4
+        center: [50.55, 26.22],
+        zoom: 9
       });
     }
   };
