@@ -202,11 +202,13 @@ function App() {
         {getPanelContent(activeTool)}
       </SidePanel>
 
-      <RightToolbar 
-        pinnedTools={pinnedTools} 
-        getToolIcon={getToolIcon} 
-        onRestore={handleRestore} 
-      />
+      {!activeTool && (
+        <RightToolbar 
+          pinnedTools={pinnedTools} 
+          getToolIcon={getToolIcon} 
+          onRestore={handleRestore} 
+        />
+      )}
 
       <BottomToolbar activeTool={activeTool} onToolSelect={handleToolSelect} />
     </div>

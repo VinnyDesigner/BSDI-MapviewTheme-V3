@@ -1,7 +1,7 @@
 .side-panel-container {
   position: fixed;
   top: 80px; /* 60px header + 20px gap */
-  right: 68px; /* Offset to the left of the pinned icons (16px edge + 36px icon + 16px gap) */
+  right: 16px;
   width: 360px;
   z-index: 950;
   pointer-events: none;
