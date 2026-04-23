@@ -1,0 +1,46 @@
+.right-toolbar-container {
+  position: fixed;
+  top: 80px; /* Aligned with where the panel starts */
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 900;
+  pointer-events: none;
+}
+
+.pinned-tool-button {
+  width: 36px;
+  height: 36px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #1e293b;
+  pointer-events: auto;
+  transition: all 0.2s;
+}
+
+.pinned-tool-button:hover {
+  transform: translateX(-4px) scale(1.05);
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .pinned-tool-button {
+    background: #1e293b;
+    color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  
+  .pinned-tool-button:hover {
+    background: #2d3748;
+    color: #e63946;
+  }
+}

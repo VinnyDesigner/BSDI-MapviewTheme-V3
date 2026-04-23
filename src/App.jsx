@@ -8,17 +8,51 @@ import MapInfoWidget from './components/MapInfoWidget'
 import { layersConfig } from './layers'
 import './App.css'
 
+import { 
+  Layers, 
+  Search, 
+  Navigation, 
+  Ruler, 
+  Pencil, 
+  Box, 
+  Database, 
+  Globe, 
+  Printer, 
+  Bookmark,
+  Info
+} from 'lucide-react';
+
+import RightToolbar from './components/RightToolbar'
+
 function App() {
   const [activeTool, setActiveTool] = useState(null)
+  const [pinnedTools, setPinnedTools] = useState([])
   const [mapView, setMapView] = useState(null)
   const [layerVisibility, setLayerVisibility] = useState(
     layersConfig.reduce((acc, layer) => ({ ...acc, [layer.id]: layer.visible }), {})
   )
 
+  const getToolIcon = (toolId) => {
+    switch (toolId) {
+      case 'layers': return <Layers size={16} />;
+      case 'search': return <Search size={16} />;
+      case 'navigation': return <Navigation size={16} />;
+      case 'measure': return <Ruler size={16} />;
+      case 'draw': return <Pencil size={16} />;
+      case 'cad': return <Box size={16} />;
+      case 'data_request': return <Database size={16} />;
+      case 'external_data': return <Globe size={16} />;
+      case 'print': return <Printer size={16} />;
+      case 'bookmark': return <Bookmark size={16} />;
+      case 'identify': return <Info size={16} />;
+      default: return null;
+    }
+  }
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       // If a tool is active and the click is outside both the panel and the toolbar, close it.
-      if (activeTool && !event.target.closest('.side-panel-container') && !event.target.closest('.bottom-toolbar-container')) {
+      if (activeTool && !event.target.closest('.side-panel-container') && !event.target.closest('.bottom-toolbar-container') && !event.target.closest('.map-controls-container') && !event.target.closest('.right-toolbar-container')) {
         setActiveTool(null);
       }
     };
@@ -30,7 +64,27 @@ function App() {
   }, [activeTool]);
 
   const handleToolSelect = (toolId) => {
-    setActiveTool(prevTool => prevTool === toolId ? null : toolId)
+    if (toolId === activeTool) {
+      setActiveTool(null);
+    } else {
+      // If the tool was pinned, unpin it when selecting from bottom
+      if (pinnedTools.includes(toolId)) {
+        setPinnedTools(prev => prev.filter(id => id !== toolId));
+      }
+      setActiveTool(toolId);
+    }
+  }
+
+  const handleMinimize = () => {
+    if (activeTool && !pinnedTools.includes(activeTool)) {
+      setPinnedTools(prev => [...prev, activeTool]);
+      setActiveTool(null);
+    }
+  }
+
+  const handleRestore = (toolId) => {
+    setPinnedTools(prev => prev.filter(id => id !== toolId));
+    setActiveTool(toolId);
   }
 
   const toggleLayer = (id) => {
@@ -143,9 +197,16 @@ function App() {
         isOpen={!!activeTool} 
         title={getPanelTitle(activeTool)} 
         onClose={() => setActiveTool(null)}
+        onMinimize={handleMinimize}
       >
         {getPanelContent(activeTool)}
       </SidePanel>
+
+      <RightToolbar 
+        pinnedTools={pinnedTools} 
+        getToolIcon={getToolIcon} 
+        onRestore={handleRestore} 
+      />
 
       <BottomToolbar activeTool={activeTool} onToolSelect={handleToolSelect} />
     </div>

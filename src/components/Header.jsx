@@ -24,7 +24,9 @@ const Header = () => {
         <img src={logo} alt="Bahrain Logo" className="header-logo-image" />
       </div>
       
-      {/* Center Section removed as per new layout */}
+      <div className="header-center">
+        <h1 className="header-title">BSDI Smart Map viewer</h1>
+      </div>
 
       <div className="header-right">
         <motion.div 

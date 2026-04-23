@@ -3,36 +3,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import React, { useState } from 'react';
 import './SidePanel.css';
 
-const SidePanel = ({ isOpen, title, children, onClose }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
+const SidePanel = ({ isOpen, title, children, onClose, onMinimize }) => {
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="side-panel-container">
           <motion.div 
-            className={`side-panel ${isCollapsed ? 'collapsed' : ''}`}
+            className="side-panel"
             initial={{ x: '100%', opacity: 0 }}
-            animate={{ 
-              x: isCollapsed ? 'calc(100% - 12px)' : '0%', 
-              opacity: 1 
-            }}
+            animate={{ x: '0%', opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           >
-            {/* Edge Handle */}
+            {/* Minimize Handle */}
             <button 
               className="side-panel-handle" 
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              aria-label={isCollapsed ? 'Expand panel' : 'Collapse panel'}
+              onClick={onMinimize}
+              aria-label="Minimize panel"
             >
-              {isCollapsed ? <ChevronLeft size={24} /> : <ChevronRight size={24} />}
+              <ChevronRight size={24} />
             </button>
 
             <div className="side-panel-inner">
-              {/* Soft Glow Effect */}
               <div className="side-panel-glow" />
-
               <div className="side-panel-header">
                 <h3>{title}</h3>
                 <button className="close-button" onClick={onClose} aria-label="Close panel">
