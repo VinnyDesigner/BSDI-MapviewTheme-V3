@@ -1,0 +1,157 @@
+.side-panel-container {
+  position: fixed;
+  top: 80px; /* 60px header + 20px gap */
+  right: 0;
+  width: 360px;
+  z-index: 950;
+  pointer-events: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px;
+}
+
+.side-panel {
+  width: 100%;
+  height: 540px; /* Increased by 40px as requested */
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: visible; /* Changed to visible to show the handle outside */
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.side-panel-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Clips the glow effect */
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+}
+
+.side-panel-glow {
+  position: absolute;
+  bottom: -60px;
+  left: -60px;
+  width: 240px;
+  height: 240px;
+  background: rgba(223, 38, 28, 0.15);
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.side-panel-handle {
+  position: absolute;
+  left: 1px; /* Align with the border */
+  top: 12px; /* Aligned near the title */
+  transform: translateX(-100%);
+  width: 24px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-right: none; /* Seamless attachment */
+  border-radius: 8px 0 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #1e293b;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.side-panel-handle:hover {
+  background: rgba(255, 255, 255, 0.9);
+  color: #e63946;
+}
+
+.side-panel-header {
+  position: relative;
+  z-index: 1; /* Above glow */
+  padding: 16px 16px 11px 16px;
+  background: transparent;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.side-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.close-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.close-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #e63946;
+}
+
+.side-panel-content {
+  position: relative;
+  z-index: 1; /* Above glow */
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  color: #475569;
+  font-size: 14px;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .side-panel {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  
+  .side-panel-handle {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+  }
+
+  .side-panel-header {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .side-panel-header h3 {
+    color: #f1f5f9;
+  }
+  
+  .side-panel-content {
+    color: #cbd5e1;
+  }
+  
+  .close-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}

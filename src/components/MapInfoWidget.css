@@ -1,0 +1,80 @@
+.map-info-widget {
+  position: absolute;
+  bottom: 30px;
+  left: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  min-width: 200px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 12px;
+  color: #1a2f4d;
+  white-space: nowrap;
+}
+
+.scale-row {
+  margin-top: 2px;
+}
+
+.info-label {
+  font-weight: 800;
+  margin-right: 8px;
+  color: #1a2f4d;
+}
+
+.info-value {
+  font-weight: 400;
+  color: #4a5568;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.ml-12 {
+  margin-left: 20px;
+}
+
+.scale-bar-wrapper {
+  margin-top: 10px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.scale-bar-segment {
+  width: 100px;
+  height: 12px;
+  border-bottom: 2px solid #1a2f4d;
+  border-left: 2px solid #1a2f4d;
+  border-right: 2px solid #1a2f4d;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scale-bar-label-inner {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a2f4d;
+  position: relative;
+  top: -1px;
+}
+
+[dir="rtl"] .map-info-widget {
+  left: auto;
+  right: 24px;
+}

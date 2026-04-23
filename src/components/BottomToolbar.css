@@ -1,0 +1,168 @@
+:root {
+  --toolbar-bg: rgba(255, 255, 255, 0.42);
+  --toolbar-blur: 10px;
+  --toolbar-border: rgba(255, 255, 255, 0.4);
+  --toolbar-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --primary-color: #DF261C;
+  --primary-glow: rgba(223, 38, 28, 0.3);
+  --btn-bg: #ffffff;
+  --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --icon-size: 44px;
+  --icon-inner: 20px;
+  --group-spacing: 6px; /* Reduced space between categories */
+  --btn-spacing: 6px; /* Also slightly reduced for consistency */
+}
+
+.bottom-toolbar-container {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 95vw;
+  display: flex;
+  justify-content: center;
+}
+
+.toolbar-wrapper {
+  position: relative;
+  padding: 6px 10px; /* 6px top/bottom, 10px left/right */
+  display: flex;
+  align-items: center;
+  gap: var(--group-spacing);
+  overflow: visible;
+  scrollbar-width: none;
+}
+
+.toolbar-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--toolbar-bg);
+  backdrop-filter: blur(var(--toolbar-blur));
+  -webkit-backdrop-filter: blur(var(--toolbar-blur));
+  border: 1px solid var(--toolbar-border);
+  border-radius: 100px;
+  box-shadow: var(--toolbar-shadow);
+  z-index: -1;
+  /* Mask is only applied when an icon is active to show the notch */
+  -webkit-mask: none;
+  mask: none;
+  transition: -webkit-mask 0.3s ease, mask 0.3s ease;
+}
+
+.toolbar-wrapper.has-active-tool::before {
+  /* Concave Cut-out Mask centered exactly with the elevated icon */
+  -webkit-mask: radial-gradient(circle 28px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
+  mask: radial-gradient(circle 28px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
+}
+
+.toolbar-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: var(--btn-spacing);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 2px; /* Reduced margin around divider */
+}
+
+.tool-button {
+  position: relative;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  border-radius: 50%;
+  border: none;
+  background: var(--btn-bg);
+  box-shadow: var(--btn-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #2d3748;
+}
+
+.tool-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--primary-color);
+}
+
+.tool-button.active {
+  background: linear-gradient(
+    140deg,
+    rgba(223, 38, 28, 0.8),
+    rgba(0, 45, 93, 0.9)
+  ) !important;
+  color: white;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transform: translateY(-26px) scale(1.05);
+  border: none !important;
+}
+
+/* Tooltip styles */
+.tool-button::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(26, 32, 44, 0.95);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.tool-button:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --toolbar-bg: rgba(30, 41, 59, 0.36);
+    --toolbar-border: rgba(255, 255, 255, 0.1);
+    --toolbar-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+    --btn-bg: #2d3748;
+    --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .tool-button {
+    color: #e2e8f0;
+  }
+  
+  .tool-button:hover {
+    background: #3a4a63;
+  }
+
+  .tool-button.active {
+    background: linear-gradient(
+      140deg,
+      rgba(223, 38, 28, 0.8),
+      rgba(0, 45, 93, 0.9)
+    ) !important;
+    border-color: transparent !important;
+  }
+  
+  .toolbar-divider {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
