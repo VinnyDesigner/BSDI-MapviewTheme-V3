@@ -1,28 +1,27 @@
 .side-panel-container {
   position: fixed;
   top: 80px; /* 60px header + 20px gap */
-  right: 0;
+  right: 16px;
   width: 360px;
   z-index: 950;
   pointer-events: none;
   display: flex;
   justify-content: flex-end;
-  padding: 0 16px;
 }
 
 .side-panel {
   width: 100%;
   height: 540px; /* Increased by 40px as requested */
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.85); /* Increased opacity to match local host */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  overflow: visible; /* Changed to visible to show the handle outside */
+  overflow: visible; 
   pointer-events: auto;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .side-panel-inner {
