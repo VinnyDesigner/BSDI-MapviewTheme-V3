@@ -2,11 +2,18 @@
   position: fixed;
   top: 80px; /* 60px header + 20px gap */
   right: 16px;
+  left: auto;
   width: 360px;
   z-index: 950;
   pointer-events: none;
   display: flex;
   justify-content: flex-end;
+}
+
+[dir="rtl"] .side-panel-container {
+  right: auto;
+  left: 16px;
+  justify-content: flex-start;
 }
 
 .side-panel {
@@ -50,6 +57,7 @@
 .side-panel-handle {
   position: absolute;
   left: 1px; /* Align with the border */
+  right: auto;
   top: 12px; /* Aligned near the title */
   transform: translateX(-100%);
   width: 24px;
@@ -68,6 +76,16 @@
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
   transition: all 0.2s;
   z-index: 10;
+}
+
+[dir="rtl"] .side-panel-handle {
+  left: auto;
+  right: 1px;
+  transform: translateX(100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.08);
 }
 
 .side-panel-handle:hover {

@@ -2,11 +2,17 @@
   position: fixed;
   top: 80px; /* Aligned with where the panel starts */
   right: 16px;
+  left: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 900;
   pointer-events: none;
+}
+
+[dir="rtl"] .right-toolbar-container {
+  right: auto;
+  left: 16px;
 }
 
 .pinned-tool-button {
@@ -29,6 +35,10 @@
   transform: translateX(-4px) scale(1.05);
   background: #ffffff;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+[dir="rtl"] .pinned-tool-button:hover {
+  transform: translateX(4px) scale(1.05);
 }
 
 /* Dark mode adjustments */

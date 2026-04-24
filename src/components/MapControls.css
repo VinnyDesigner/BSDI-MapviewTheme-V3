@@ -2,6 +2,7 @@
   position: absolute;
   top: 90px;
   left: 20px;
+  right: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;

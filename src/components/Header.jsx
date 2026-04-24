@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useLanguage } from '../context/LanguageContext';
 import './Header.css';
 import logo from '../assets/logo.png';
+
 const Header = () => {
-  const [lang, setLang] = useState('EN');
+  const { t, toggleLanguage } = useLanguage();
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
-  const toggleLanguage = () => {
-    const newLang = lang === 'EN' ? 'AR' : 'EN';
-    setLang(newLang);
-    document.documentElement.dir = newLang === 'AR' ? 'rtl' : 'ltr';
-    document.documentElement.lang = newLang.toLowerCase();
-  };
   return (
     <header className="header-container">
       {/* Organic Red Gradient Blobs */}
@@ -25,7 +21,8 @@ const Header = () => {
       </div>
       
       <div className="header-center">
-        <h1 className="header-title">BSDI Smart Map viewer</h1>
+        {/* ✅ Static UI title — translated */}
+        <h1 className="header-title">{t('appTitle')}</h1>
       </div>
 
       <div className="header-right">
@@ -37,7 +34,7 @@ const Header = () => {
           <button 
             className="header-action-btn search-btn" 
             onClick={() => setIsSearchExpanded(!isSearchExpanded)}
-            aria-label="Toggle Search"
+            aria-label={t('tools').search}
           >
             <Search size={20} />
           </button>
@@ -48,7 +45,7 @@ const Header = () => {
               animate={{ opacity: 1 }}
               type="text"
               className="header-search-input"
-              placeholder="Search..."
+              placeholder={t('searchPlaceholder')}
               autoFocus
             />
           )}
@@ -56,8 +53,9 @@ const Header = () => {
 
         <div className="header-divider" />
 
+        {/* ✅ Lang toggle label — from translations (shows opposite language name) */}
         <button className="lang-text-toggle" onClick={toggleLanguage} aria-label="Toggle Language">
-          {lang === 'EN' ? 'العربية' : 'English'}
+          {t('langToggle')}
         </button>
 
         <div className="header-divider" />

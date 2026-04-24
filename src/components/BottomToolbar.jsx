@@ -1,105 +1,97 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { 
-  Layers, 
-  Info, 
-  Search, 
-  Navigation, 
-  Ruler, 
-  Pencil, 
-  Box, 
-  Database, 
-  Globe, 
-  Printer, 
-  Bookmark 
+  Layers, Info, Search, Navigation, Ruler, 
+  Pencil, Box, Database, Globe, Printer, Bookmark 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../i18n/translations';
 import './BottomToolbar.css';
 
-const TOOL_GROUPS = [
+// Tool group structure — IDs are code keys, names resolved via translations
+const TOOL_GROUP_DEFS = [
   {
-    name: 'Explore',
+    id: 'explore',
     tools: [
-      { id: 'layers', name: 'Layers', icon: Layers },
-      { id: 'search', name: 'Search', icon: Search },
-      { id: 'navigation', name: 'Navigation', icon: Navigation }
+      { id: 'layers',     icon: Layers },
+      { id: 'search',     icon: Search },
+      { id: 'navigation', icon: Navigation },
     ]
   },
   {
-    name: 'Analysis',
+    id: 'analysis',
     tools: [
-      { id: 'measure', name: 'Measure', icon: Ruler },
-      { id: 'draw', name: 'Draw', icon: Pencil },
-      { id: 'cad', name: 'CAD', icon: Box }
+      { id: 'measure', icon: Ruler },
+      { id: 'draw',    icon: Pencil },
+      { id: 'cad',     icon: Box },
     ]
   },
   {
-    name: 'Data',
+    id: 'data',
     tools: [
-      { id: 'data_request', name: 'Data Request', icon: Database },
-      { id: 'external_data', name: 'External Data', icon: Globe }
+      { id: 'data_request',  icon: Database },
+      { id: 'external_data', icon: Globe },
     ]
   },
   {
-    name: 'Output',
+    id: 'output',
     tools: [
-      { id: 'print', name: 'Print', icon: Printer },
-      { id: 'bookmark', name: 'Bookmark', icon: Bookmark }
+      { id: 'print',    icon: Printer },
+      { id: 'bookmark', icon: Bookmark },
     ]
-  }
+  },
 ];
 
 const BottomToolbar = ({ activeTool, onToolSelect }) => {
+  const { lang } = useLanguage();
   const toolbarRef = useRef(null);
   const [notchX, setNotchX] = useState(0);
 
-  // Get all tool IDs that belong to this toolbar
-  const bottomToolIds = TOOL_GROUPS.flatMap(group => group.tools.map(t => t.id));
-  const isBottomToolActive = activeTool && bottomToolIds.includes(activeTool);
+  const allToolIds = TOOL_GROUP_DEFS.flatMap(g => g.tools.map(t => t.id));
+  const isBottomToolActive = activeTool && allToolIds.includes(activeTool);
 
   useEffect(() => {
     if (toolbarRef.current && isBottomToolActive) {
       const activeBtn = toolbarRef.current.querySelector('.tool-button.active');
       if (activeBtn) {
-        const btnRect = activeBtn.getBoundingClientRect();
+        const btnRect     = activeBtn.getBoundingClientRect();
         const toolbarRect = toolbarRef.current.getBoundingClientRect();
-        const x = (btnRect.left - toolbarRect.left) + (btnRect.width / 2);
-        setNotchX(x);
+        setNotchX((btnRect.left - toolbarRect.left) + btnRect.width / 2);
       }
     }
   }, [activeTool, isBottomToolActive]);
 
   return (
     <div className="bottom-toolbar-container">
-      <motion.div 
+      <motion.div
         ref={toolbarRef}
         className={`toolbar-wrapper ${isBottomToolActive ? 'has-active-tool' : ''}`}
         initial={{ y: 100, opacity: 0 }}
-        animate={{ 
-          y: 0, 
-          opacity: 1,
-          '--notch-x': `${notchX}px`
-        }}
+        animate={{ y: 0, opacity: 1, '--notch-x': `${notchX}px` }}
         transition={{ type: 'spring', damping: 20, stiffness: 100 }}
       >
-        {TOOL_GROUPS.map((group, groupIndex) => (
-          <React.Fragment key={group.name}>
+        {TOOL_GROUP_DEFS.map((group, groupIndex) => (
+          <React.Fragment key={group.id}>
             <div className="tool-group">
               {group.tools.map((tool) => {
                 const Icon = tool.icon;
+                // ✅ Static UI tooltip from translations — NOT dynamic data
+                const label = translations[lang].tools[tool.id] ?? tool.id;
                 return (
                   <button
                     key={tool.id}
+                    id={`toolbar-btn-${tool.id}`}
                     className={`tool-button ${activeTool === tool.id ? 'active' : ''}`}
                     onClick={() => onToolSelect(tool.id)}
-                    data-tooltip={tool.name}
-                    aria-label={tool.name}
+                    data-tooltip={label}
+                    aria-label={label}
                   >
                     <Icon size={18} />
                   </button>
                 );
               })}
             </div>
-            {groupIndex < TOOL_GROUPS.length - 1 && (
+            {groupIndex < TOOL_GROUP_DEFS.length - 1 && (
               <div className="toolbar-divider" />
             )}
           </React.Fragment>
