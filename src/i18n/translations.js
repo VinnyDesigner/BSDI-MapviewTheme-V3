@@ -82,6 +82,8 @@ export const translations = {
     home:       'Home',
     identify:   'Identify',
     pan:        'Pan',
+    view2D:     '2D View',
+    view3D:     '3D View',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'Close panel',
@@ -166,6 +168,8 @@ export const translations = {
     home:       'الرئيسية',
     identify:   'تحديد',
     pan:        'تحريك',
+    view2D:     'عرض ثنائي الأبعاد',
+    view3D:     'عرض ثلاثي الأبعاد',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'إغلاق اللوحة',

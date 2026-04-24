@@ -3,7 +3,7 @@ import { Plus, Minus, Home, Info, Hand } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import './MapControls.css';
 
-const MapControls = ({ view, activeTool, onToolSelect }) => {
+const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D }) => {
   const { t } = useLanguage();
 
   const handleZoomIn  = () => { if (view) view.zoom += 1; };
@@ -35,6 +35,16 @@ const MapControls = ({ view, activeTool, onToolSelect }) => {
         title={t('identify')}
       >
         <Info size={18} />
+      </button>
+
+      <button
+        className={`map-control-btn ${is3D ? 'active' : ''}`}
+        onClick={onToggle3D}
+        title={is3D ? (t('view2D') || '2D View') : (t('view3D') || '3D View')}
+      >
+        <span style={{ fontWeight: '800', fontSize: '14px', fontFamily: 'Inter', letterSpacing: '-0.5px' }}>
+          {is3D ? '2D' : '3D'}
+        </span>
       </button>
 
       <button

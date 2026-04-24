@@ -24,6 +24,7 @@ function AppInner() {
   const [activeTool, setActiveTool] = useState(null)
   const [pinnedTools, setPinnedTools] = useState([])
   const [mapView, setMapView] = useState(null)
+  const [is3D, setIs3D] = useState(false)
   const [layerVisibility, setLayerVisibility] = useState(
     layersConfig.reduce((acc, layer) => ({ ...acc, [layer.id]: layer.visible }), {})
   )
@@ -182,8 +183,14 @@ function AppInner() {
   return (
     <div className="app-container">
       <Header />
-      <ArcGISMap layerVisibility={layerVisibility} onViewReady={setMapView} />
-      <MapControls view={mapView} activeTool={activeTool} onToolSelect={setActiveTool} />
+      <ArcGISMap layerVisibility={layerVisibility} onViewReady={setMapView} is3D={is3D} />
+      <MapControls 
+        view={mapView} 
+        activeTool={activeTool} 
+        onToolSelect={setActiveTool} 
+        is3D={is3D} 
+        onToggle3D={() => setIs3D(!is3D)} 
+      />
 
       {mapView && <MapInfoWidget view={mapView} />}
 
