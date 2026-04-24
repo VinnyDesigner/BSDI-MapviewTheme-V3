@@ -73,6 +73,8 @@ export const translations = {
     coordX:     'X:',
     coordY:     'Y:',
     scale:      'Scale 1:',
+    unitKm:     'km',
+    unitM:      'm',
 
     // ── Map Controls ─────────────────────────────────────
     zoomIn:     'Zoom In',
@@ -154,7 +156,9 @@ export const translations = {
     // ── Map Info Widget ──────────────────────────────────
     coordX:     ':X',
     coordY:     ':Y',
-    scale:      ':مقياس 1',
+    scale:      'المقياس 1:',
+    unitKm:     'كم',
+    unitM:      'م',
 
     // ── Map Controls ─────────────────────────────────────
     zoomIn:     'تكبير',

@@ -10,7 +10,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext'
 import { translations } from './i18n/translations'
 import './App.css'
 
-import { 
+import {
   Layers, Search, Navigation, Ruler, Pencil,
   Box, Database, Globe, Printer, Bookmark, Info
 } from 'lucide-react';
@@ -21,9 +21,9 @@ import RightToolbar from './components/RightToolbar'
 function AppInner() {
   const { t, lang } = useLanguage();
 
-  const [activeTool, setActiveTool]     = useState(null)
-  const [pinnedTools, setPinnedTools]   = useState([])
-  const [mapView, setMapView]           = useState(null)
+  const [activeTool, setActiveTool] = useState(null)
+  const [pinnedTools, setPinnedTools] = useState([])
+  const [mapView, setMapView] = useState(null)
   const [layerVisibility, setLayerVisibility] = useState(
     layersConfig.reduce((acc, layer) => ({ ...acc, [layer.id]: layer.visible }), {})
   )

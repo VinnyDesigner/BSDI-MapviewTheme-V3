@@ -74,7 +74,39 @@
   top: -1px;
 }
 
+/* ── RTL overrides ──────────────────────────────────────── */
 [dir="rtl"] .map-info-widget {
   left: auto;
   right: 24px;
+  align-items: flex-end;
+}
+
+/* All rows flow RTL in Arabic */
+[dir="rtl"] .info-row {
+  direction: rtl;
+  justify-content: flex-start;
+}
+
+/* Scale row aligned to middle */
+[dir="rtl"] .scale-row {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Label margins: In RTL, label is on the right, so it needs margin-left to push the value to its left */
+[dir="rtl"] .info-label {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+/* Gap between Y block and X block. In RTL, X is rightmost, Y is to its left. 
+   The gap is applied to Y label. So Y label needs margin-right to separate from X value.
+   We also MUST preserve the 8px margin-left so it doesn't touch its own Y value! */
+[dir="rtl"] .ml-12 {
+  margin-left: 8px;
+  margin-right: 20px;
+}
+
+[dir="rtl"] .scale-bar-label-inner {
+  direction: ltr;
 }
