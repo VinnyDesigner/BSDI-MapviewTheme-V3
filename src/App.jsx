@@ -12,7 +12,8 @@ import './App.css'
 
 import {
   Layers, Search, Navigation, Ruler, Pencil,
-  Box, Database, Globe, Printer, Bookmark, Info
+  Box, Database, Globe, Printer, Bookmark, Info,
+  Columns2
 } from 'lucide-react';
 
 import RightToolbar from './components/RightToolbar'
@@ -28,6 +29,46 @@ function AppInner() {
   const [layerVisibility, setLayerVisibility] = useState(
     layersConfig.reduce((acc, layer) => ({ ...acc, [layer.id]: layer.visible }), {})
   )
+  
+  const [splitLayers, setSplitLayers] = useState({
+    left: layersConfig[0]?.id || '',
+    right: layersConfig[1]?.id || layersConfig[0]?.id || ''
+  })
+  const [isSplitModePersistent, setIsSplitModePersistent] = useState(false);
+  const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
+
+  const basemaps = [
+    {
+      id: "dark-gray-vector",
+      title: "Dark Gray Canvas",
+      thumbnail: "/assets/basemaps/dark-gray.jpg"
+    },
+    {
+      id: "satellite",
+      title: "Imagery",
+      thumbnail: "/assets/basemaps/imagery.jpg"
+    },
+    {
+      id: "hybrid",
+      title: "Imagery Hybrid",
+      thumbnail: "/assets/basemaps/hybrid.jpg"
+    },
+    {
+      id: "gray-vector",
+      title: "Light Gray Canvas",
+      thumbnail: "/assets/basemaps/light-gray.jpg"
+    },
+    {
+      id: "streets-navigation-vector",
+      title: "Navigation Map",
+      thumbnail: "/assets/basemaps/navigation.jpg"
+    },
+    {
+      id: "oceans",
+      title: "Oceans",
+      thumbnail: "/assets/basemaps/oceans.jpg"
+    }
+  ];
 
   // ── Tool icon lookup ────────────────────────────────────────────────────────
   const getToolIcon = (toolId) => {
@@ -37,7 +78,7 @@ function AppInner() {
       draw: <Pencil size={16} />, cad: <Box size={16} />,
       data_request: <Database size={16} />, external_data: <Globe size={16} />,
       print: <Printer size={16} />, bookmark: <Bookmark size={16} />,
-      identify: <Info size={16} />,
+      identify: <Info size={16} />, split: <Columns2 size={16} />,
     };
     return icons[toolId] ?? null;
   }
@@ -92,6 +133,37 @@ function AppInner() {
   // ❌ Dynamic data (layer.title, API values) is rendered directly — never t(layer.title).
   const getPanelContent = (toolId) => {
     switch (toolId) {
+      case 'basemap':
+        return (
+          <div className="tool-content">
+            <div className="basemap-gallery">
+              {basemaps.map((bm) => (
+                <div 
+                  key={bm.id} 
+                  className={`basemap-item ${currentBasemap === bm.id ? 'active' : ''}`}
+                  onClick={() => setCurrentBasemap(bm.id)}
+                >
+                  <div className="basemap-thumbnail">
+                    <img 
+                      src={bm.thumbnail} 
+                      alt={bm.title} 
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "/assets/fallback.jpg";
+                      }}
+                    />
+                    {currentBasemap === bm.id && (
+                      <div className="active-overlay">
+                        <div className="check-mark">✓</div>
+                      </div>
+                    )}
+                  </div>
+                  <span className="basemap-title">{bm.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 'layers':
         return (
           <div className="tool-content">
@@ -119,6 +191,81 @@ function AppInner() {
           <div className="tool-content">
             <p>{t('identifyHint')}</p>
             <div className="info-box">{t('identifyActive')}</div>
+          </div>
+        );
+        
+      case 'split':
+        return (
+          <div className="tool-content">
+            <p className="description">{t('splitPanelDesc')}</p>
+            
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '12px',
+              background: 'rgba(255, 193, 7, 0.1)',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              border: '1px solid rgba(255, 193, 7, 0.3)'
+            }}>
+              <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
+                {isSplitModePersistent ? 'Split View Active' : 'Enable Split View'}
+              </span>
+              <button 
+                onClick={() => setIsSplitModePersistent(!isSplitModePersistent)}
+                className="primary-btn"
+                style={{ 
+                  background: isSplitModePersistent ? '#e63946' : '#FFC107',
+                  color: isSplitModePersistent ? 'white' : '#1a2f4d',
+                  padding: '6px 12px',
+                  fontSize: '12px'
+                }}
+              >
+                {isSplitModePersistent ? 'Disable' : 'Enable'}
+              </button>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitLeftLayer')}</label>
+              <select 
+                className="tool-select" 
+                value={splitLayers.left}
+                onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <optgroup label={t('splitLayerLabel')}>
+                  {layersConfig.filter(l => !l.time).map(layer => (
+                    <option key={layer.id} value={layer.id}>{layer.title}</option>
+                  ))}
+                </optgroup>
+                <optgroup label={t('splitTimeLabel')}>
+                  {layersConfig.filter(l => l.time).map(layer => (
+                    <option key={layer.id} value={layer.id}>{layer.title}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitRightLayer')}</label>
+              <select 
+                className="tool-select" 
+                value={splitLayers.right}
+                onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <optgroup label={t('splitLayerLabel')}>
+                  {layersConfig.filter(l => !l.time).map(layer => (
+                    <option key={layer.id} value={layer.id}>{layer.title}</option>
+                  ))}
+                </optgroup>
+                <optgroup label={t('splitTimeLabel')}>
+                  {layersConfig.filter(l => l.time).map(layer => (
+                    <option key={layer.id} value={layer.id}>{layer.title}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
           </div>
         );
 
@@ -183,7 +330,14 @@ function AppInner() {
   return (
     <div className="app-container">
       <Header />
-      <ArcGISMap layerVisibility={layerVisibility} onViewReady={setMapView} is3D={is3D} />
+      <ArcGISMap 
+        layerVisibility={layerVisibility} 
+        onViewReady={setMapView} 
+        is3D={is3D} 
+        isSplitMode={isSplitModePersistent}
+        splitLayers={splitLayers}
+        basemap={currentBasemap}
+      />
       <MapControls 
         view={mapView} 
         activeTool={activeTool} 
@@ -208,6 +362,83 @@ function AppInner() {
       )}
 
       <BottomToolbar activeTool={activeTool} onToolSelect={handleToolSelect} />
+
+      {/* Centralized Split UI at the top center */}
+      {isSplitModePersistent && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            zIndex: 1000,
+            pointerEvents: 'none' // Let clicks pass through to map where not over buttons
+          }}
+        >
+          {/* LEFT LABEL */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
+            padding: '6px 16px',
+            borderRadius: '999px',
+            color: 'white',
+            fontSize: '11px',
+            fontWeight: '800',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            whiteSpace: 'nowrap',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            LEFT: {layersConfig.find(l => l.id === splitLayers.left)?.title}
+          </div>
+
+          {/* ACTIVE INDICATOR / RE-OPEN PANEL BUTTON */}
+          <div 
+            onClick={() => setActiveTool('split')}
+            style={{
+              background: '#FFC107',
+              padding: '8px 20px',
+              borderRadius: '999px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              boxShadow: '0 6px 16px rgba(0,0,0,0.3)',
+              fontSize: '12px',
+              fontWeight: '900',
+              color: '#1a2f4d',
+              border: '2px solid white',
+              pointerEvents: 'auto', // Allow clicking this specifically
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <Columns2 size={16} />
+            <span>{activeTool === 'split' ? 'COMPARING MAPS' : 'SPLIT VIEW ACTIVE'}</span>
+          </div>
+
+          {/* RIGHT LABEL */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
+            padding: '6px 16px',
+            borderRadius: '999px',
+            color: 'white',
+            fontSize: '11px',
+            fontWeight: '800',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            whiteSpace: 'nowrap',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            RIGHT: {layersConfig.find(l => l.id === splitLayers.right)?.title}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

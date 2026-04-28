@@ -8,217 +8,201 @@
   font-family: 'Inter', sans-serif;
 }
 
-.map-view {
+.map-view-container {
   width: 100%;
   height: 100%;
+  position: relative;
+  background: #f8fafc;
 }
 
-/* Tool Content Styles */
-.tool-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.description {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.layer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.layer-item {
-  display: flex;
-  align-items: center;
-}
-
-.checkbox-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: 6px;
-  transition: background 0.2s;
-}
-
-.checkbox-container:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.layer-name {
-  font-weight: 500;
-  color: #334155;
-}
-
-.search-box {
-  display: flex;
-  gap: 8px;
-}
-
-.tool-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.primary-btn {
-  background: #e63946;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.primary-btn:hover {
-  background: #d62839;
-}
-
-.full-width {
-  width: 100%;
-}
-
-.hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.info-box {
-  background: #f1f5f9;
-  padding: 10px;
-  border-radius: 6px;
-  text-align: center;
-  font-weight: 600;
-  color: #475569;
-}
-
-.btn-group {
-  display: flex;
-  gap: 8px;
-}
-
-.tool-btn-item {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.draw-tools {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.draw-icon {
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.tool-select {
-  padding: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: white;
-}
-
-/* Force Override ArcGIS Widget Styles - Matching Header Gradient */
-.esri-zoom,
-.esri-widget,
-.esri-component {
-  background: linear-gradient(
-    120deg,
-    #002D5D 0%,
-    #1A2F4D 100%
-  ) !important;
+/* ── ESRI Widget Customization ── */
+.esri-ui .esri-zoom,
+.esri-ui .esri-search,
+.esri-ui .esri-compass,
+.esri-ui .esri-home,
+.esri-ui .esri-locate,
+.esri-ui .esri-basemap-toggle,
+.esri-ui .esri-widget--button {
+  background: linear-gradient(120deg, #002D5D 0%, #1A2F4D 100%) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25) !important;
-  overflow: hidden !important;
+  color: #ffffff !important;
 }
 
-.esri-widget--button,
-.esri-zoom__button {
-  background: transparent !important;
-  color: #ffffff !important; /* White for high contrast on dark background */
+.esri-view-surface,
+.esri-view-surface--focus {
+  background-color: transparent !important;
+  outline: none !important;
+}
+
+/* 🌓 Flexible Split (Swipe Widget) Styling */
+.esri-swipe__divider {
+  background-color: #FFC107 !important;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.6) !important;
   border: none !important;
-  width: 38px !important;
-  height: 38px !important;
+  z-index: 100 !important;
+}
+
+/* Handle indicator */
+.esri-swipe__handle {
+  background-color: #FFC107 !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  border: 4px solid #ffffff !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  transition: all 0.2s ease !important;
+  z-index: 101 !important;
 }
 
-.esri-widget--button:hover,
-.esri-zoom__button:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #ffffff !important;
+.esri-swipe__handle::before {
+  content: '||' !important;
+  color: white !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  letter-spacing: 1px !important;
 }
 
-.esri-zoom {
-  display: flex !important;
-  flex-direction: column !important;
-  border-radius: 20px !important;
+.esri-swipe__handle::after {
+  display: none !important;
 }
 
-.esri-zoom .esri-widget--button:first-child {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+/* Labels (Pinned to sides for Left/Right split) */
+.split-label {
+  position: absolute;
+  top: 85px;
+  padding: 8px 18px;
+  background: rgba(0, 45, 93, 0.95);
+  color: white;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  z-index: 100;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
 }
 
-.esri-compass.esri-widget {
-  border-radius: 50% !important;
-  margin-top: 12px !important;
+.split-label.left { 
+  left: 30px; 
+  border-left: 6px solid #FFC107; 
 }
 
-.esri-widget--button span,
-.esri-zoom__button span {
-  color: #ffffff !important;
-  font-weight: 600 !important;
+.split-label.right { 
+  right: 30px; 
+  border-right: 6px solid #FFC107; 
 }
 
-/* Specific fix for the compass needle/icon color */
-.esri-compass__icon,
-.esri-compass__needle {
-  color: #ffffff !important;
+/* 🗺️ Basemap Gallery Styles */
+.basemap-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 8px 4px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
-/* Hide zoom in/out text labels (legends) */
-.esri-zoom .esri-widget--button .esri-icon-font-fallback-text,
-.esri-zoom .esri-widget--button .esri-button__text,
-.esri-zoom .esri-widget--button [title] {
-  font-size: 0 !important;
-  text-indent: -9999px !important;
+.basemap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid transparent;
 }
 
-/* Hide default ArcGIS focus outline */
-.esri-view .esri-view-surface--focus:after {
+.basemap-item:hover {
+  background: white;
+  transform: translateY(-2px);
+  border-color: rgba(229, 57, 53, 0.5); /* Soft red hover */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.basemap-item.active {
+  background: white;
+  border-color: #e53935; /* Brand Red */
+  box-shadow: 0 0 10px rgba(229, 57, 53, 0.3);
+}
+
+.basemap-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3/2;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: #f1f5f9;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.basemap-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.basemap-item:hover .basemap-thumbnail img {
+  transform: scale(1.05);
+}
+
+.active-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 45, 93, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(1px);
+}
+
+.check-mark {
+  background: #e53935; /* Red selection */
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.basemap-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a2f4d;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.5px;
+}
+
+/* Hide default ArcGIS focus outline and all possible map strokes */
+.map-view-container,
+.map-view-container *,
+.esri-view, 
+.esri-view-surface,
+.esri-view-surface--focus,
+.esri-view-surface:focus,
+.esri-view-surface:focus::after {
   outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }

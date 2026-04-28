@@ -6,7 +6,7 @@
 export const translations = {
   EN: {
     // ── Header ──────────────────────────────────────────
-    appTitle:       'BSDI Smart Map viewer',
+    appTitle:       'BSDI Smart Map Viewer',
     langToggle:     'العربية',
 
     // ── Bottom Toolbar — Tool names (tooltips) ───────────
@@ -22,6 +22,8 @@ export const translations = {
       print:        'Print',
       bookmark:     'Bookmark',
       identify:     'Identify',
+      split:        'Compare Maps',
+      basemap:      'Basemaps',
     },
 
     // ── Panel titles ─────────────────────────────────────
@@ -37,10 +39,15 @@ export const translations = {
       data_request: 'Data Request',
       external_data:'External Data',
       identify:     'Identify',
+      split:        'Compare Maps',
+      basemap:      'Basemaps',
     },
 
     // ── Layers panel ─────────────────────────────────────
     layersPanelDesc:  'Manage map layer visibility:',
+
+    // ── Basemap panel ────────────────────────────────────
+    basemapDesc:      'Select a basemap style:',
 
     // ── Search panel ─────────────────────────────────────
     searchPlaceholder: 'Search locations...',
@@ -64,6 +71,13 @@ export const translations = {
     // ── Identify panel ───────────────────────────────────
     identifyHint:     'Click on the map to identify features and view detailed information.',
     identifyActive:   'Identify mode active',
+
+    // ── Split Map panel ──────────────────────────────────
+    splitPanelDesc:   'Compare layers or time periods using the swipe divider.',
+    splitLeftLayer:   'Left Side Layer / Year',
+    splitRightLayer:  'Right Side Layer / Year',
+    splitTimeLabel:   'Time-Based Comparison',
+    splitLayerLabel:  'Standard Layer Comparison',
 
     // ── Generic panel ────────────────────────────────────
     comingSoon:       'Configuration for',
@@ -108,6 +122,8 @@ export const translations = {
       print:        'طباعة',
       bookmark:     'إشارة مرجعية',
       identify:     'تحديد',
+      split:        'مقارنة الخرائط',
+      basemap:      'خرائط الأساس',
     },
 
     // ── Panel titles ─────────────────────────────────────
@@ -123,10 +139,15 @@ export const translations = {
       data_request: 'طلب البيانات',
       external_data:'بيانات خارجية',
       identify:     'تحديد',
+      split:        'مقارنة الخرائط',
+      basemap:      'خرائط الأساس',
     },
 
     // ── Layers panel ─────────────────────────────────────
     layersPanelDesc:  'إدارة رؤية طبقات الخريطة:',
+
+    // ── Basemap panel ────────────────────────────────────
+    basemapDesc:      'اختر نمط خريطة الأساس:',
 
     // ── Search panel ─────────────────────────────────────
     searchPlaceholder: 'البحث عن مواقع...',
@@ -150,6 +171,13 @@ export const translations = {
     // ── Identify panel ───────────────────────────────────
     identifyHint:     'انقر على الخريطة لتحديد المعالم وعرض معلومات تفصيلية.',
     identifyActive:   'وضع التحديد نشط',
+
+    // ── Split Map panel ──────────────────────────────────
+    splitPanelDesc:   'قارن بين الطبقات أو الفترات الزمنية باستخدام فاصل المسح.',
+    splitLeftLayer:   'طبقة / سنة الجانب الأيسر',
+    splitRightLayer:  'طبقة / سنة الجانب الأيمن',
+    splitTimeLabel:   'مقارنة زمنية',
+    splitLayerLabel:  'مقارنة الطبقات القياسية',
 
     // ── Generic panel ────────────────────────────────────
     comingSoon:       'إعدادات',

@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { 
   Layers, Info, Search, Navigation, Ruler, 
-  Pencil, Box, Database, Globe, Printer, Bookmark 
+  Pencil, Box, Database, Globe, Printer, Bookmark,
+  Columns2, Map
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
@@ -15,6 +16,7 @@ const TOOL_GROUP_DEFS = [
     tools: [
       { id: 'layers',     icon: Layers },
       { id: 'search',     icon: Search },
+      { id: 'split',      icon: Columns2 },
       { id: 'navigation', icon: Navigation },
     ]
   },

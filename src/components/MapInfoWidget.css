@@ -1,12 +1,12 @@
 .map-info-widget {
   position: absolute;
   bottom: 30px;
-  left: 24px;
-  background: rgba(255, 255, 255, 0.95);
+  left: 16px; /* Match MapControls left alignment */
+  background: rgba(255, 255, 255, 0.8); /* Match MapControls opacity */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.05); /* Match MapControls border */
+  border-radius: 5px; /* Match MapControls radius */
   padding: 8px 16px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   z-index: 10;
@@ -77,7 +77,7 @@
 /* ── RTL overrides ──────────────────────────────────────── */
 [dir="rtl"] .map-info-widget {
   left: auto;
-  right: 24px;
+  right: 16px; /* Match MapControls right alignment in RTL */
   align-items: flex-end;
 }
 

@@ -1,96 +1,106 @@
 .map-controls-container {
   position: absolute;
-  top: 90px;
-  left: 20px;
+  top: 80px;
+  left: 16px;
   right: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px; /* Slightly tighter gap */
   z-index: 10;
   pointer-events: none;
 }
 
-.map-control-group {
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(
-    140deg,
-    rgba(223, 38, 28, 0.6),
-    rgba(0, 45, 93, 0.9)
-  );
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.group-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.15);
-  margin: 0 6px;
+[dir="rtl"] .map-controls-container {
+  left: auto;
+  right: 16px;
 }
 
 .map-control-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: linear-gradient(
-    140deg,
-    rgba(223, 38, 28, 0.6),
-    rgba(0, 45, 93, 0.9)
-  );
-  color: white;
+  width: 34px; /* Reduced from 38px */
+  height: 34px; /* Reduced from 38px */
+  background: rgba(255, 255, 255, 0.8); /* Reduced opacity */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 5px; /* Changed to 5px */
+  color: #1C1C1C;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.map-control-btn.group-btn {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  backdrop-filter: none;
 }
 
 .map-control-btn:hover {
-  transform: scale(1.05);
-  filter: brightness(1.2);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
 
-.map-control-btn.group-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: none;
+.map-control-btn svg {
+  width: 18px; /* Slightly smaller icons for smaller buttons */
+  height: 18px;
 }
 
 .map-control-btn.active {
   background: linear-gradient(
     140deg,
-    rgba(223, 38, 28, 0.6),
+    rgba(223, 38, 28, 0.8),
     rgba(0, 45, 93, 0.9)
   ) !important;
-  border: 2px solid #ffffff !important;
-  transform: scale(1.08);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
-}
-
-.map-control-btn.active svg {
   color: #ffffff !important;
+  border: none !important;
+  opacity: 1 !important; /* Full opacity when active */
 }
 
-[dir="rtl"] .map-controls-container {
-  left: auto;
-  right: 20px;
+.map-control-btn.active .toggle-text {
+  color: #ffffff;
+}
+
+.toggle-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; /* Slightly smaller text */
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.control-divider {
+  display: none;
+}
+
+.map-control-group-square {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 5px; /* Match single buttons */
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.map-control-group-square .sub-btn {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transition: background 0.2s;
+}
+
+.map-control-group-square .sub-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: none;
+}
+
+.inner-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.05);
+  margin: 0 6px;
 }

@@ -4,73 +4,17 @@
   left: 0;
   width: 100%;
   height: 60px;
-  overflow: hidden;
-  /* Brand Gradient Base */
-  background: linear-gradient(
-    120deg,
-    #002D5D 0%,
-    #1A2F4D 20%,
-    #2A2A2A 50%,
-    #1A2F4D 80%,
-    #002D5D 100%
-  );
-  /* Glassmorphism Effect overlay */
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   z-index: 1000;
   box-sizing: border-box;
-}
-
-/* Organic Red Blobs */
-.header-blob {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: -2;
-  filter: blur(100px);
-}
-
-.blob-1 {
-  left: 15%;
-  top: -100px;
-  width: 250px;
-  height: 250px;
-  background: rgba(223, 38, 28, 0.15);
-}
-
-.blob-2 {
-  right: 20%;
-  top: -120px;
-  width: 300px;
-  height: 300px;
-  background: rgba(223, 38, 28, 0.25);
-}
-
-.blob-3 {
-  left: 50%;
-  top: -80px;
-  transform: translateX(-50%);
-  width: 200px;
-  height: 200px;
-  background: rgba(223, 38, 28, 0.2);
-}
-
-/* Pseudo-element to apply the glass effect on top of the solid gradient */
-.header-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: -1;
-  pointer-events: none;
 }
 
 .header-left {
@@ -78,31 +22,42 @@
   align-items: center;
   gap: 12px;
   z-index: 1;
-  flex: 1; /* Allow left/right to share space */
+  flex: 0 0 auto; /* Don't shrink the logo container */
+  max-width: 380px; /* Provide ample space for the wide logo */
+  overflow: visible;
 }
 
-.header-logo-image {
+.header-logo {
   height: 40px;
   width: auto;
   object-fit: contain;
+  display: block;
+  flex-shrink: 0;
 }
 
+/* Option 2 (Quick Fix) if needed for black backgrounds: */
+/* .header-logo { mix-blend-mode: multiply; } */
+
+
 .header-center {
-  flex: 2; /* Take up more space to stay centered */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .header-title {
   font-family: 'Inter', -apple-system, sans-serif;
   font-size: 18px;
   font-weight: 600;
-  color: #FFFFFF;
+  color: #1C1C1C;
   margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
+  pointer-events: auto;
 }
 
 .header-right {
@@ -110,7 +65,7 @@
   align-items: center;
   gap: 12px;
   z-index: 1;
-  flex: 1; /* Allow left/right to share space */
+  flex: 0 0 auto; /* Keep fixed actions container */
   justify-content: flex-end;
 }
 
@@ -126,16 +81,16 @@
 }
 
 .header-search-wrapper.expanded {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .header-search-input {
   background: transparent;
   border: none;
-  color: white;
+  color: #1C1C1C;
   padding: 0 12px 0 4px;
   font-size: 14px;
   width: 100%;
@@ -148,13 +103,13 @@
 }
 
 .header-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.4);
 }
 
 .header-action-btn {
   background: transparent;
   border: none;
-  color: white;
+  color: #1C1C1C;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -168,20 +123,20 @@
 }
 
 .header-action-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .header-divider {
   height: 20px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.1);
   margin: 0 4px;
 }
 
 .lang-text-toggle {
   background: transparent;
   border: none;
-  color: #FFFFFF;
+  color: #1C1C1C;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -197,15 +152,15 @@
 .header-avatar {
   width: 38px;
   height: 38px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: #1C1C1C;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -213,6 +168,6 @@
 }
 
 .header-avatar:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.1);
   transform: scale(1.05);
 }

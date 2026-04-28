@@ -12,9 +12,27 @@ export const layersConfig = [
     visible: false
   },
   {
-    id: 'world-cities',
-    title: 'Points of Interest',
-    url: 'https://services.arcgis.com/V6ZHFr6zdgNZuXC0/arcgis/rest/services/World_Cities/FeatureServer/0',
-    visible: true
+    id: 'satellite-present',
+    title: 'Present – Satellite View',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+    type: 'tile',
+    visible: false,
+    time: 2026
+  },
+  {
+    id: 'historical-1940',
+    title: '1940 – Historical View',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer',
+    type: 'tile',
+    visible: false,
+    time: 1940
+  },
+  {
+    id: 'historical-1990',
+    title: '1990 – Historical View',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer',
+    type: 'tile',
+    visible: false,
+    time: 1990
   }
 ];

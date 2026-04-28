@@ -3,7 +3,6 @@ import { Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 import './Header.css';
-import logo from '../assets/logo.png';
 
 const Header = () => {
   const { t, toggleLanguage } = useLanguage();
@@ -11,13 +10,9 @@ const Header = () => {
 
   return (
     <header className="header-container">
-      {/* Organic Red Gradient Blobs */}
-      <div className="header-blob blob-1" />
-      <div className="header-blob blob-2" />
-      <div className="header-blob blob-3" />
       
       <div className="header-left">
-        <img src={logo} alt="Bahrain Logo" className="header-logo-image" />
+        <img src="/assets/bahrain-logo.png" alt="Bahrain Authority Logo" class="header-logo" />
       </div>
       
       <div className="header-center">
