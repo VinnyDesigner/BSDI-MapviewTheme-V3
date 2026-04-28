@@ -6,6 +6,7 @@
   box-sizing: border-box;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
+
 }
 
 .map-view-container {
@@ -90,14 +91,14 @@
   letter-spacing: 1.5px;
 }
 
-.split-label.left { 
-  left: 30px; 
-  border-left: 6px solid #FFC107; 
+.split-label.left {
+  left: 30px;
+  border-left: 6px solid #FFC107;
 }
 
-.split-label.right { 
-  right: 30px; 
-  border-right: 6px solid #FFC107; 
+.split-label.right {
+  right: 30px;
+  border-right: 6px solid #FFC107;
 }
 
 /* 🗺️ Basemap Gallery Styles */
@@ -127,13 +128,15 @@
 .basemap-item:hover {
   background: white;
   transform: translateY(-2px);
-  border-color: rgba(229, 57, 53, 0.5); /* Soft red hover */
+  border-color: rgba(229, 57, 53, 0.5);
+  /* Soft red hover */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .basemap-item.active {
   background: white;
-  border-color: #e53935; /* Brand Red */
+  border-color: #e53935;
+  /* Brand Red */
   box-shadow: 0 0 10px rgba(229, 57, 53, 0.3);
 }
 
@@ -170,7 +173,8 @@
 }
 
 .check-mark {
-  background: #e53935; /* Red selection */
+  background: #e53935;
+  /* Red selection */
   color: #fff;
   width: 24px;
   height: 24px;
@@ -197,7 +201,7 @@
 /* Hide default ArcGIS focus outline and all possible map strokes */
 .map-view-container,
 .map-view-container *,
-.esri-view, 
+.esri-view,
 .esri-view-surface,
 .esri-view-surface--focus,
 .esri-view-surface:focus,
