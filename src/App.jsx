@@ -225,13 +225,15 @@ function AppInner() {
                   color: isSplitModePersistent ? '#1a2f4d' : 'white',
                   padding: '8px 18px',
                   fontSize: '13px',
-                  fontWeight: '700',
-                  borderRadius: '10px', // 10px Corner Radius
-                  border: 'none !important',
+                  fontWeight: '600', // Semibold
+                  borderRadius: '10px',
+                  border: 'none',
+                  outline: 'none',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
                   boxShadow: isSplitModePersistent ? 'none' : '0 4px 12px rgba(223, 38, 28, 0.2)'
                 }}
+                className="no-stroke-btn" // Added a custom class just in case primary-btn has forced borders
               >
                 {isSplitModePersistent ? 'Disable' : 'Enable'}
               </button>
