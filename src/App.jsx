@@ -5,6 +5,7 @@ import SidePanel from './components/SidePanel'
 import Header from './components/Header'
 import MapControls from './components/MapControls'
 import MapInfoWidget from './components/MapInfoWidget'
+import DualMapView from './components/DualMapView'
 import { layersConfig } from './layers'
 import { LanguageProvider, useLanguage } from './context/LanguageContext'
 import { translations } from './i18n/translations'
@@ -35,6 +36,8 @@ function AppInner() {
     right: layersConfig[1]?.id || layersConfig[0]?.id || ''
   })
   const [isSplitModePersistent, setIsSplitModePersistent] = useState(false);
+  const [isSplitView, setIsSplitView] = useState(false);
+  const [syncMode, setSyncMode] = useState('both'); // 'both' | 'zoom' | 'none'
   const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
   const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
   const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
@@ -81,6 +84,7 @@ function AppInner() {
       data_request: <Database size={16} />, external_data: <Globe size={16} />,
       print: <Printer size={16} />, bookmark: <Bookmark size={16} />,
       identify: <Info size={16} />, split: <Columns2 size={16} />,
+      split_view: <i className="material-icons" style={{ fontSize: '16px' }}>splitscreen</i>,
     };
     return icons[toolId] ?? null;
   }
@@ -97,6 +101,7 @@ function AppInner() {
     const handleClickOutside = (e) => {
       if (
         activeTool &&
+        activeTool !== 'split_view' && // Keep Split View panel persistent
         !e.target.closest('.side-panel-container') &&
         !e.target.closest('.bottom-toolbar-container') &&
         !e.target.closest('.map-controls-container') &&
@@ -110,7 +115,15 @@ function AppInner() {
   }, [activeTool]);
 
   const handleToolSelect = (toolId) => {
-    if (toolId === activeTool) { setActiveTool(null); return; }
+    if (toolId === activeTool) { 
+      setActiveTool(null); 
+      return; 
+    }
+
+    // Mutual Exclusivity: Disable persistent features when switching to a different tool
+    if (toolId !== 'split_view') setIsSplitView(false);
+    if (toolId !== 'split') setIsSplitModePersistent(false);
+
     if (pinnedTools.includes(toolId)) setPinnedTools(prev => prev.filter(id => id !== toolId));
     setActiveTool(toolId);
   }
@@ -314,6 +327,106 @@ function AppInner() {
           </div>
         );
 
+      case 'split_view':
+        return (
+          <div className="tool-content">
+            <p className="description">View two maps side-by-side.</p>
+            
+            {/* Enable / Disable toggle */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '12px',
+              background: 'rgba(30, 60, 114, 0.05)',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              border: '1px solid rgba(30, 60, 114, 0.1)'
+            }}>
+              <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
+                {isSplitView ? 'Split View Active' : 'Enable Split View'}
+              </span>
+              <button 
+                onClick={() => {
+                  setIsSplitView(!isSplitView);
+                  if (isSplitModePersistent) setIsSplitModePersistent(false); // turn off swipe
+                }}
+                className="no-stroke-btn"
+                style={{ 
+                  background: isSplitView ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', 
+                  color: isSplitView ? '#1a2f4d' : 'white',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  borderRadius: '10px',
+                  border: 'none',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                  boxShadow: isSplitView ? 'none' : '0 4px 12px rgba(223, 38, 28, 0.2)'
+                }}
+              >
+                {isSplitView ? 'Disable' : 'Enable'}
+              </button>
+            </div>
+
+            {/* Layer selects */}
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>Left Layer</label>
+              <select 
+                className="tool-select" 
+                value={splitLayers.left}
+                onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                {layersConfig.map(layer => (
+                  <option key={layer.id} value={layer.id}>{layer.title}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>Right Layer</label>
+              <select 
+                className="tool-select" 
+                value={splitLayers.right}
+                onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                {layersConfig.map(layer => (
+                  <option key={layer.id} value={layer.id}>{layer.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Extent Synchronization */}
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                Extent Synchronization
+              </label>
+              <select 
+                className="tool-select" 
+                value={syncMode}
+                onChange={(e) => setSyncMode(e.target.value)}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  borderRadius: '8px', 
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  background: 'white',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#1a2f4d',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="both">Sync Both Views (pan + zoom)</option>
+                <option value="zoom">Sync Zoom Only</option>
+                <option value="none">Independent Views</option>
+              </select>
+            </div>
+          </div>
+        );
+
       case 'search':
         return (
           <div className="tool-content">
@@ -373,17 +486,27 @@ function AppInner() {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container" data-swipe-mode={swipeMode}>
       <Header />
-      <ArcGISMap 
-        layerVisibility={layerVisibility} 
-        onViewReady={setMapView} 
-        is3D={is3D} 
-        isSplitMode={isSplitModePersistent}
-        splitLayers={splitLayers}
-        basemap={currentBasemap}
-        swipeMode={swipeMode}
-        onSwipePositionChange={setSwipeInfo}
+      <div style={{ display: isSplitView ? 'none' : 'block', width: '100%', height: '100%' }}>
+        <ArcGISMap 
+          layerVisibility={layerVisibility} 
+          onViewReady={setMapView} 
+          is3D={is3D} 
+          isSplitMode={isSplitModePersistent}
+          splitLayers={splitLayers}
+          basemap={currentBasemap}
+          swipeMode={swipeMode}
+          onSwipePositionChange={setSwipeInfo}
+        />
+      </div>
+      
+      <DualMapView 
+        isSplitView={isSplitView} 
+        splitLayers={splitLayers} 
+        basemap={currentBasemap} 
+        syncMode={syncMode}
+        onExit={() => setIsSplitView(false)}
       />
       <MapControls 
         view={mapView} 
@@ -408,7 +531,13 @@ function AppInner() {
         <RightToolbar pinnedTools={pinnedTools} getToolIcon={getToolIcon} onRestore={handleRestore} />
       )}
 
-      <BottomToolbar activeTool={activeTool} onToolSelect={handleToolSelect} />
+      <BottomToolbar 
+        activeTool={activeTool} 
+        onToolSelect={handleToolSelect} 
+        swipeMode={swipeMode} 
+        isSplitView={isSplitView}
+        isSplitModePersistent={isSplitModePersistent}
+      />
 
       {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
       {isSplitModePersistent && (() => {
@@ -416,47 +545,34 @@ function AppInner() {
         const pos = swipeInfo.position ?? 50;
 
         const labelBase = {
-          position: 'absolute',
-          background: 'rgba(255,255,255,0.92)',
-          padding: '8px 16px',
-          borderRadius: '6px',
-          color: '#1a2f4d',
-          fontSize: '12px',
-          fontWeight: '800',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-          border: '1px solid rgba(0,0,0,0.1)',
-          whiteSpace: 'nowrap',
-          letterSpacing: '0.5px',
-          backdropFilter: 'blur(6px)',
-          transition: 'opacity 0.2s ease, background 0.2s ease', 
-          pointerEvents: 'none',
-          zIndex: 1001
+          // Base styles are now in .swipe-label class in App.css
         };
+
 
         // Visual Vertical Line (L/R) corresponds to swipeMode="horizontal"
         // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
         const isVisualVertical = swipeMode === 'horizontal';
 
-        // Clearance fix: 60px ensures a clean, consistent gap even during fast drags
-        const clearance = '60px';
+        // Perfection: Use exactly 20px clearance for vertical, and 40px for horizontal to clear the circular handle
+        const clearance = isVisualVertical ? '20px' : '40px';
 
         const labelA = isVisualVertical
-          ? { ...labelBase, top: '50%', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), -50%, 0)` } // Left
-          : { ...labelBase, left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
+          ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` } // Left
+          : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
 
         const labelB = isVisualVertical
-          ? { ...labelBase, top: '50%', left: `${pos}%`, transform: `translate3d(${clearance}, -50%, 0)` } // Right
-          : { ...labelBase, left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
+          ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` } // Right
+          : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
 
         const labelAText = isVisualVertical ? 'Left' : 'Top';
         const labelBText = isVisualVertical ? 'Right' : 'Bottom';
 
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}>
-            <div style={labelA}>
+            <div className="swipe-label" style={labelA}>
               {labelAText}: {layersConfig.find(l => l.id === splitLayers.left)?.title}
             </div>
-            <div style={labelB}>
+            <div className="swipe-label" style={labelB}>
               {labelBText}: {layersConfig.find(l => l.id === splitLayers.right)?.title}
             </div>
           </div>

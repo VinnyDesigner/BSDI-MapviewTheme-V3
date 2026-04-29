@@ -17,6 +17,7 @@ const TOOL_GROUP_DEFS = [
       { id: 'layers',     icon: Layers },
       { id: 'search',     icon: Search },
       { id: 'split',      icon: Columns2 },
+      { id: 'split_view', icon: Map },
       { id: 'navigation', icon: Navigation },
     ]
   },
@@ -44,13 +45,19 @@ const TOOL_GROUP_DEFS = [
   },
 ];
 
-const BottomToolbar = ({ activeTool, onToolSelect }) => {
+const BottomToolbar = ({ 
+  activeTool, 
+  onToolSelect, 
+  swipeMode = 'vertical', 
+  isSplitView = false,
+  isSplitModePersistent = false 
+}) => {
   const { lang } = useLanguage();
   const toolbarRef = useRef(null);
   const [notchX, setNotchX] = useState(0);
 
   const allToolIds = TOOL_GROUP_DEFS.flatMap(g => g.tools.map(t => t.id));
-  const isBottomToolActive = activeTool && allToolIds.includes(activeTool);
+  const isBottomToolActive = (activeTool && allToolIds.includes(activeTool)) || isSplitView;
 
   useEffect(() => {
     if (toolbarRef.current && isBottomToolActive) {
@@ -61,7 +68,7 @@ const BottomToolbar = ({ activeTool, onToolSelect }) => {
         setNotchX((btnRect.left - toolbarRect.left) + btnRect.width / 2);
       }
     }
-  }, [activeTool, isBottomToolActive]);
+  }, [activeTool, isBottomToolActive, isSplitView]);
 
   return (
     <div className="bottom-toolbar-container">
@@ -79,16 +86,28 @@ const BottomToolbar = ({ activeTool, onToolSelect }) => {
                 const Icon = tool.icon;
                 // ✅ Static UI tooltip from translations — NOT dynamic data
                 const label = translations[lang].tools[tool.id] ?? tool.id;
+                const isActive = activeTool === tool.id || 
+                               (tool.id === 'split_view' && isSplitView) ||
+                               (tool.id === 'split' && isSplitModePersistent);
                 return (
                   <button
                     key={tool.id}
                     id={`toolbar-btn-${tool.id}`}
-                    className={`tool-button ${activeTool === tool.id ? 'active' : ''}`}
+                    className={`tool-button tool-item ${isActive ? 'active' : ''}`}
                     onClick={() => onToolSelect(tool.id)}
                     data-tooltip={label}
+                    title={tool.id === 'split' ? "Swipe Maps" : label}
                     aria-label={label}
                   >
-                    <Icon size={18} />
+                    {tool.id === 'split' ? (
+                      <i className="material-icons" style={{ fontSize: '18px' }}>
+                        {swipeMode === 'horizontal' ? 'swap_horiz' : 'swap_vert'}
+                      </i>
+                    ) : tool.id === 'split_view' ? (
+                      <i className="material-icons" style={{ fontSize: '18px' }}>splitscreen</i>
+                    ) : (
+                      <Icon size={18} />
+                    )}
                   </button>
                 );
               })}
