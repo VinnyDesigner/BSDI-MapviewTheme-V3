@@ -11,7 +11,7 @@ import { layersConfig } from '../layers';
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
-const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, basemap, is3D }) => {
+const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
   const mapDiv = useRef(null);
   const viewRef = useRef(null);
   const swipeRef = useRef(null);
@@ -109,43 +109,69 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, bas
     if (!view) return;
 
     if (isSplitMode) {
-      // Set visibility
-      Object.keys(layersRef.current).forEach(id => {
-        const layer = layersRef.current[id];
-        layer.visible = (id === splitLayers.left || id === splitLayers.right);
-      });
-
       const leftLayer = layersRef.current[splitLayers.left];
       const rightLayer = layersRef.current[splitLayers.right];
 
       if (leftLayer && rightLayer) {
+        // 1. Force visibility for comparison
+        leftLayer.visible = true;
+        rightLayer.visible = true;
+        
+        // Hide others
+        Object.keys(layersRef.current).forEach(id => {
+          if (id !== splitLayers.left && id !== splitLayers.right) {
+            layersRef.current[id].visible = false;
+          }
+        });
+
+        // 2. Clear existing swipe
         if (swipeRef.current) {
-          swipeRef.current.leadingLayers = [leftLayer];
-          swipeRef.current.trailingLayers = [rightLayer];
-          // SWAP TO TEST: If 'vertical' gave horizontal, maybe 'horizontal' gives vertical?
-          swipeRef.current.direction = 'horizontal'; 
-        } else {
-          const swipe = new Swipe({
-            view: view,
-            leadingLayers: [leftLayer],
-            trailingLayers: [rightLayer],
-            direction: 'horizontal', // Trying 'horizontal' to achieve a vertical line split
-            position: 50
-          });
-          view.ui.add(swipe);
-          swipeRef.current = swipe;
+          try {
+            view.ui.remove(swipeRef.current);
+            swipeRef.current.destroy();
+          } catch (e) {}
+          swipeRef.current = null;
         }
+
+        // 3. Create fresh swipe with current mode
+        const swipe = new Swipe({
+          view: view,
+          leadingLayers: [leftLayer],
+          trailingLayers: [rightLayer],
+          direction: swipeMode,   // 'vertical' or 'horizontal'
+          position: 50
+        });
+
+        view.ui.add(swipe);
+        swipeRef.current = swipe;
+
+        // Emit both dimensions so parent can handle either mode
+        const emitPos = (pos) => {
+          if (onSwipePositionChange) {
+            onSwipePositionChange({ position: pos, viewWidth: view.width, viewHeight: view.height });
+          }
+        };
+
+        swipe.watch('position', emitPos);
+        emitPos(50); // initial
       }
     } else {
+      // Restore normal view architecture
       if (swipeRef.current) {
-        swipeRef.current.destroy();
+        try {
+          view.ui.remove(swipeRef.current);
+          swipeRef.current.destroy();
+        } catch (e) {}
         swipeRef.current = null;
       }
+      
       Object.keys(layersRef.current).forEach(id => {
-        layersRef.current[id].visible = !!layerVisibility[id];
+        if (layersRef.current[id]) {
+          layersRef.current[id].visible = !!layerVisibility[id];
+        }
       });
     }
-  }, [isSplitMode, splitLayers, layerVisibility]);
+  }, [isSplitMode, splitLayers, layerVisibility, swipeMode]);
 
   // 3. Handle Dynamic Basemap Switching
   useEffect(() => {

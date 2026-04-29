@@ -22,7 +22,7 @@ export const translations = {
       print:        'Print',
       bookmark:     'Bookmark',
       identify:     'Identify',
-      split:        'Compare Maps',
+      split:        'Swipe',
       basemap:      'Basemaps',
     },
 
@@ -39,7 +39,7 @@ export const translations = {
       data_request: 'Data Request',
       external_data:'External Data',
       identify:     'Identify',
-      split:        'Compare Maps',
+      split:        'Swipe',
       basemap:      'Basemaps',
     },
 
@@ -73,7 +73,7 @@ export const translations = {
     identifyActive:   'Identify mode active',
 
     // ── Split Map panel ──────────────────────────────────
-    splitPanelDesc:   'Compare layers or time periods using the swipe divider.',
+    splitPanelDesc:   'Swipe between layers or time periods using the divider.',
     splitLeftLayer:   'Left Side Layer / Year',
     splitRightLayer:  'Right Side Layer / Year',
     splitTimeLabel:   'Time-Based Comparison',
@@ -122,7 +122,7 @@ export const translations = {
       print:        'طباعة',
       bookmark:     'إشارة مرجعية',
       identify:     'تحديد',
-      split:        'مقارنة الخرائط',
+      split:        'مسح',
       basemap:      'خرائط الأساس',
     },
 
@@ -139,7 +139,7 @@ export const translations = {
       data_request: 'طلب البيانات',
       external_data:'بيانات خارجية',
       identify:     'تحديد',
-      split:        'مقارنة الخرائط',
+      split:        'مسح',
       basemap:      'خرائط الأساس',
     },
 
@@ -173,7 +173,7 @@ export const translations = {
     identifyActive:   'وضع التحديد نشط',
 
     // ── Split Map panel ──────────────────────────────────
-    splitPanelDesc:   'قارن بين الطبقات أو الفترات الزمنية باستخدام فاصل المسح.',
+    splitPanelDesc:   'امسح بين الطبقات أو الفترات الزمنية باستخدام الفاصل.',
     splitLeftLayer:   'طبقة / سنة الجانب الأيسر',
     splitRightLayer:  'طبقة / سنة الجانب الأيمن',
     splitTimeLabel:   'مقارنة زمنية',

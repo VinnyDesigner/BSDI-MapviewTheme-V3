@@ -35,6 +35,8 @@ function AppInner() {
     right: layersConfig[1]?.id || layersConfig[0]?.id || ''
   })
   const [isSplitModePersistent, setIsSplitModePersistent] = useState(false);
+  const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
+  const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
   const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
 
   const basemaps = [
@@ -199,33 +201,74 @@ function AppInner() {
           <div className="tool-content">
             <p className="description">{t('splitPanelDesc')}</p>
             
+            {/* Enable / Disable toggle */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'space-between',
               padding: '12px',
-              background: 'rgba(255, 193, 7, 0.1)',
+              background: 'rgba(30, 60, 114, 0.05)',
               borderRadius: '8px',
               marginBottom: '20px',
-              border: '1px solid rgba(255, 193, 7, 0.3)'
+              border: '1px solid rgba(30, 60, 114, 0.1)'
             }}>
               <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
-                {isSplitModePersistent ? 'Split View Active' : 'Enable Split View'}
+                {isSplitModePersistent ? 'Swipe Active' : 'Enable Swipe'}
               </span>
               <button 
                 onClick={() => setIsSplitModePersistent(!isSplitModePersistent)}
                 className="primary-btn"
                 style={{ 
-                  background: isSplitModePersistent ? '#e63946' : '#FFC107',
-                  color: isSplitModePersistent ? 'white' : '#1a2f4d',
-                  padding: '6px 12px',
-                  fontSize: '12px'
+                  background: isSplitModePersistent 
+                    ? '#cbd5e1' // Professional Ash color for "Disable" state
+                    : 'linear-gradient(135deg, #df261c, #002D5D)', // Icon Gradient for "Enable" state
+                  color: isSplitModePersistent ? '#1a2f4d' : 'white',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  borderRadius: '10px', // 10px Corner Radius
+                  border: 'none !important',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                  boxShadow: isSplitModePersistent ? 'none' : '0 4px 12px rgba(223, 38, 28, 0.2)'
                 }}
               >
                 {isSplitModePersistent ? 'Disable' : 'Enable'}
               </button>
             </div>
 
+            {/* ── Swipe Direction Toggle (ABOVE layer selects) ── */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Swipe Direction</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[
+                  { id: 'horizontal', label: '| Vertical Swipe' },
+                  { id: 'vertical',   label: '— Horizontal Swipe' }
+                ].map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => setSwipeMode(id)}
+                    style={{
+                      flex: 1,
+                      padding: '7px 0',
+                      borderRadius: '6px',
+                      border: '1.5px solid',
+                      borderColor: swipeMode === id ? '#1e3c72' : '#e2e8f0',
+                      background: swipeMode === id ? 'linear-gradient(135deg, #1e3c72, #2a5298)' : 'white',
+                      color: swipeMode === id ? 'white' : '#1a2f4d',
+                      fontWeight: '700',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Layer selects */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitLeftLayer')}</label>
               <select 
@@ -337,6 +380,8 @@ function AppInner() {
         isSplitMode={isSplitModePersistent}
         splitLayers={splitLayers}
         basemap={currentBasemap}
+        swipeMode={swipeMode}
+        onSwipePositionChange={setSwipeInfo}
       />
       <MapControls 
         view={mapView} 
@@ -363,82 +408,58 @@ function AppInner() {
 
       <BottomToolbar activeTool={activeTool} onToolSelect={handleToolSelect} />
 
-      {/* Centralized Split UI at the top center */}
-      {isSplitModePersistent && (
-        <div 
-          style={{
-            position: 'absolute',
-            top: '80px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            zIndex: 1000,
-            pointerEvents: 'none' // Let clicks pass through to map where not over buttons
-          }}
-        >
-          {/* LEFT LABEL */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
-            padding: '6px 16px',
-            borderRadius: '999px',
-            color: 'white',
-            fontSize: '11px',
-            fontWeight: '800',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            whiteSpace: 'nowrap',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            LEFT: {layersConfig.find(l => l.id === splitLayers.left)?.title}
-          </div>
+      {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
+      {isSplitModePersistent && (() => {
+        const isVertical = swipeMode === 'vertical';
+        const pos = swipeInfo.position ?? 50;
 
-          {/* ACTIVE INDICATOR / RE-OPEN PANEL BUTTON */}
-          <div 
-            onClick={() => setActiveTool('split')}
-            style={{
-              background: '#FFC107',
-              padding: '8px 20px',
-              borderRadius: '999px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 6px 16px rgba(0,0,0,0.3)',
-              fontSize: '12px',
-              fontWeight: '900',
-              color: '#1a2f4d',
-              border: '2px solid white',
-              pointerEvents: 'auto', // Allow clicking this specifically
-              transition: 'transform 0.2s'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            <Columns2 size={16} />
-            <span>{activeTool === 'split' ? 'COMPARING MAPS' : 'SPLIT VIEW ACTIVE'}</span>
-          </div>
+        const labelBase = {
+          position: 'absolute',
+          background: 'rgba(255,255,255,0.92)',
+          padding: '8px 16px',
+          borderRadius: '6px',
+          color: '#1a2f4d',
+          fontSize: '12px',
+          fontWeight: '800',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+          border: '1px solid rgba(0,0,0,0.1)',
+          whiteSpace: 'nowrap',
+          letterSpacing: '0.5px',
+          backdropFilter: 'blur(6px)',
+          transition: 'opacity 0.2s ease, background 0.2s ease', 
+          pointerEvents: 'none',
+          zIndex: 1001
+        };
 
-          {/* RIGHT LABEL */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
-            padding: '6px 16px',
-            borderRadius: '999px',
-            color: 'white',
-            fontSize: '11px',
-            fontWeight: '800',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            whiteSpace: 'nowrap',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            RIGHT: {layersConfig.find(l => l.id === splitLayers.right)?.title}
+        // Visual Vertical Line (L/R) corresponds to swipeMode="horizontal"
+        // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
+        const isVisualVertical = swipeMode === 'horizontal';
+
+        // Clearance fix: 60px ensures a clean, consistent gap even during fast drags
+        const clearance = '60px';
+
+        const labelA = isVisualVertical
+          ? { ...labelBase, top: '50%', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), -50%, 0)` } // Left
+          : { ...labelBase, left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
+
+        const labelB = isVisualVertical
+          ? { ...labelBase, top: '50%', left: `${pos}%`, transform: `translate3d(${clearance}, -50%, 0)` } // Right
+          : { ...labelBase, left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
+
+        const labelAText = isVisualVertical ? 'Left' : 'Top';
+        const labelBText = isVisualVertical ? 'Right' : 'Bottom';
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}>
+            <div style={labelA}>
+              {labelAText}: {layersConfig.find(l => l.id === splitLayers.left)?.title}
+            </div>
+            <div style={labelB}>
+              {labelBText}: {layersConfig.find(l => l.id === splitLayers.right)?.title}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   )
 }

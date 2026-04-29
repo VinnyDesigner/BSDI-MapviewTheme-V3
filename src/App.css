@@ -38,34 +38,31 @@
   outline: none !important;
 }
 
-/* 🌓 Flexible Split (Swipe Widget) Styling */
+/* 🌓 Swipe Widget — visual styling only (direction controlled by JS) */
 .esri-swipe__divider {
-  background-color: #FFC107 !important;
-  box-shadow: 0 0 25px rgba(0, 0, 0, 0.6) !important;
-  border: none !important;
-  z-index: 100 !important;
+  background: linear-gradient(to bottom, rgba(223,38,28,0.85), rgba(0,45,93,0.9)) !important;
+  z-index: 10 !important;
+  box-shadow: 0 0 12px rgba(0,0,0,0.4) !important;
 }
 
-/* Handle indicator */
 .esri-swipe__handle {
-  background-color: #FFC107 !important;
+  z-index: 11 !important;
+  background: linear-gradient(135deg, #df261c, #002D5D) !important;
+  border: 2px solid white !important;
   width: 36px !important;
   height: 36px !important;
   border-radius: 50% !important;
-  border: 4px solid #ffffff !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  z-index: 101 !important;
 }
 
 .esri-swipe__handle::before {
   content: '||' !important;
   color: white !important;
-  font-size: 14px !important;
   font-weight: 900 !important;
-  letter-spacing: 1px !important;
+  font-size: 14px !important;
+  transform: none; 
 }
 
 .esri-swipe__handle::after {
@@ -77,28 +74,28 @@
   position: absolute;
   top: 85px;
   padding: 8px 18px;
-  background: rgba(0, 45, 93, 0.95);
-  color: white;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #1a2f4d;
+  border-radius: 5px;
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 900;
   z-index: 100;
   pointer-events: none;
   backdrop-filter: blur(10px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-  text-transform: uppercase;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  text-transform: none;
   letter-spacing: 1.5px;
 }
 
 .split-label.left {
   left: 30px;
-  border-left: 6px solid #FFC107;
+  border-left: 6px solid #1e3c72;
 }
 
 .split-label.right {
   right: 30px;
-  border-right: 6px solid #FFC107;
+  border-right: 6px solid #1e3c72;
 }
 
 /* 🗺️ Basemap Gallery Styles */
