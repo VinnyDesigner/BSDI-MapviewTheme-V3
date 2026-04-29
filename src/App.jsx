@@ -553,8 +553,8 @@ function AppInner() {
         // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
         const isVisualVertical = swipeMode === 'horizontal';
 
-        // Perfection: Use exactly 20px clearance for vertical, and 40px for horizontal to clear the circular handle
-        const clearance = isVisualVertical ? '20px' : '40px';
+        // Perfection: Use exactly 20px clearance for vertical, and 60px for horizontal to clear the circular handle
+        const clearance = isVisualVertical ? '20px' : '60px';
 
         const labelA = isVisualVertical
           ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` } // Left
@@ -568,7 +568,7 @@ function AppInner() {
         const labelBText = isVisualVertical ? 'Right' : 'Bottom';
 
         return (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}>
+          <div style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
             <div className="swipe-label" style={labelA}>
               {labelAText}: {layersConfig.find(l => l.id === splitLayers.left)?.title}
             </div>
