@@ -4,7 +4,7 @@ import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import './SidePanel.css';
 
-const SidePanel = ({ isOpen, title, children, onClose, onMinimize }) => {
+const SidePanel = ({ isOpen, title, children, footer, onClose, onMinimize }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
   const slideX = isRTL ? '-100%' : '100%';
@@ -31,15 +31,26 @@ const SidePanel = ({ isOpen, title, children, onClose, onMinimize }) => {
 
             <div className="side-panel-inner">
               <div className="side-panel-glow" />
+              
+              {/* Fixed Header */}
               <div className="side-panel-header">
                 <h3>{title}</h3>
                 <button className="close-button" onClick={onClose} aria-label={t('closePanel')}>
                   <X size={18} />
                 </button>
               </div>
+
+              {/* Scrollable Body */}
               <div className="side-panel-content">
                 {children}
               </div>
+
+              {/* Fixed Footer (if any) */}
+              {footer && (
+                <div className="side-panel-footer">
+                  {footer}
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

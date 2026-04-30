@@ -66,6 +66,19 @@ function AppInner() {
     status: '',
     lastRun: null
   });
+  const [timelapseSettings, setTimelapseSettings] = useState({
+    layerId: 'blocks-bahrain',
+    currentYear: 2024,
+    fromYear: 2018,
+    toYear: 2024,
+    startYear: 2018,
+    endYear: 2024,
+    isPlaying: false,
+    speed: 'Medium',
+    loop: true,
+    mode: 'range' // 'single' | 'range'
+  });
+  const [timeCompareTab, setTimeCompareTab] = useState('slider'); // 'slider' | 'swipe'
   const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
   const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
   const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
@@ -187,6 +200,13 @@ function AppInner() {
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
   // ❌ Dynamic data (layer.title, API values) is rendered directly — never t(layer.title).
+  const getPanelFooter = (toolId) => {
+    switch (toolId) {
+      default:
+        return null;
+    }
+  };
+
   const getPanelContent = (toolId) => {
     switch (toolId) {
       case 'basemap':
@@ -665,6 +685,178 @@ function AppInner() {
           </div>
         );
 
+      case 'time_compare':
+        return (
+          <div className="tool-content" style={{ paddingBottom: '16px' }}>
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Timeline Dataset</label>
+                  <select 
+                    className="tool-select"
+                    value={timelapseSettings.layerId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isBlocks = val === 'blocks-bahrain';
+                      setTimelapseSettings({
+                        ...timelapseSettings, 
+                        layerId: val,
+                        mode: isBlocks ? 'range' : 'single',
+                        startYear: isBlocks ? 2018 : 1940,
+                        endYear: isBlocks ? 2024 : 2024,
+                        fromYear: isBlocks ? 2018 : null,
+                        toYear: isBlocks ? 2024 : null,
+                        currentYear: isBlocks ? 2024 : 2024,
+                        isPlaying: false
+                      });
+                    }}
+                  >
+                    {layersConfig.filter(l => l.time !== undefined || l.timeEnabled).map(l => (
+                      <option key={l.id} value={l.id}>{l.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '24px', padding: '20px', background: 'linear-gradient(135deg, #1e3c72, #2a5298)', borderRadius: '16px', color: 'white', textAlign: 'center', boxShadow: '0 8px 24px rgba(30, 60, 114, 0.2)' }}>
+                  <span style={{ fontSize: '12px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '1px' }}>Current Range</span>
+                  <div style={{ fontSize: '32px', fontWeight: '900', margin: '4px 0' }}>
+                    {timelapseSettings.mode === 'range' ? `${timelapseSettings.fromYear} – ${timelapseSettings.toYear}` : timelapseSettings.currentYear}
+                  </div>
+                  <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', position: 'relative', marginTop: '10px' }}>
+                    <div style={{ 
+                      position: 'absolute', 
+                      left: 0, 
+                      height: '100%', 
+                      background: '#facc15', 
+                      borderRadius: '2px',
+                      width: timelapseSettings.mode === 'range' 
+                        ? `${((timelapseSettings.toYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
+                        : `${((timelapseSettings.currentYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
+                    }}></div>
+                  </div>
+                </div>
+
+                {timelapseSettings.mode === 'range' ? (
+                  <div style={{ display: 'flex', gap: '15px', marginBottom: '24px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>From Year</label>
+                      <select 
+                        className="tool-select"
+                        value={timelapseSettings.fromYear}
+                        onChange={(e) => setTimelapseSettings({...timelapseSettings, fromYear: Number(e.target.value), isPlaying: false})}
+                      >
+                        {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>To Year</label>
+                      <select 
+                        className="tool-select"
+                        value={timelapseSettings.toYear}
+                        onChange={(e) => setTimelapseSettings({...timelapseSettings, toYear: Number(e.target.value), isPlaying: false})}
+                      >
+                        {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-group" style={{ marginBottom: '24px' }}>
+                    <input 
+                      type="range" 
+                      min={timelapseSettings.startYear} 
+                      max={timelapseSettings.endYear} 
+                      value={timelapseSettings.currentYear}
+                      onChange={(e) => setTimelapseSettings({...timelapseSettings, currentYear: Number(e.target.value), isPlaying: false})}
+                      style={{ width: '100%', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                      <span>{timelapseSettings.startYear}</span>
+                      <span>{timelapseSettings.endYear}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Moved Speed & Loop here */}
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '24px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Speed</label>
+                    <select 
+                      className="tool-select"
+                      style={{ height: '36px', fontSize: '12px' }}
+                      value={timelapseSettings.speed}
+                      onChange={(e) => setTimelapseSettings({...timelapseSettings, speed: e.target.value})}
+                    >
+                      <option>Slow</option>
+                      <option>Medium</option>
+                      <option>Fast</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Loop</label>
+                    <div 
+                      onClick={() => setTimelapseSettings(prev => ({ ...prev, loop: !prev.loop }))}
+                      style={{ 
+                        height: '36px', 
+                        background: timelapseSettings.loop ? '#f0fdf4' : '#f1f5f9',
+                        border: `1px solid ${timelapseSettings.loop ? '#166534' : '#e2e8f0'}`,
+                        borderRadius: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        color: timelapseSettings.loop ? '#166534' : '#64748b'
+                      }}
+                    >
+                      {timelapseSettings.loop ? 'Enabled' : 'Disabled'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
+                  <button 
+                    onClick={() => {
+                      if (timelapseSettings.mode === 'range') {
+                        setTimelapseSettings(prev => ({ ...prev, toYear: Math.max(prev.fromYear, prev.toYear - 1), isPlaying: false }));
+                      } else {
+                        setTimelapseSettings(prev => ({ ...prev, currentYear: Math.max(prev.startYear, prev.currentYear - 1), isPlaying: false }));
+                      }
+                    }}
+                    style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 20L9 12L19 4V20Z" fill="currentColor"/><path d="M5 19V5" strokeWidth="3"/></svg>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setTimelapseSettings(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
+                    style={{ background: 'linear-gradient(135deg, #df261c, #002d5d)', border: 'none', width: '60px', height: '60px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 15px rgba(223, 38, 28, 0.3)' }}
+                  >
+                    {timelapseSettings.isPlaying ? (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    ) : (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      if (timelapseSettings.mode === 'range') {
+                        setTimelapseSettings(prev => ({ ...prev, toYear: Math.min(prev.endYear, prev.toYear + 1), isPlaying: false }));
+                      } else {
+                        setTimelapseSettings(prev => ({ ...prev, currentYear: Math.min(prev.endYear, prev.currentYear + 1), isPlaying: false }));
+                      }
+                    }}
+                    style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 4L15 12L5 20V4Z" fill="currentColor"/><path d="M19 5V19" strokeWidth="3"/></svg>
+                  </button>
+                </div>
+          </div>
+        );
+
       case 'identify':
         return (
           <div className="tool-content">
@@ -840,6 +1032,13 @@ function AppInner() {
           blendSettings={activeTool === 'blend' ? blendSettings : null}
           arcadeSettings={activeTool === 'arcade' ? arcadeSettings : null}
           spatialSettings={activeTool === 'spatial_analysis' ? spatialSettings : null}
+          timelapseSettings={activeTool === 'time_compare' ? timelapseSettings : null}
+          isSplitView={activeTool === 'time_compare' && timeCompareTab === 'swipe'}
+          onTimelapseYearChange={(year) => setTimelapseSettings(prev => ({ 
+            ...prev, 
+            toYear: prev.mode === 'range' ? year : prev.toYear,
+            currentYear: prev.mode === 'single' ? year : prev.currentYear 
+          }))}
           onSpatialResult={(dist) => setSpatialSettings(prev => ({ ...prev, distanceResult: dist, status: 'Nearest feature identified' }))}
           onArcadePreview={(val, debug) => setArcadeSettings(prev => ({ ...prev, preview: val, debugInfo: debug }))}
           splitLayers={splitLayers}
@@ -869,6 +1068,7 @@ function AppInner() {
       <SidePanel
         isOpen={!!activeTool}
         title={getPanelTitle(activeTool)}
+        footer={getPanelFooter(activeTool)}
         onClose={() => setActiveTool(null)}
         onMinimize={handleMinimize}
       >

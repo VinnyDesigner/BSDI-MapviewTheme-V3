@@ -17,7 +17,7 @@ import { layersConfig } from '../layers';
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
-const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, blendSettings, arcadeSettings, onArcadePreview, spatialSettings, onSpatialResult, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
+const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, blendSettings, arcadeSettings, onArcadePreview, spatialSettings, onSpatialResult, timelapseSettings, onTimelapseYearChange, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
   const mapDiv = useRef(null);
   const viewRef = useRef(null);
   const swipeRef = useRef(null);
@@ -507,6 +507,71 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
       if (clickHandler) clickHandler.remove();
     };
   }, [spatialSettings?.lastRun]);
+
+  // 8. Handle Timelapse Animation
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !timelapseSettings) return;
+
+    const { layerId, currentYear, fromYear, toYear, isPlaying, speed, loop, startYear, endYear, mode } = timelapseSettings;
+    const layer = layersRef.current[layerId];
+    if (!layer) return;
+
+    if (mode === 'range') {
+      // Apply Range Filter (Attribute Based)
+      layer.visible = true;
+      layer.definitionExpression = `SURVEY_YEAR >= ${fromYear} AND SURVEY_YEAR <= ${toYear}`;
+    } else {
+      // Apply Snapshot Filter (Layer Visibility Based)
+      const timeLayers = layersConfig.filter(l => l.time !== undefined);
+      let activeTimeLayerId = null;
+      let maxFoundTime = -1;
+
+      timeLayers.forEach(l => {
+        if (l.time <= currentYear && l.time > maxFoundTime) {
+          maxFoundTime = l.time;
+          activeTimeLayerId = l.id;
+        }
+      });
+
+      timeLayers.forEach(l => {
+        const tLayer = layersRef.current[l.id];
+        if (tLayer) {
+          tLayer.visible = (l.id === activeTimeLayerId);
+          tLayer.opacity = (l.id === activeTimeLayerId) ? 1 : 0;
+        }
+      });
+    }
+
+    // Handle Animation Loop
+    let intervalId = null;
+    if (isPlaying) {
+      const ms = speed === 'Slow' ? 2000 : speed === 'Medium' ? 1000 : 500;
+      
+      intervalId = setInterval(() => {
+        if (mode === 'range') {
+          let nextTo = toYear + 1;
+          if (nextTo > endYear) {
+            if (loop) nextTo = fromYear;
+            else { clearInterval(intervalId); return; }
+          }
+          // We need a way to update toYear. Let's assume onTimelapseYearChange can handle an object or just the year
+          onTimelapseYearChange(nextTo);
+        } else {
+          let nextYear = currentYear + 1;
+          if (nextYear > endYear) {
+            if (loop) nextYear = startYear;
+            else { clearInterval(intervalId); return; }
+          }
+          onTimelapseYearChange(nextYear);
+        }
+      }, ms);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [timelapseSettings?.isPlaying, timelapseSettings?.currentYear, timelapseSettings?.fromYear, timelapseSettings?.toYear, timelapseSettings?.speed, timelapseSettings?.layerId]);
 
   // 3. Handle Dynamic Basemap Switching
   useEffect(() => {

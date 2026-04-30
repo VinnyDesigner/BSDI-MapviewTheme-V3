@@ -16,7 +16,14 @@ const TOOL_GROUP_DEFS = [
     tools: [
       { id: 'layers',     icon: Layers },
       { id: 'search',     icon: Search },
-      { id: 'split',      icon: Columns2 },
+      { id: 'time_compare', icon: () => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+          <path d="M16 12h-4V8" opacity="0.3"/>
+          <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
+        </svg>
+      )},
       { id: 'split_view', icon: Map },
       { id: 'blend',      icon: Blend },
       { id: 'arcade',     icon: () => (
@@ -126,10 +133,21 @@ const BottomToolbar = ({
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
                       </svg>
+                    ) : tool.id === 'arcade' ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
+                      </svg>
                     ) : tool.id === 'spatial_analysis' ? (
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
                         <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                      </svg>
+                    ) : tool.id === 'time_compare' ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                        <path d="M16 12h-4V8" opacity="0.3"/>
+                        <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
                       </svg>
                     ) : (
                       <Icon size={18} />

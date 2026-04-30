@@ -22,10 +22,9 @@ export const translations = {
       print:        'Print',
       bookmark:     'Bookmark',
       identify:     'Identify',
-      split:        'Swipe',
-      blend:        'Layer Blending & Effects',
       arcade:       'Arcade Expression',
       spatial_analysis: 'Spatial Analysis',
+      time_compare:     'Time & Compare',
       basemap:      'Basemaps',
     },
 
@@ -42,10 +41,9 @@ export const translations = {
       data_request: 'Data Request',
       external_data:'External Data',
       identify:     'Identify',
-      split:        'Swipe',
-      blend:        'Layer Blending & Effects',
       arcade:       'Arcade Expression',
       spatial_analysis: 'Spatial Analysis',
+      time_compare:     'Time & Compare',
       basemap:      'Basemaps',
     },
 

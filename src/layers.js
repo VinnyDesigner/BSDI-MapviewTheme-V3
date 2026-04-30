@@ -34,5 +34,13 @@ export const layersConfig = [
     type: 'tile',
     visible: false,
     time: 1990
+  },
+  {
+    id: 'blocks-bahrain',
+    title: 'BLOCKS Bahrain',
+    url: 'https://services6.arcgis.com/89H8pYI6ZzNf9H5v/arcgis/rest/services/Blocks_Bahrain/FeatureServer/0',
+    type: 'feature',
+    visible: false,
+    timeEnabled: true
   }
 ];
