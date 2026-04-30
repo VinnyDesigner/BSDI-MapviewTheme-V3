@@ -1,21 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Map from '@arcgis/core/Map';
+import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
 import SceneView from '@arcgis/core/views/SceneView';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import TileLayer from '@arcgis/core/layers/TileLayer';
 import SceneLayer from '@arcgis/core/layers/SceneLayer';
+import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
+import Graphic from '@arcgis/core/Graphic';
 import Swipe from '@arcgis/core/widgets/Swipe';
+import * as geometryEngine from '@arcgis/core/geometry/geometryEngine';
+import Polyline from '@arcgis/core/geometry/Polyline';
+import HeatmapRenderer from '@arcgis/core/renderers/HeatmapRenderer';
 import { layersConfig } from '../layers';
 
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
-const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
+const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, blendSettings, arcadeSettings, onArcadePreview, spatialSettings, onSpatialResult, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
   const mapDiv = useRef(null);
   const viewRef = useRef(null);
   const swipeRef = useRef(null);
   const layersRef = useRef({});
+  const graphicsLayerRef = useRef(new GraphicsLayer());
   const [isLoading, setIsLoading] = useState(true);
   
   // 1. Initialize Map, View and ALL Layers
@@ -172,6 +179,334 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, bas
       });
     }
   }, [isSplitMode, splitLayers, layerVisibility, swipeMode]);
+
+  // 4. Manage Layer Blending
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || isSplitMode) return;
+
+    if (blendSettings) {
+      // 1. Hide all layers first and reset properties
+      Object.keys(layersRef.current).forEach(id => {
+        const layer = layersRef.current[id];
+        if (layer) {
+          layer.visible = false;
+          layer.opacity = 1;
+          layer.blendMode = 'normal';
+        }
+      });
+
+      const base = layersRef.current[blendSettings.baseLayerId];
+      const overlay = layersRef.current[blendSettings.overlayLayerId];
+
+      if (base && overlay) {
+        // 2. Setup base layer (bottom)
+        base.visible = true;
+        base.opacity = 1;
+        base.blendMode = 'normal';
+        view.map.reorder(base, 0);
+
+        // 3. Setup overlay layer (top)
+        overlay.visible = true;
+        overlay.opacity = blendSettings.opacity;
+        overlay.blendMode = blendSettings.blendMode;
+        view.map.reorder(overlay, 1);
+      }
+    } else {
+      // Restore standard visibility and reset blending
+      Object.keys(layersRef.current).forEach(id => {
+        if (layersRef.current[id]) {
+          layersRef.current[id].visible = !!layerVisibility[id];
+          layersRef.current[id].opacity = 1;
+          layersRef.current[id].blendMode = 'normal';
+        }
+      });
+    }
+  }, [blendSettings, layerVisibility, isSplitMode]);
+
+  // 5. Manage Arcade Expressions
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !arcadeSettings?.lastApplied) return;
+
+    const layer = layersRef.current[arcadeSettings.layerId];
+    if (!layer) return;
+
+    const { expression, applyTo } = arcadeSettings;
+
+    try {
+      if (applyTo === 'Styling') {
+        // Apply Arcade to Renderer
+        layer.renderer = {
+          type: "simple",
+          symbol: {
+            type: "simple-fill",
+            color: [150, 150, 150, 0.5],
+            outline: { color: [255, 255, 255, 0.8], width: 1 }
+          },
+          visualVariables: [{
+            type: "color",
+            valueExpression: expression,
+            stops: [
+              { value: 0, color: "#f7fcf0" },
+              { value: 100, color: "#084081" }
+            ]
+          }]
+        };
+      } else if (applyTo === 'Labels') {
+        // Apply Arcade to Labeling
+        layer.labelingInfo = [{
+          labelPlacement: "above-center",
+          labelExpressionInfo: { expression },
+          symbol: {
+            type: "text",
+            color: "white",
+            haloColor: "#1e3c72",
+            haloSize: "2px",
+            font: { size: 12, weight: "bold", family: "Inter" }
+          }
+        }];
+        layer.labelsVisible = true;
+      } else if (applyTo === 'Popup') {
+        // Apply Arcade to Popups
+        layer.popupTemplate = {
+          title: "Arcade Computation",
+          content: [{
+            type: "text",
+            text: `The computed result for this feature is: <b>{expression/custom-arcade}</b>`
+          }],
+          expressionInfos: [{
+            name: "custom-arcade",
+            title: "Result",
+            expression: expression
+          }]
+        };
+      } else if (applyTo === 'Filtering') {
+        // Note: For filtering, we typically use definitionExpression which is SQL-like.
+        // However, we can use it for visual variables to "hide" features (opacity = 0).
+        layer.renderer = {
+          type: "simple",
+          symbol: layer.renderer.symbol || { type: "simple-fill", color: "blue" },
+          visualVariables: [{
+            type: "opacity",
+            valueExpression: `if (${expression}) { return 1 } else { return 0 }`,
+            stops: [{ value: 0, opacity: 0 }, { value: 1, opacity: 1 }]
+          }]
+        };
+      }
+    } catch (err) {
+      console.error("Arcade Apply Error:", err);
+    }
+  }, [arcadeSettings?.lastApplied]);
+
+  // 6. Live Arcade Preview
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !arcadeSettings?.expression || !onArcadePreview) {
+      if (onArcadePreview && !arcadeSettings?.expression) onArcadePreview('Enter expression to see preview');
+      return;
+    }
+
+    const layer = layersRef.current[arcadeSettings.layerId];
+    if (!layer) return;
+
+    // Evaluate expression on a sample feature
+    const evalPreview = async () => {
+      try {
+        await layer.when();
+        const results = await layer.queryFeatures({
+          where: "1=1",
+          outFields: ["*"],
+          num: 1,
+          returnGeometry: false
+        });
+
+        if (results.features.length > 0) {
+          const feature = results.features[0];
+          const attrs = feature.attributes;
+          let result = "---";
+          const expr = arcadeSettings.expression.trim();
+          
+          // Basic field substitution for preview
+          if (expr.includes('$feature.')) {
+            // Extract field names from $feature.field
+            const matches = [...expr.matchAll(/\$feature\.(\w+)/g)];
+            let tempResult = expr;
+            let fieldMissing = null;
+
+            for (const match of matches) {
+              const fieldName = match[1];
+              const val = attrs[fieldName] || attrs[fieldName.toUpperCase()] || attrs[fieldName.toLowerCase()];
+              
+              if (val === undefined) {
+                fieldMissing = fieldName;
+                break;
+              }
+              // Replace for simulation
+              tempResult = tempResult.replace(`$feature.${fieldName}`, val);
+            }
+
+            if (fieldMissing) {
+              result = `Error: Field "${fieldMissing}" not found in layer`;
+            } else if (expr.includes('/') || expr.includes('*')) {
+              // Simulated math
+              try {
+                // Strip return/When for simple math eval
+                const mathExpr = expr.replace('return', '').replace(';', '').trim();
+                const evalExpr = mathExpr.replace(/\$feature\.(\w+)/g, (m, f) => {
+                  return attrs[f] || attrs[f.toUpperCase()] || attrs[f.toLowerCase()] || 0;
+                });
+                result = eval(evalExpr);
+              } catch (e) {
+                result = "Error: Invalid math expression";
+              }
+            } else if (matches.length > 0) {
+              const f0 = matches[0][1];
+              result = attrs[f0] || attrs[f0.toUpperCase()] || attrs[f0.toLowerCase()];
+            }
+          } else {
+            result = "Expression Valid (Logic Ready)";
+          }
+          
+          onArcadePreview(String(result), attrs);
+        } else {
+          onArcadePreview("No sample features found", null);
+        }
+      } catch (err) {
+        console.error("Preview Eval Error:", err);
+        onArcadePreview("Evaluation Error", null);
+      }
+    };
+
+    const timer = setTimeout(evalPreview, 300);
+    return () => clearTimeout(timer);
+  }, [arcadeSettings?.expression, arcadeSettings?.layerId]);
+
+  // 7. Handle Spatial Analysis Operations
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    // Create or find analysis layer
+    let analysisLayer = view.map.findLayerById('analysis-layer');
+    if (!analysisLayer) {
+      analysisLayer = new GraphicsLayer({ id: 'analysis-layer' });
+      view.map.add(analysisLayer);
+    }
+
+    if (!spatialSettings?.lastRun) {
+      analysisLayer.removeAll();
+      // Restore renderers if they were changed for heatmap
+      layersConfig.forEach(l => {
+        const layer = layersRef.current[l.id];
+        if (layer && layer.originalRenderer) {
+          layer.renderer = layer.originalRenderer;
+        }
+      });
+      return;
+    }
+
+    const { subTool, layerId, bufferDistance, bufferUnit, isWaitingForClick } = spatialSettings;
+    const layer = layersRef.current[layerId];
+    if (!layer) return;
+
+    let clickHandler = null;
+    if (isWaitingForClick) {
+      clickHandler = view.on("click", async (event) => {
+        try {
+          const results = await layer.queryFeatures();
+          if (results.features.length === 0) return;
+
+          let nearestFeature = null;
+          let minDistance = Infinity;
+
+          results.features.forEach(f => {
+            const dist = geometryEngine.distance(event.mapPoint, f.geometry, "meters");
+            if (dist < minDistance) {
+              minDistance = dist;
+              nearestFeature = f;
+            }
+          });
+
+          if (nearestFeature) {
+            analysisLayer.removeAll();
+
+            // 1. Draw Click Point
+            analysisLayer.add(new Graphic({
+              geometry: event.mapPoint,
+              symbol: { type: "simple-marker", color: "#df261c", size: "12px", outline: { color: "white", width: 2 } }
+            }));
+
+            // 2. Draw Connector Line
+            const line = new Polyline({
+              paths: [[[event.mapPoint.x, event.mapPoint.y], [nearestFeature.geometry.centroid?.x || nearestFeature.geometry.x, nearestFeature.geometry.centroid?.y || nearestFeature.geometry.y]]],
+              spatialReference: view.spatialReference
+            });
+            analysisLayer.add(new Graphic({
+              geometry: line,
+              symbol: { type: "simple-line", color: "#1e3c72", width: 2, style: "dash" }
+            }));
+
+            // 3. Highlight Nearest Feature
+            analysisLayer.add(new Graphic({
+              geometry: nearestFeature.geometry,
+              symbol: { type: "simple-fill", color: [250, 204, 21, 0.4], outline: { color: "#facc15", width: 2 } }
+            }));
+
+            // 4. Update UI with Distance
+            const formattedDist = minDistance > 1000 ? `${(minDistance/1000).toFixed(2)} km` : `${Math.round(minDistance)} m`;
+            onSpatialResult(formattedDist);
+          }
+        } catch (err) {
+          console.error("Proximity Analysis Error:", err);
+        }
+      });
+    }
+
+    const runAnalysis = async () => {
+      try {
+        if (subTool === 'Buffer Analysis') {
+          const results = await layer.queryFeatures();
+          const geometries = results.features.map(f => f.geometry);
+          const buffers = geometryEngine.buffer(geometries, bufferDistance, bufferUnit);
+          
+          analysisLayer.removeAll();
+          const bufferGraphics = (Array.isArray(buffers) ? buffers : [buffers]).map(geometry => ({
+            geometry,
+            symbol: {
+              type: "simple-fill",
+              color: [30, 60, 114, 0.3],
+              outline: { color: [30, 60, 114, 0.8], width: 1 }
+            }
+          }));
+          analysisLayer.addMany(bufferGraphics);
+          view.goTo(analysisLayer.graphics);
+        } 
+        else if (subTool === 'Heatmap Density') {
+          if (!layer.originalRenderer) layer.originalRenderer = layer.renderer.clone();
+          layer.renderer = new HeatmapRenderer({
+            colorStops: [
+              { color: "rgba(30, 60, 114, 0)", ratio: 0 },
+              { color: "#1e3c72", ratio: 0.2 },
+              { color: "#df261c", ratio: 0.5 },
+              { color: "#facc15", ratio: 0.8 },
+              { color: "#ffffff", ratio: 1 }
+            ],
+            maxDensity: 0.01,
+            minDensity: 0
+          });
+        }
+      } catch (err) {
+        console.error("Spatial Analysis Error:", err);
+      }
+    };
+
+    runAnalysis();
+
+    return () => {
+      if (clickHandler) clickHandler.remove();
+    };
+  }, [spatialSettings?.lastRun]);
 
   // 3. Handle Dynamic Basemap Switching
   useEffect(() => {

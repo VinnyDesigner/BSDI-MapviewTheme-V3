@@ -23,6 +23,9 @@ export const translations = {
       bookmark:     'Bookmark',
       identify:     'Identify',
       split:        'Swipe',
+      blend:        'Layer Blending & Effects',
+      arcade:       'Arcade Expression',
+      spatial_analysis: 'Spatial Analysis',
       basemap:      'Basemaps',
     },
 
@@ -40,6 +43,9 @@ export const translations = {
       external_data:'External Data',
       identify:     'Identify',
       split:        'Swipe',
+      blend:        'Layer Blending & Effects',
+      arcade:       'Arcade Expression',
+      spatial_analysis: 'Spatial Analysis',
       basemap:      'Basemaps',
     },
 
@@ -123,6 +129,9 @@ export const translations = {
       bookmark:     'إشارة مرجعية',
       identify:     'تحديد',
       split:        'مسح',
+      blend:        'دمج الطبقات والتأثيرات',
+      arcade:       'تعبير Arcade',
+      spatial_analysis: 'التحليل المكاني',
       basemap:      'خرائط الأساس',
     },
 
@@ -140,6 +149,9 @@ export const translations = {
       external_data:'بيانات خارجية',
       identify:     'تحديد',
       split:        'مسح',
+      blend:        'دمج الطبقات والتأثيرات',
+      arcade:       'تعبير Arcade',
+      spatial_analysis: 'التحليل المكاني',
       basemap:      'خرائط الأساس',
     },
 

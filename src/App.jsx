@@ -38,6 +38,34 @@ function AppInner() {
   const [isSplitModePersistent, setIsSplitModePersistent] = useState(false);
   const [isSplitView, setIsSplitView] = useState(false);
   const [syncMode, setSyncMode] = useState('both'); // 'both' | 'zoom' | 'none'
+  const [blendSettings, setBlendSettings] = useState({
+    baseLayerId: 'satellite-present',
+    overlayLayerId: 'historical-1990',
+    opacity: 0.5,
+    blendMode: 'multiply'
+  });
+  const [arcadeSettings, setArcadeSettings] = useState({
+    applyTo: 'Styling',
+    layerId: 'heritage-sites',
+    expression: '',
+    template: '',
+    status: '',
+    lastApplied: null,
+    preview: 'Enter expression to see preview',
+    debugInfo: null,
+    showDebug: false
+  });
+  const [spatialSettings, setSpatialSettings] = useState({
+    subTool: 'Buffer Analysis',
+    layerId: 'heritage-sites',
+    bufferDistance: 1000,
+    bufferUnit: 'meters',
+    proximityPoint: null,
+    distanceResult: null,
+    isWaitingForClick: false,
+    status: '',
+    lastRun: null
+  });
   const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
   const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
   const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
@@ -83,8 +111,15 @@ function AppInner() {
       draw: <Pencil size={16} />, cad: <Box size={16} />,
       data_request: <Database size={16} />, external_data: <Globe size={16} />,
       print: <Printer size={16} />, bookmark: <Bookmark size={16} />,
-      identify: <Info size={16} />, split: <Columns2 size={16} />,
-      split_view: <i className="material-icons" style={{ fontSize: '16px' }}>splitscreen</i>,
+      identify:     <Info size={16} />, 
+      split:        <Columns2 size={16} />,
+      split_view:   <i className="material-icons" style={{ fontSize: '16px' }}>splitscreen</i>,
+      blend: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="8" cy="12" r="7" />
+          <circle cx="16" cy="12" r="7" />
+        </svg>
+      ),
     };
     return icons[toolId] ?? null;
   }
@@ -123,6 +158,12 @@ function AppInner() {
     // Mutual Exclusivity: Disable persistent features when switching to a different tool
     if (toolId !== 'split_view') setIsSplitView(false);
     if (toolId !== 'split') setIsSplitModePersistent(false);
+    
+    // Disable blending if we move to a feature that doesn't support it (split/swipe)
+    // But keep it active if we're just opening other panels like search? 
+    // User said "Only one active tool at a time" and "Do not stack with split/swipe"
+    // So if split or swipe becomes active, we must ensure blend is effectively "off".
+    // We'll use the activeTool === 'blend' check to render it in MapView.
 
     if (pinnedTools.includes(toolId)) setPinnedTools(prev => prev.filter(id => id !== toolId));
     setActiveTool(toolId);
@@ -192,11 +233,434 @@ function AppInner() {
                       checked={layerVisibility[layer.id]}
                       onChange={() => toggleLayer(layer.id)}
                     />
-                    {/* ✅ Raw dynamic data — NOT translated */}
                     <span className="layer-name">{layer.title}</span>
                   </label>
                 </div>
               ))}
+            </div>
+          </div>
+        );
+
+      case 'blend':
+        return (
+          <div className="tool-content">
+            <p className="description" style={{ marginBottom: '20px', color: '#64748b', fontSize: '13px' }}>
+              Create complex visual effects by blending two map layers together.
+            </p>
+            
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                Base Layer
+              </label>
+              <select 
+                className="tool-select" 
+                value={blendSettings.baseLayerId}
+                onChange={(e) => setBlendSettings(prev => ({ ...prev, baseLayerId: e.target.value }))}
+              >
+                {layersConfig.map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                Overlay Layer
+              </label>
+              <select 
+                className="tool-select" 
+                value={blendSettings.overlayLayerId}
+                onChange={(e) => setBlendSettings(prev => ({ ...prev, overlayLayerId: e.target.value }))}
+              >
+                {layersConfig.map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Opacity</label>
+                <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01"
+                value={blendSettings.opacity}
+                onChange={(e) => setBlendSettings(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
+                style={{ 
+                  width: '100%', 
+                  accentColor: '#DF261C',
+                  cursor: 'pointer'
+                }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                Blend Mode
+              </label>
+              <select 
+                className="tool-select" 
+                value={blendSettings.blendMode}
+                onChange={(e) => setBlendSettings(prev => ({ ...prev, blendMode: e.target.value }))}
+              >
+                <option value="normal">Normal</option>
+                <option value="multiply">Multiply</option>
+                <option value="overlay">Overlay</option>
+                <option value="screen">Screen</option>
+                <option value="color-burn">Color Burn</option>
+                <option value="destination-over">Destination Over</option>
+                <option value="lighter">Lighter</option>
+              </select>
+            </div>
+          </div>
+        );
+
+      case 'arcade':
+        return (
+          <div className="tool-content" style={{ paddingBottom: '16px' }}>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Apply To</label>
+              <select 
+                className="tool-select"
+                value={arcadeSettings.applyTo}
+                onChange={(e) => setArcadeSettings({...arcadeSettings, applyTo: e.target.value})}
+              >
+                <option>Styling</option>
+                <option>Labels</option>
+                <option>Popup</option>
+                <option>Filtering</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Target Layer</label>
+              <select 
+                className="tool-select"
+                value={arcadeSettings.layerId}
+                onChange={(e) => setArcadeSettings({...arcadeSettings, layerId: e.target.value})}
+              >
+                {layersConfig.map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Quick Templates</label>
+              <select 
+                className="tool-select"
+                value={arcadeSettings.template}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  let expr = '';
+                  if (val === 'Population Density') expr = 'return $feature.population / $feature.area;';
+                  if (val === 'Highlight Coastal') expr = "return When($feature.type == 'Coastal', 'High', 'Low');";
+                  if (val === 'Conditional Label') expr = "if ($feature.status == 1) { return 'Active'; } else { return 'Inactive'; }";
+                  setArcadeSettings({...arcadeSettings, template: val, expression: expr});
+                }}
+              >
+                <option value="">-- Select Template --</option>
+                <option>Population Density</option>
+                <option>Highlight Coastal</option>
+                <option>Conditional Label</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Field Picker</label>
+              <div className="field-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {['$feature.name', '$feature.type', '$feature.area', '$feature.population'].map(field => (
+                  <button 
+                    key={field}
+                    onClick={() => setArcadeSettings({...arcadeSettings, expression: arcadeSettings.expression + ' ' + field})}
+                    style={{ 
+                      padding: '4px 10px', 
+                      background: '#f1f5f9', 
+                      border: '1px solid #e2e8f0', 
+                      borderRadius: '6px', 
+                      fontSize: '11px', 
+                      color: '#1e3c72',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {field}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Expression Editor</label>
+              <textarea 
+                className="tool-input"
+                style={{ height: '100px', padding: '12px', fontFamily: 'monospace', fontSize: '12px', resize: 'vertical' }}
+                placeholder="Write Arcade expression here..."
+                value={arcadeSettings.expression}
+                onChange={(e) => setArcadeSettings({...arcadeSettings, expression: e.target.value})}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <div style={{ 
+                padding: '12px', 
+                background: arcadeSettings.preview.includes('Error') ? '#fff1f2' : '#f8fafc', 
+                borderRadius: '8px', 
+                border: '1px solid ' + (arcadeSettings.preview.includes('Error') ? '#fecaca' : '#e2e8f0') 
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Output Preview</span>
+                  <button 
+                    onClick={() => setArcadeSettings(prev => ({ ...prev, showDebug: !prev.showDebug }))}
+                    style={{ fontSize: '10px', background: 'none', border: 'none', color: '#1e3c72', cursor: 'pointer', fontWeight: '600' }}
+                  >
+                    {arcadeSettings.showDebug ? 'Hide Debug' : 'Show Debug'}
+                  </button>
+                </div>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '800', 
+                  color: arcadeSettings.preview.includes('Error') ? '#be123c' : '#1a2f4d', 
+                  display: 'block' 
+                }}>
+                  {arcadeSettings.expression 
+                    ? (arcadeSettings.preview.includes('Error') ? `❌ ${arcadeSettings.preview}` : `Result: ${arcadeSettings.preview}`) 
+                    : 'Enter expression to see preview'}
+                </span>
+              </div>
+            </div>
+
+            {arcadeSettings.showDebug && arcadeSettings.debugInfo && (
+              <div style={{ marginBottom: '16px', padding: '10px', background: '#1e293b', color: '#cbd5e1', borderRadius: '8px', fontSize: '11px', fontFamily: 'monospace', maxHeight: '100px', overflowY: 'auto' }}>
+                <div style={{ color: '#94a3b8', marginBottom: '4px', borderBottom: '1px solid #334155', paddingBottom: '2px' }}>Sample Feature Attributes:</div>
+                {Object.entries(arcadeSettings.debugInfo).map(([k, v]) => (
+                  <div key={k}>{k}: {String(v)}</div>
+                ))}
+              </div>
+            )}
+
+            {arcadeSettings.applyTo === 'Styling' && arcadeSettings.lastApplied && (
+              <div style={{ marginBottom: '20px', padding: '12px', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#1a2f4d', fontWeight: '700' }}>Color Scale (Legend)</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ height: '12px', flex: 1, background: 'linear-gradient(to right, #f7fcf0, #084081)', borderRadius: '4px' }}></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '10px', color: '#64748b' }}>
+                  <span>Low / 0</span>
+                  <span>High / 100+</span>
+                </div>
+              </div>
+            )}
+
+            <div className="arcade-guide" style={{ marginBottom: '20px', padding: '12px', background: 'rgba(30, 60, 114, 0.03)', borderRadius: '8px', border: '1px dashed rgba(30, 60, 114, 0.2)' }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#1e3c72', fontWeight: '700' }}>Where to see results:</h4>
+              <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '11px', color: '#64748b', lineHeight: '1.6' }}>
+                <li><b>Popup:</b> Click on any feature on the map</li>
+                <li><b>Styling:</b> Observe color changes based on the legend above</li>
+                <li><b>Labels:</b> Check text appearing over features</li>
+                <li><b>Filtering:</b> Features will show/hide dynamically</li>
+              </ul>
+            </div>
+
+            {arcadeSettings.status && (
+              <div style={{ 
+                marginBottom: '16px', 
+                padding: '12px', 
+                background: arcadeSettings.status.includes('Error') ? '#fef2f2' : '#f0fdf4',
+                color: arcadeSettings.status.includes('Error') ? '#991b1b' : '#166534',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: '700',
+                textAlign: 'center',
+                border: '1px solid' + (arcadeSettings.status.includes('Error') ? '#fee2e2' : '#dcfce7'),
+                animation: 'fadeIn 0.3s ease'
+              }}>
+                ✔ {arcadeSettings.status}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                className="primary-btn" 
+                style={{ 
+                  flex: 1, 
+                  padding: '10px', 
+                  borderRadius: '10px', 
+                  background: arcadeSettings.preview.includes('Error') || !arcadeSettings.expression ? '#e2e8f0' : 'linear-gradient(135deg, #df261c, #002d5d)', 
+                  color: arcadeSettings.preview.includes('Error') || !arcadeSettings.expression ? '#64748b' : 'white', 
+                  fontWeight: '700', 
+                  border: 'none', 
+                  cursor: arcadeSettings.preview.includes('Error') || !arcadeSettings.expression ? 'not-allowed' : 'pointer',
+                  opacity: arcadeSettings.preview.includes('Error') || !arcadeSettings.expression ? 0.8 : 1
+                }}
+                disabled={!arcadeSettings.expression || arcadeSettings.preview.includes('Error')}
+                onClick={() => {
+                  const hintMap = {
+                    'Popup': 'Click feature to see output',
+                    'Styling': 'Check map color changes',
+                    'Labels': 'Labels appear on map',
+                    'Filtering': 'Features will hide/show'
+                  };
+                  setArcadeSettings(prev => ({ 
+                    ...prev, 
+                    lastApplied: Date.now(),
+                    status: `${prev.applyTo} applied successfully — ${hintMap[prev.applyTo]}`
+                  }));
+                }}
+              >
+                Apply
+              </button>
+              <button 
+                className="secondary-btn"
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#f1f5f9', color: '#1a2f4d', fontWeight: '700', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                onClick={() => setArcadeSettings({
+                  ...arcadeSettings,
+                  expression: '',
+                  template: '',
+                  status: '',
+                  lastApplied: null
+                })}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'spatial_analysis':
+        return (
+          <div className="tool-content" style={{ paddingBottom: '16px' }}>
+            <p className="description" style={{ marginBottom: '20px', color: '#64748b', fontSize: '13px' }}>
+              Perform advanced spatial operations to derive geographical insights.
+            </p>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Select Analysis Tool</label>
+              <select 
+                className="tool-select"
+                value={spatialSettings.subTool}
+                onChange={(e) => setSpatialSettings({...spatialSettings, subTool: e.target.value})}
+              >
+                <option>Buffer Analysis</option>
+                <option>Select by Location</option>
+                <option>Overlay (Intersect)</option>
+                <option>Proximity (Nearest)</option>
+                <option>Heatmap Density</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Target Layer</label>
+              <select 
+                className="tool-select"
+                value={spatialSettings.layerId}
+                onChange={(e) => setSpatialSettings({...spatialSettings, layerId: e.target.value})}
+              >
+                {layersConfig.map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {spatialSettings.subTool === 'Buffer Analysis' && (
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ flex: 2 }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Distance</label>
+                    <input 
+                      type="number" 
+                      className="tool-input" 
+                      value={spatialSettings.bufferDistance}
+                      onChange={(e) => setSpatialSettings({...spatialSettings, bufferDistance: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Unit</label>
+                    <select 
+                      className="tool-select"
+                      value={spatialSettings.bufferUnit}
+                      onChange={(e) => setSpatialSettings({...spatialSettings, bufferUnit: e.target.value})}
+                    >
+                      <option value="meters">m</option>
+                      <option value="kilometers">km</option>
+                      <option value="miles">mi</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {spatialSettings.subTool === 'Proximity (Nearest)' && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', border: '1px dashed #1e3c72' }}>
+                <span style={{ fontSize: '12px', color: '#1e3c72', fontWeight: '600' }}>Instructions:</span>
+                <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#64748b' }}>Click any point on the map to find the nearest feature in the selected layer.</p>
+              </div>
+            )}
+
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <div className="arcade-guide" style={{ padding: '12px', background: 'rgba(30, 60, 114, 0.03)', borderRadius: '8px', border: '1px dashed rgba(30, 60, 114, 0.2)' }}>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#1e3c72', fontWeight: '700' }}>Tool Info:</h4>
+                <p style={{ margin: 0, fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>
+                  {spatialSettings.subTool === 'Buffer Analysis' && "Creates a polygon around map features at a specified distance."}
+                  {spatialSettings.subTool === 'Select by Location' && "Filters features based on their spatial relationship with another layer."}
+                  {spatialSettings.subTool === 'Overlay (Intersect)' && "Identifies areas where two layers geographically overlap."}
+                  {spatialSettings.subTool === 'Proximity (Nearest)' && "Calculates the straight-line distance to the closest item."}
+                  {spatialSettings.subTool === 'Heatmap Density' && "Visualizes the geographic concentration of features."}
+                </p>
+              </div>
+            </div>
+
+            {spatialSettings.status && (
+              <div style={{ 
+                marginBottom: '16px', 
+                padding: '12px', 
+                background: spatialSettings.status.includes('Click') ? 'rgba(30, 60, 114, 0.05)' : '#f0fdf4', 
+                color: spatialSettings.status.includes('Click') ? '#1e3c72' : '#166534', 
+                borderRadius: '8px', 
+                fontSize: '12px', 
+                fontWeight: '700', 
+                textAlign: 'center', 
+                border: '1px solid ' + (spatialSettings.status.includes('Click') ? '#1e3c72' : '#dcfce7') 
+              }}>
+                {spatialSettings.status.includes('Click') ? '📍 ' : '✔ '} {spatialSettings.status}
+              </div>
+            )}
+
+            {spatialSettings.distanceResult && (
+              <div style={{ marginBottom: '16px', padding: '15px', background: '#1e3c72', color: 'white', borderRadius: '12px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, display: 'block', marginBottom: '4px' }}>Nearest Distance</span>
+                <span style={{ fontSize: '24px', fontWeight: '800' }}>{spatialSettings.distanceResult}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                className="primary-btn" 
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'linear-gradient(135deg, #df261c, #002d5d)', color: 'white', fontWeight: '700', border: 'none', cursor: 'pointer' }}
+                onClick={() => {
+                  const isProximity = spatialSettings.subTool === 'Proximity (Nearest)';
+                  setSpatialSettings({
+                    ...spatialSettings, 
+                    lastRun: Date.now(), 
+                    isWaitingForClick: isProximity,
+                    status: isProximity ? 'Ready: Click any point on the map' : `${spatialSettings.subTool} applied successfully`,
+                    distanceResult: null
+                  });
+                }}
+              >
+                {spatialSettings.subTool === 'Proximity (Nearest)' ? 'Start Tracking' : 'Run Analysis'}
+              </button>
+              <button 
+                className="secondary-btn"
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#f1f5f9', color: '#1a2f4d', fontWeight: '700', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                onClick={() => setSpatialSettings({...spatialSettings, status: '', lastRun: null, distanceResult: null, isWaitingForClick: false})}
+              >
+                Clear
+              </button>
             </div>
           </div>
         );
@@ -213,46 +677,18 @@ function AppInner() {
         return (
           <div className="tool-content">
             <p className="description">{t('splitPanelDesc')}</p>
-            
-            {/* Enable / Disable toggle */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              padding: '12px',
-              background: 'rgba(30, 60, 114, 0.05)',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              border: '1px solid rgba(30, 60, 114, 0.1)'
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
               <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
                 {isSplitModePersistent ? 'Swipe Active' : 'Enable Swipe'}
               </span>
               <button 
                 onClick={() => setIsSplitModePersistent(!isSplitModePersistent)}
-                className="primary-btn"
-                style={{ 
-                  background: isSplitModePersistent 
-                    ? '#cbd5e1' // Professional Ash color for "Disable" state
-                    : 'linear-gradient(135deg, #df261c, #002D5D)', // Icon Gradient for "Enable" state
-                  color: isSplitModePersistent ? '#1a2f4d' : 'white',
-                  padding: '8px 18px',
-                  fontSize: '13px',
-                  fontWeight: '600', // Semibold
-                  borderRadius: '10px',
-                  border: 'none',
-                  outline: 'none',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer',
-                  boxShadow: isSplitModePersistent ? 'none' : '0 4px 12px rgba(223, 38, 28, 0.2)'
-                }}
-                className="no-stroke-btn" // Added a custom class just in case primary-btn has forced borders
+                className="no-stroke-btn"
+                style={{ background: isSplitModePersistent ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitModePersistent ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', transition: 'all 0.3s ease', cursor: 'pointer' }}
               >
                 {isSplitModePersistent ? 'Disable' : 'Enable'}
               </button>
             </div>
-
-            {/* ── Swipe Direction Toggle (ABOVE layer selects) ── */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Swipe Direction</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -263,64 +699,32 @@ function AppInner() {
                   <button
                     key={id}
                     onClick={() => setSwipeMode(id)}
-                    style={{
-                      flex: 1,
-                      padding: '7px 0',
-                      borderRadius: '6px',
-                      border: '1.5px solid',
-                      borderColor: swipeMode === id ? '#1e3c72' : '#e2e8f0',
-                      background: swipeMode === id ? 'linear-gradient(135deg, #1e3c72, #2a5298)' : 'white',
-                      color: swipeMode === id ? 'white' : '#1a2f4d',
-                      fontWeight: '700',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: '6px', border: '1.5px solid', borderColor: swipeMode === id ? '#1e3c72' : '#e2e8f0', background: swipeMode === id ? 'linear-gradient(135deg, #1e3c72, #2a5298)' : 'white', color: swipeMode === id ? 'white' : '#1a2f4d', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}
                   >
                     {label}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Layer selects */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitLeftLayer')}</label>
-              <select 
-                className="tool-select" 
-                value={splitLayers.left}
-                onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
+              <select className="tool-select" value={splitLayers.left} onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                 <optgroup label={t('splitLayerLabel')}>
-                  {layersConfig.filter(l => !l.time).map(layer => (
-                    <option key={layer.id} value={layer.id}>{layer.title}</option>
-                  ))}
+                  {layersConfig.filter(l => !l.time).map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
                 </optgroup>
                 <optgroup label={t('splitTimeLabel')}>
-                  {layersConfig.filter(l => l.time).map(layer => (
-                    <option key={layer.id} value={layer.id}>{layer.title}</option>
-                  ))}
+                  {layersConfig.filter(l => l.time).map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
                 </optgroup>
               </select>
             </div>
             <div className="form-group">
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitRightLayer')}</label>
-              <select 
-                className="tool-select" 
-                value={splitLayers.right}
-                onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
+              <select className="tool-select" value={splitLayers.right} onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                 <optgroup label={t('splitLayerLabel')}>
-                  {layersConfig.filter(l => !l.time).map(layer => (
-                    <option key={layer.id} value={layer.id}>{layer.title}</option>
-                  ))}
+                  {layersConfig.filter(l => !l.time).map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
                 </optgroup>
                 <optgroup label={t('splitTimeLabel')}>
-                  {layersConfig.filter(l => l.time).map(layer => (
-                    <option key={layer.id} value={layer.id}>{layer.title}</option>
-                  ))}
+                  {layersConfig.filter(l => l.time).map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
                 </optgroup>
               </select>
             </div>
@@ -331,94 +735,33 @@ function AppInner() {
         return (
           <div className="tool-content">
             <p className="description">View two maps side-by-side.</p>
-            
-            {/* Enable / Disable toggle */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              padding: '12px',
-              background: 'rgba(30, 60, 114, 0.05)',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              border: '1px solid rgba(30, 60, 114, 0.1)'
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
               <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
                 {isSplitView ? 'Split View Active' : 'Enable Split View'}
               </span>
               <button 
-                onClick={() => {
-                  setIsSplitView(!isSplitView);
-                  if (isSplitModePersistent) setIsSplitModePersistent(false); // turn off swipe
-                }}
+                onClick={() => { setIsSplitView(!isSplitView); if (isSplitModePersistent) setIsSplitModePersistent(false); }}
                 className="no-stroke-btn"
-                style={{ 
-                  background: isSplitView ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', 
-                  color: isSplitView ? '#1a2f4d' : 'white',
-                  padding: '8px 18px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  borderRadius: '10px',
-                  border: 'none',
-                  outline: 'none',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer',
-                  boxShadow: isSplitView ? 'none' : '0 4px 12px rgba(223, 38, 28, 0.2)'
-                }}
+                style={{ background: isSplitView ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitView ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
               >
                 {isSplitView ? 'Disable' : 'Enable'}
               </button>
             </div>
-
-            {/* Layer selects */}
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>Left Layer</label>
-              <select 
-                className="tool-select" 
-                value={splitLayers.left}
-                onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
-                {layersConfig.map(layer => (
-                  <option key={layer.id} value={layer.id}>{layer.title}</option>
-                ))}
+              <select className="tool-select" value={splitLayers.left} onChange={(e) => setSplitLayers(prev => ({ ...prev, left: e.target.value }))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                {layersConfig.map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>Right Layer</label>
-              <select 
-                className="tool-select" 
-                value={splitLayers.right}
-                onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
-                {layersConfig.map(layer => (
-                  <option key={layer.id} value={layer.id}>{layer.title}</option>
-                ))}
+              <select className="tool-select" value={splitLayers.right} onChange={(e) => setSplitLayers(prev => ({ ...prev, right: e.target.value }))} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                {layersConfig.map(layer => (<option key={layer.id} value={layer.id}>{layer.title}</option>))}
               </select>
             </div>
-
-            {/* Extent Synchronization */}
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-                Extent Synchronization
-              </label>
-              <select 
-                className="tool-select" 
-                value={syncMode}
-                onChange={(e) => setSyncMode(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  padding: '10px', 
-                  borderRadius: '8px', 
-                  border: '1px solid rgba(0,0,0,0.1)',
-                  background: 'white',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#1a2f4d',
-                  cursor: 'pointer'
-                }}
-              >
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Extent Synchronization</label>
+              <select className="tool-select" value={syncMode} onChange={(e) => setSyncMode(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)', background: 'white', fontSize: '13px', fontWeight: '500', color: '#1a2f4d', cursor: 'pointer' }}>
                 <option value="both">Sync Both Views (pan + zoom)</option>
                 <option value="zoom">Sync Zoom Only</option>
                 <option value="none">Independent Views</option>
@@ -465,7 +808,6 @@ function AppInner() {
           <div className="tool-content">
             <div className="form-group">
               <label>{t('printFormat')}</label>
-              {/* PDF/PNG/JPG are technical format names — kept as-is */}
               <select className="tool-select">
                 <option>PDF</option>
                 <option>PNG</option>
@@ -494,6 +836,12 @@ function AppInner() {
           onViewReady={setMapView} 
           is3D={is3D} 
           isSplitMode={isSplitModePersistent}
+          activeTool={activeTool}
+          blendSettings={activeTool === 'blend' ? blendSettings : null}
+          arcadeSettings={activeTool === 'arcade' ? arcadeSettings : null}
+          spatialSettings={activeTool === 'spatial_analysis' ? spatialSettings : null}
+          onSpatialResult={(dist) => setSpatialSettings(prev => ({ ...prev, distanceResult: dist, status: 'Nearest feature identified' }))}
+          onArcadePreview={(val, debug) => setArcadeSettings(prev => ({ ...prev, preview: val, debugInfo: debug }))}
           splitLayers={splitLayers}
           basemap={currentBasemap}
           swipeMode={swipeMode}
