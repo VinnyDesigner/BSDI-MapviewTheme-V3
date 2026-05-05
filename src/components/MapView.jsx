@@ -12,12 +12,21 @@ import Swipe from '@arcgis/core/widgets/Swipe';
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine';
 import Polyline from '@arcgis/core/geometry/Polyline';
 import HeatmapRenderer from '@arcgis/core/renderers/HeatmapRenderer';
+import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
+import Query from '@arcgis/core/rest/support/Query';
 import { layersConfig } from '../layers';
 
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
-const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, blendSettings, arcadeSettings, onArcadePreview, spatialSettings, onSpatialResult, timelapseSettings, onTimelapseYearChange, basemap, is3D, swipeMode = 'vertical', onSwipePositionChange }) => {
+const ArcGISMap = ({ 
+  layerVisibility, onViewReady, isSplitMode, splitLayers, 
+  blendSettings, arcadeSettings, onArcadePreview, 
+  spatialSettings, onSpatialResult, 
+  timelapseSettings, onTimelapseYearChange, 
+  basemap, is3D, swipeMode = 'vertical', onSwipePositionChange,
+  activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart
+}) => {
   const mapDiv = useRef(null);
   const viewRef = useRef(null);
   const swipeRef = useRef(null);
@@ -62,6 +71,7 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
       const buildingsLayer = new SceneLayer({
         url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
         title: "3D Buildings",
+        id: "3d-buildings",
         popupEnabled: false,
         opacity: 0.8
       });
@@ -124,12 +134,16 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
         leftLayer.visible = true;
         rightLayer.visible = true;
         
-        // Hide others
+        // Hide others (including buildings in 3D if present)
         Object.keys(layersRef.current).forEach(id => {
           if (id !== splitLayers.left && id !== splitLayers.right) {
             layersRef.current[id].visible = false;
           }
         });
+        
+        // Specifically hide buildings in 3D to ensure clean comparison
+        const buildingsLayer = view.map.findLayerById('3d-buildings');
+        if (buildingsLayer) buildingsLayer.visible = false;
 
         // 2. Clear existing swipe
         if (swipeRef.current) {
@@ -140,27 +154,31 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
           swipeRef.current = null;
         }
 
-        // 3. Create fresh swipe with current mode
-        const swipe = new Swipe({
-          view: view,
-          leadingLayers: [leftLayer],
-          trailingLayers: [rightLayer],
-          direction: swipeMode,   // 'vertical' or 'horizontal'
-          position: 50
+        // 3. Create fresh swipe with current mode after view is ready
+        view.when(() => {
+          if (view.destroyed || !isSplitMode) return;
+
+          const swipe = new Swipe({
+            view: view,
+            leadingLayers: [leftLayer],
+            trailingLayers: [rightLayer],
+            direction: swipeMode,   // 'vertical' or 'horizontal'
+            position: 50
+          });
+
+          view.ui.add(swipe);
+          swipeRef.current = swipe;
+
+          // Emit both dimensions so parent can handle either mode
+          const emitPos = (pos) => {
+            if (onSwipePositionChange) {
+              onSwipePositionChange({ position: pos, viewWidth: view.width, viewHeight: view.height });
+            }
+          };
+
+          swipe.watch('position', emitPos);
+          emitPos(50); // initial
         });
-
-        view.ui.add(swipe);
-        swipeRef.current = swipe;
-
-        // Emit both dimensions so parent can handle either mode
-        const emitPos = (pos) => {
-          if (onSwipePositionChange) {
-            onSwipePositionChange({ position: pos, viewWidth: view.width, viewHeight: view.height });
-          }
-        };
-
-        swipe.watch('position', emitPos);
-        emitPos(50); // initial
       }
     } else {
       // Restore normal view architecture
@@ -177,8 +195,12 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
           layersRef.current[id].visible = !!layerVisibility[id];
         }
       });
+
+      // Restore buildings in 3D
+      const buildingsLayer = view.map.findLayerById('3d-buildings');
+      if (buildingsLayer) buildingsLayer.visible = is3D;
     }
-  }, [isSplitMode, splitLayers, layerVisibility, swipeMode]);
+  }, [isSplitMode, splitLayers, layerVisibility, swipeMode, is3D]);
 
   // 4. Manage Layer Blending
   useEffect(() => {
@@ -580,6 +602,161 @@ const ArcGISMap = ({ layerVisibility, onViewReady, isSplitMode, splitLayers, ble
       view.map.basemap = basemap;
     }
   }, [basemap]);
+
+  // 4. Identify Tool Logic
+  const identifyGraphicsLayer = useRef(new GraphicsLayer({ id: 'identify-highlights' }));
+  const sketchLayer = useRef(new GraphicsLayer({ id: 'identify-sketch-layer' }));
+  const sketchVM = useRef(null);
+
+  // Sync layers with map when view changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view && view.map) {
+      if (!view.map.findLayerById('identify-highlights')) {
+        view.map.add(identifyGraphicsLayer.current);
+      }
+      if (!view.map.findLayerById('identify-sketch-layer')) {
+        view.map.add(sketchLayer.current);
+      }
+    }
+  }, [is3D]); // Re-add layers if map/view changes due to 3D toggle
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    if (activeTool === 'identify') {
+      console.log('Identify Active. Mode:', identifySettings.mode, 'is3D:', is3D);
+      view.cursor = 'crosshair';
+
+      const performQuery = async (geometry) => {
+        console.log('Identify: performing query with', geometry.type);
+        onIdentifyQueryStart();
+        
+        const queryLayers = identifySettings.selectedLayerId === 'all'
+          ? layersConfig.filter(l => layerVisibility[l.id])
+          : [layersConfig.find(l => l.id === identifySettings.selectedLayerId)];
+
+        const results = { total: 0, grouped: {} };
+        identifyGraphicsLayer.current.removeAll();
+        sketchLayer.current.removeAll();
+
+        for (const config of queryLayers) {
+          const layer = layersRef.current[config.id];
+          if (!layer || layer.type !== 'feature') continue;
+
+          const query = new Query({
+            geometry: geometry,
+            spatialRelationship: 'intersects',
+            outFields: ['*'],
+            returnGeometry: true
+          });
+
+          try {
+            const response = await layer.queryFeatures(query);
+            if (response.features.length > 0) {
+              results.total += response.features.length;
+              results.grouped[config.title] = response.features.map(f => ({
+                attributes: f.attributes
+              }));
+
+              response.features.forEach(f => {
+                const highlightGraphic = new Graphic({
+                  geometry: f.geometry,
+                  symbol: f.geometry.type === 'point' ? {
+                    type: 'simple-marker',
+                    style: 'circle',
+                    color: [255, 255, 0, 0.6],
+                    size: '12px',
+                    outline: { color: [255, 255, 0, 1], width: 2 }
+                  } : f.geometry.type === 'polyline' ? {
+                    type: 'simple-line',
+                    color: [255, 255, 0, 1],
+                    width: 4
+                  } : {
+                    type: 'simple-fill',
+                    color: [255, 255, 0, 0.4],
+                    outline: { color: [255, 255, 0, 1], width: 2 }
+                  }
+                });
+                identifyGraphicsLayer.current.add(highlightGraphic);
+              });
+            }
+          } catch (err) {
+            console.error(`Identify query failed for layer ${config.title}:`, err);
+          }
+        }
+        onIdentifyResults(results);
+      };
+
+      // Always recreate or update sketchVM for current view
+      if (sketchVM.current) {
+        sketchVM.current.destroy();
+        sketchVM.current = null;
+      }
+
+      let clickHandler;
+      if (identifySettings.mode === 'point') {
+        clickHandler = view.on('click', (event) => {
+          event.stopPropagation();
+          performQuery(event.mapPoint);
+        });
+      } else {
+        sketchVM.current = new SketchViewModel({
+          view: view,
+          layer: sketchLayer.current,
+          updateOnGraphicClick: false,
+          defaultCreateOptions: { hasZ: false }
+        });
+
+        sketchVM.current.on('create', async (event) => {
+          if (event.state === 'start') console.log('Sketch started');
+          if (event.state === 'complete') {
+            console.log('Sketch complete');
+            performQuery(event.graphic.geometry);
+            // Re-activate sketch for next interaction
+            setTimeout(() => {
+              if (activeTool === 'identify' && identifySettings.mode !== 'point') {
+                sketchVM.current?.create(identifySettings.mode);
+              }
+            }, 100);
+          }
+        });
+
+        console.log('Triggering sketch create:', identifySettings.mode);
+        sketchVM.current.create(identifySettings.mode);
+      }
+
+      return () => {
+        if (clickHandler) clickHandler.remove();
+        if (sketchVM.current) {
+          sketchVM.current.cancel();
+          sketchVM.current.destroy();
+          sketchVM.current = null;
+        }
+        view.cursor = 'default';
+      };
+    } else {
+      view.cursor = 'default';
+      if (sketchVM.current) {
+        sketchVM.current.cancel();
+        sketchVM.current.destroy();
+        sketchVM.current = null;
+      }
+      if (!identifySettings.results) {
+        identifyGraphicsLayer.current.removeAll();
+        sketchLayer.current.removeAll();
+      }
+    }
+  }, [activeTool, identifySettings.mode, identifySettings.selectedLayerId, layerVisibility, is3D]);
+
+  // Clear highlights when results are nullified manually
+  useEffect(() => {
+    if (!identifySettings.results) {
+      identifyGraphicsLayer.current.removeAll();
+      sketchLayer.current.removeAll();
+    }
+  }, [identifySettings.results]);
 
   return (
     <div className="map-view-container">

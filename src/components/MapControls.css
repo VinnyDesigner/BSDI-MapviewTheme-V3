@@ -21,7 +21,7 @@
   background: rgba(255, 255, 255, 0.8); /* Reduced opacity */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: none;
   border-radius: 5px; /* Changed to 5px */
   color: #1C1C1C;
   display: flex;
@@ -60,6 +60,18 @@
   color: #ffffff;
 }
 
+.map-control-btn.disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  background: rgba(226, 232, 240, 0.5) !important;
+  pointer-events: auto !important; /* Allow tooltip to show */
+}
+
+.map-control-btn.disabled:hover {
+  transform: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
 .toggle-text {
   font-family: 'Inter', sans-serif;
   font-size: 13px; /* Slightly smaller text */
@@ -78,7 +90,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-radius: 5px; /* Match single buttons */
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   pointer-events: auto;

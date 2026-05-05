@@ -7,6 +7,7 @@ import MapControls from './components/MapControls'
 import MapInfoWidget from './components/MapInfoWidget'
 import DualMapView from './components/DualMapView'
 import { layersConfig } from './layers'
+import { ewaWddTree } from './ewa_wdd_config'
 import { LanguageProvider, useLanguage } from './context/LanguageContext'
 import { translations } from './i18n/translations'
 import './App.css'
@@ -14,8 +15,18 @@ import './App.css'
 import {
   Layers, Search, Navigation, Ruler, Pencil,
   Box, Database, Globe, Printer, Bookmark, Info,
-  Columns2
+  Columns2, ChevronRight, MousePointer2, Square, Hexagon
 } from 'lucide-react';
+
+// Custom 4-dot drag handle (2×2 grid)
+const DragHandle = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+    <circle cx="3" cy="3" r="1.2" />
+    <circle cx="7" cy="3" r="1.2" />
+    <circle cx="3" cy="7" r="1.2" />
+    <circle cx="7" cy="7" r="1.2" />
+  </svg>
+);
 
 import RightToolbar from './components/RightToolbar'
 
@@ -66,6 +77,128 @@ function AppInner() {
     status: '',
     lastRun: null
   });
+
+  const [layerSearch, setLayerSearch] = useState('');
+  const [layerOrder, setLayerOrder] = useState(() => layersConfig.map(l => l.id));
+  const [dragOverId, setDragOverId] = useState(null);
+  const dragItem = React.useRef(null);
+  const dragOverItem = React.useRef(null);
+
+  // Identify State
+  const [identifySettings, setIdentifySettings] = useState({
+    mode: 'point', // 'point', 'rectangle', 'polygon'
+    selectedLayerId: 'all',
+    results: null, // { total: number, grouped: { [layerName]: features[] } }
+    isQuerying: false
+  });
+
+  // ── Drag & Drop Handlers ─────────────────────────────────────────────────
+  const handleDragStart = (e, id) => {
+    dragItem.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, id) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragOverItem.current = id;
+    setDragOverId(id);
+  };
+
+  const handleDrop = () => {
+    const from = dragItem.current;
+    const to = dragOverItem.current;
+    if (!from || !to || from === to) return;
+    setLayerOrder(prev => {
+      const arr = [...prev];
+      const fromIdx = arr.indexOf(from);
+      const toIdx = arr.indexOf(to);
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, from);
+      return arr;
+    });
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragOverId(null);
+  };
+
+  // ── Layer Tree State (specifically for EWA_WDD) ──────────────────────────
+  const [treeExpanded, setTreeExpanded] = useState({}); // Collapsed by default
+  const [treeVisibility, setTreeVisibility] = useState({}); // Stores individual feature type visibility
+  
+  // ── Layer Tree Synchronization Helpers ──────────────────────────────────
+  const updateTreeVisibility = (updates) => {
+    setTreeVisibility(prev => ({ ...prev, ...updates }));
+  };
+
+  const handleToggleRoot = (checked) => {
+    toggleLayer('ewa-wdd'); // Sync with standard visibility
+    const updates = {};
+    ewaWddTree.categories.forEach(cat => {
+      updates[cat.title] = checked;
+      cat.features.forEach(f => updates[`${cat.title}_${f}`] = checked);
+    });
+    updateTreeVisibility(updates);
+  };
+
+  const handleToggleDataset = (checked) => {
+    const updates = {};
+    ewaWddTree.categories.forEach(cat => {
+      updates[cat.title] = checked;
+      cat.features.forEach(f => updates[`${cat.title}_${f}`] = checked);
+    });
+    updateTreeVisibility(updates);
+  };
+
+  const handleToggleCategory = (catTitle, checked) => {
+    const cat = ewaWddTree.categories.find(c => c.title === catTitle);
+    const updates = { [catTitle]: checked };
+    if (cat) {
+      cat.features.forEach(f => updates[`${catTitle}_${f}`] = checked);
+    }
+    updateTreeVisibility(updates);
+  };
+
+  const getCategoryState = (cat) => {
+    if (cat.features.length === 0) return { checked: !!treeVisibility[cat.title], indeterminate: false };
+    const checkedCount = cat.features.filter(f => treeVisibility[`${cat.title}_${f}`]).length;
+    return {
+      checked: checkedCount === cat.features.length,
+      indeterminate: checkedCount > 0 && checkedCount < cat.features.length
+    };
+  };
+
+  const getDatasetState = () => {
+    const catStates = ewaWddTree.categories.map(cat => getCategoryState(cat));
+    const allChecked = catStates.every(s => s.checked);
+    const noneChecked = catStates.every(s => !s.checked && !s.indeterminate);
+    return {
+      checked: allChecked,
+      indeterminate: !allChecked && !noneChecked
+    };
+  };
+
+  // ── Conditional 3D Logic ──────────────────────────────────────────────────
+  // Ensure 3D view is only available where supported.
+  // Automatically switch to 2D if Swipe or Split View is enabled while in 3D.
+  useEffect(() => {
+    const isSwipeActive = isSplitModePersistent;
+    const isSplitViewActive = isSplitView;
+    const isIncompatible = isSwipeActive || isSplitViewActive;
+
+    if (isIncompatible && is3D) {
+      setIs3D(false);
+    }
+  }, [isSplitModePersistent, isSplitView, is3D]);
+
+  const is3DDisabled = isSplitModePersistent || isSplitView;
+
   const [timelapseSettings, setTimelapseSettings] = useState({
     layerId: 'blocks-bahrain',
     currentYear: 2024,
@@ -149,7 +282,8 @@ function AppInner() {
     const handleClickOutside = (e) => {
       if (
         activeTool &&
-        activeTool !== 'split_view' && // Keep Split View panel persistent
+        activeTool !== 'split_view' && 
+        activeTool !== 'identify' && // Keep Identify panel open during map interaction
         !e.target.closest('.side-panel-container') &&
         !e.target.closest('.bottom-toolbar-container') &&
         !e.target.closest('.map-controls-container') &&
@@ -200,13 +334,6 @@ function AppInner() {
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
   // ❌ Dynamic data (layer.title, API values) is rendered directly — never t(layer.title).
-  const getPanelFooter = (toolId) => {
-    switch (toolId) {
-      default:
-        return null;
-    }
-  };
-
   const getPanelContent = (toolId) => {
     switch (toolId) {
       case 'basemap':
@@ -241,23 +368,314 @@ function AppInner() {
           </div>
         );
       case 'layers':
+        const orderedLayers = layerOrder.map(id => layersConfig.find(l => l.id === id)).filter(Boolean);
+        const filteredLayers = orderedLayers.filter(l =>
+          l.title.toLowerCase().includes(layerSearch.toLowerCase())
+        );
+        const allVisible = filteredLayers.length > 0 && filteredLayers.every(l => layerVisibility[l.id]);
+
+        return (
+          <div className="tool-content" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Search Box */}
+            <div className="layer-search-container">
+              <div className="search-container" style={{ position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input 
+                  type="text" 
+                  placeholder="Search layers..." 
+                  className="layer-search-input"
+                  value={layerSearch}
+                  onChange={(e) => setLayerSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Select All Row */}
+            <div className="layer-select-all-row">
+              <label className="layer-card-label">
+                <input 
+                  type="checkbox" 
+                  className="custom-checkbox"
+                  checked={allVisible}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const updates = {};
+                    filteredLayers.forEach(l => updates[l.id] = checked);
+                    setLayerVisibility(prev => ({ ...prev, ...updates }));
+                  }}
+                />
+                <span className="layer-card-name">Select all</span>
+              </label>
+              <button 
+                className="layer-clear-btn"
+                onClick={() => {
+                  const updates = {};
+                  filteredLayers.forEach(l => updates[l.id] = false);
+                  setLayerVisibility(prev => ({ ...prev, ...updates }));
+                }}
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="layer-list" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+              {filteredLayers.map(layer => {
+                if (layer.hasTree && layer.id === 'ewa-wdd') {
+                  const dsState = getDatasetState();
+                  const rootIndeterminate = dsState.indeterminate || (dsState.checked !== layerVisibility[layer.id]);
+
+                  return (
+                    <div 
+                      key={layer.id}
+                      className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, layer.id)}
+                      onDragOver={(e) => handleDragOver(e, layer.id)}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                    >
+                      {/* Root Layer Row */}
+                      <div 
+                        className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${treeExpanded[layer.id] ? 'tree-active' : ''}`} 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setTreeExpanded(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+                      >
+                        <div className="layer-card-label" onClick={(e) => e.stopPropagation()}>
+                          <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
+                            <DragHandle />
+                          </span>
+                          <input 
+                            type="checkbox" 
+                            className={`custom-checkbox ${rootIndeterminate ? 'indeterminate' : ''}`}
+                            checked={layerVisibility[layer.id]}
+                            onChange={(e) => handleToggleRoot(e.target.checked)}
+                          />
+                          <span className="layer-card-name">{layer.title}</span>
+                        </div>
+                        <div className="tree-expand-icon-wrapper">
+                          <ChevronRight size={14} className={`tree-expand-icon ${treeExpanded[layer.id] ? 'expanded' : ''}`} />
+                        </div>
+                      </div>
+
+                      {treeExpanded[layer.id] && (
+                        <div className="tree-children">
+                          {/* Dataset Node (Level 1) */}
+                          <div className="tree-row" onClick={() => setTreeExpanded(prev => ({ ...prev, 'dataset': !prev['dataset'] }))}>
+                            <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
+                            <div className="tree-checkbox-wrapper">
+                              <input 
+                                type="checkbox" 
+                                className={`custom-checkbox ${dsState.indeterminate ? 'indeterminate' : ''}`}
+                                checked={dsState.checked}
+                                onChange={(e) => { e.stopPropagation(); handleToggleDataset(e.target.checked); }}
+                              />
+                            </div>
+                            <span className="tree-label tree-label-category" style={{ color: '#1e3c72' }}>{ewaWddTree.dataset}</span>
+                            <div className="tree-expand-icon-wrapper">
+                              <ChevronRight size={14} className={`tree-expand-icon ${treeExpanded['dataset'] ? 'expanded' : ''}`} />
+                            </div>
+                          </div>
+
+                          {treeExpanded['dataset'] && ewaWddTree.categories.map((cat, catIdx) => {
+                            const isExpanded = treeExpanded[cat.title];
+                            const catState = getCategoryState(cat);
+
+                            return (
+                              <React.Fragment key={cat.title}>
+                                {/* Category Row (Level 2) */}
+                                <div className="tree-row" onClick={() => setTreeExpanded(prev => ({ ...prev, [cat.title]: !prev[cat.title] }))}>
+                                  <div className="tree-line-spacer"><div className="tree-line-v" /></div>
+                                  <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
+                                  <div className="tree-checkbox-wrapper">
+                                    <input 
+                                      type="checkbox" 
+                                      className={`custom-checkbox ${catState.indeterminate ? 'indeterminate' : ''}`}
+                                      checked={catState.checked}
+                                      onChange={(e) => { e.stopPropagation(); handleToggleCategory(cat.title, e.target.checked); }}
+                                    />
+                                  </div>
+                                  <span className="tree-label tree-label-category">{cat.title}</span>
+                                  <div className="tree-expand-icon-wrapper">
+                                    {cat.features.length > 0 && (
+                                      <ChevronRight size={14} className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`} />
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isExpanded && cat.features.map(feat => (
+                                  /* Leaf Row (Level 3) */
+                                  <div key={feat} className="tree-row">
+                                    <div className="tree-line-spacer"><div className="tree-line-v" /></div>
+                                    <div className="tree-line-spacer"><div className="tree-line-v" /></div>
+                                    <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
+                                    <div className="tree-checkbox-wrapper">
+                                      <input 
+                                        type="checkbox" 
+                                        className="custom-checkbox"
+                                        checked={!!treeVisibility[`${cat.title}_${feat}`]}
+                                        onChange={(e) => {
+                                          const checked = e.target.checked;
+                                          updateTreeVisibility({ [`${cat.title}_${feat}`]: checked });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="tree-symbol-wrapper">
+                                      <div className={`symbol-${cat.geometry === 'point' ? 'dot' : cat.geometry === 'line' ? 'line' : 'square'}`} />
+                                    </div>
+                                    <span className="tree-label tree-label-leaf">{feat}</span>
+                                    <div className="tree-expand-icon-wrapper" />
+                                  </div>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={layer.id}
+                    className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${dragOverId === layer.id ? 'drag-over' : ''}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, layer.id)}
+                    onDragOver={(e) => handleDragOver(e, layer.id)}
+                    onDrop={handleDrop}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <label className="layer-card-label">
+                      <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
+                        <DragHandle />
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={layerVisibility[layer.id]}
+                        onChange={() => toggleLayer(layer.id)}
+                      />
+                      <span className="layer-card-name">{layer.title}</span>
+                    </label>
+                    <button className="layer-card-arrow" onClick={() => console.log('Details for', layer.id)}>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+              {filteredLayers.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '13px' }}>
+                  No layers found matching "{layerSearch}"
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'identify':
+        const visibleLayers = layersConfig.filter(l => layerVisibility[l.id]);
         return (
           <div className="tool-content">
-            <p className="description">{t('layersPanelDesc')}</p>
-            <div className="layer-list">
-              {layersConfig.map(layer => (
-                <div key={layer.id} className="layer-item">
-                  <label className="checkbox-container">
-                    <input
-                      type="checkbox"
-                      checked={layerVisibility[layer.id]}
-                      onChange={() => toggleLayer(layer.id)}
-                    />
-                    <span className="layer-name">{layer.title}</span>
+            {!identifySettings.results ? (
+              <>
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                    Select Layer
                   </label>
+                  <select 
+                    className="tool-select"
+                    value={identifySettings.selectedLayerId}
+                    onChange={(e) => setIdentifySettings(prev => ({ ...prev, selectedLayerId: e.target.value }))}
+                  >
+                    <option value="all">All Visible Layers</option>
+                    {visibleLayers.map(l => (
+                      <option key={l.id} value={l.id}>{l.title}</option>
+                    ))}
+                  </select>
                 </div>
-              ))}
-            </div>
+
+                <div className="form-group" style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+                    Identify Mode
+                  </label>
+                  <div className="identify-modes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                    {[
+                      { id: 'point', label: 'Point', icon: <MousePointer2 size={18} /> },
+                      { id: 'rectangle', label: 'Rectangle', icon: <Square size={18} /> },
+                      { id: 'polygon', label: 'Polygon', icon: <Hexagon size={18} /> }
+                    ].map(m => (
+                      <button 
+                        key={m.id}
+                        className={`identify-mode-card ${identifySettings.mode === m.id ? 'active' : ''}`}
+                        onClick={() => setIdentifySettings(prev => ({ ...prev, mode: m.id }))}
+                      >
+                        <div className="mode-icon">{m.icon}</div>
+                        <span className="mode-label">{m.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="identify-instruction" style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                  Click on the map to identify features
+                </div>
+
+                {identifySettings.isQuerying && (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#df261c', fontSize: '13px', fontWeight: '600' }}>
+                    Querying layers...
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="identify-results">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', color: '#1a2f4d' }}>
+                    Identify Results ({identifySettings.results.total} Found)
+                  </h4>
+                  <button 
+                    className="layer-clear-btn"
+                    onClick={() => setIdentifySettings(prev => ({ ...prev, results: null }))}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="results-list" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+                  {Object.entries(identifySettings.results.grouped).map(([layerName, features]) => (
+                    <div key={layerName} style={{ marginBottom: '16px' }}>
+                      <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '4px', fontWeight: '600', fontSize: '12px', color: '#1e3c72', marginBottom: '8px' }}>
+                        {layerName}
+                      </div>
+                      {features.map((f, i) => (
+                        <div key={i} className="feature-item" style={{ padding: '8px', border: '1px solid #f1f5f9', borderRadius: '6px', marginBottom: '8px', fontSize: '12px' }}>
+                          {Object.entries(f.attributes).map(([key, val]) => (
+                            <div key={key} style={{ display: 'flex', marginBottom: '2px' }}>
+                              <span style={{ color: '#94a3b8', width: '40%', flexShrink: 0 }}>{key}:</span>
+                              <span style={{ color: '#1a2f4d', fontWeight: '500' }}>{String(val)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                <button 
+                  className="tool-btn" 
+                  style={{ width: '100%', marginTop: '16px', background: '#1e3c72', color: 'white', padding: '10px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+                  onClick={() => {
+                    const data = JSON.stringify(identifySettings.results, null, 2);
+                    const blob = new Blob([data], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'identify_results.json';
+                    link.click();
+                  }}
+                >
+                  Export as JSON
+                </button>
+              </div>
+            )}
           </div>
         );
 
@@ -690,170 +1108,169 @@ function AppInner() {
           <div className="tool-content" style={{ paddingBottom: '16px' }}>
             <div className="form-group" style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Timeline Dataset</label>
+              <select 
+                className="tool-select"
+                value={timelapseSettings.layerId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const isBlocks = val === 'blocks-bahrain';
+                  setTimelapseSettings({
+                    ...timelapseSettings, 
+                    layerId: val,
+                    mode: isBlocks ? 'range' : 'single',
+                    startYear: isBlocks ? 2018 : 1940,
+                    endYear: isBlocks ? 2024 : 2024,
+                    fromYear: isBlocks ? 2018 : null,
+                    toYear: isBlocks ? 2024 : null,
+                    currentYear: isBlocks ? 2024 : 2024,
+                    isPlaying: false
+                  });
+                }}
+              >
+                {layersConfig.filter(l => l.time !== undefined || l.timeEnabled).map(l => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '24px', padding: '20px', background: 'linear-gradient(135deg, #1e3c72, #2a5298)', borderRadius: '16px', color: 'white', textAlign: 'center', boxShadow: '0 8px 24px rgba(30, 60, 114, 0.2)' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '1px' }}>Current Range</span>
+              <div style={{ fontSize: '32px', fontWeight: '900', margin: '4px 0' }}>
+                {timelapseSettings.mode === 'range' ? `${timelapseSettings.fromYear} – ${timelapseSettings.toYear}` : timelapseSettings.currentYear}
+              </div>
+              <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', position: 'relative', marginTop: '10px' }}>
+                <div style={{ 
+                  position: 'absolute', 
+                  left: 0, 
+                  height: '100%', 
+                  background: '#facc15', 
+                  borderRadius: '2px',
+                  width: timelapseSettings.mode === 'range' 
+                    ? `${((timelapseSettings.toYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
+                    : `${((timelapseSettings.currentYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
+                }}></div>
+              </div>
+            </div>
+
+            {timelapseSettings.mode === 'range' ? (
+              <div style={{ display: 'flex', gap: '15px', marginBottom: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>From Year</label>
                   <select 
                     className="tool-select"
-                    value={timelapseSettings.layerId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const isBlocks = val === 'blocks-bahrain';
-                      setTimelapseSettings({
-                        ...timelapseSettings, 
-                        layerId: val,
-                        mode: isBlocks ? 'range' : 'single',
-                        startYear: isBlocks ? 2018 : 1940,
-                        endYear: isBlocks ? 2024 : 2024,
-                        fromYear: isBlocks ? 2018 : null,
-                        toYear: isBlocks ? 2024 : null,
-                        currentYear: isBlocks ? 2024 : 2024,
-                        isPlaying: false
-                      });
-                    }}
+                    value={timelapseSettings.fromYear}
+                    onChange={(e) => setTimelapseSettings({...timelapseSettings, fromYear: Number(e.target.value), isPlaying: false})}
                   >
-                    {layersConfig.filter(l => l.time !== undefined || l.timeEnabled).map(l => (
-                      <option key={l.id} value={l.id}>{l.title}</option>
+                    {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
+                      <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
                 </div>
-
-                <div style={{ marginBottom: '24px', padding: '20px', background: 'linear-gradient(135deg, #1e3c72, #2a5298)', borderRadius: '16px', color: 'white', textAlign: 'center', boxShadow: '0 8px 24px rgba(30, 60, 114, 0.2)' }}>
-                  <span style={{ fontSize: '12px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '1px' }}>Current Range</span>
-                  <div style={{ fontSize: '32px', fontWeight: '900', margin: '4px 0' }}>
-                    {timelapseSettings.mode === 'range' ? `${timelapseSettings.fromYear} – ${timelapseSettings.toYear}` : timelapseSettings.currentYear}
-                  </div>
-                  <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', position: 'relative', marginTop: '10px' }}>
-                    <div style={{ 
-                      position: 'absolute', 
-                      left: 0, 
-                      height: '100%', 
-                      background: '#facc15', 
-                      borderRadius: '2px',
-                      width: timelapseSettings.mode === 'range' 
-                        ? `${((timelapseSettings.toYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
-                        : `${((timelapseSettings.currentYear - timelapseSettings.startYear) / (timelapseSettings.endYear - timelapseSettings.startYear)) * 100}%`
-                    }}></div>
-                  </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>To Year</label>
+                  <select 
+                    className="tool-select"
+                    value={timelapseSettings.toYear}
+                    onChange={(e) => setTimelapseSettings({...timelapseSettings, toYear: Number(e.target.value), isPlaying: false})}
+                  >
+                    {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+            ) : (
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <input 
+                  type="range" 
+                  min={timelapseSettings.startYear} 
+                  max={timelapseSettings.endYear} 
+                  value={timelapseSettings.currentYear}
+                  onChange={(e) => setTimelapseSettings({...timelapseSettings, currentYear: Number(e.target.value), isPlaying: false})}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                  <span>{timelapseSettings.startYear}</span>
+                  <span>{timelapseSettings.endYear}</span>
+                </div>
+              </div>
+            )}
 
-                {timelapseSettings.mode === 'range' ? (
-                  <div style={{ display: 'flex', gap: '15px', marginBottom: '24px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>From Year</label>
-                      <select 
-                        className="tool-select"
-                        value={timelapseSettings.fromYear}
-                        onChange={(e) => setTimelapseSettings({...timelapseSettings, fromYear: Number(e.target.value), isPlaying: false})}
-                      >
-                        {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>To Year</label>
-                      <select 
-                        className="tool-select"
-                        value={timelapseSettings.toYear}
-                        onChange={(e) => setTimelapseSettings({...timelapseSettings, toYear: Number(e.target.value), isPlaying: false})}
-                      >
-                        {[2018, 2019, 2020, 2021, 2022, 2023, 2024].map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
+              <button 
+                onClick={() => {
+                  if (timelapseSettings.mode === 'range') {
+                    setTimelapseSettings(prev => ({ ...prev, toYear: Math.max(prev.fromYear, prev.toYear - 1), isPlaying: false }));
+                  } else {
+                    setTimelapseSettings(prev => ({ ...prev, currentYear: Math.max(prev.startYear, prev.currentYear - 1), isPlaying: false }));
+                  }
+                }}
+                style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 20L9 12L19 4V20Z" fill="currentColor"/><path d="M5 19V5" strokeWidth="3"/></svg>
+              </button>
+              
+              <button 
+                onClick={() => setTimelapseSettings(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
+                style={{ background: 'linear-gradient(135deg, #df261c, #002d5d)', border: 'none', width: '60px', height: '60px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 15px rgba(223, 38, 28, 0.3)' }}
+              >
+                {timelapseSettings.isPlaying ? (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                 ) : (
-                  <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <input 
-                      type="range" 
-                      min={timelapseSettings.startYear} 
-                      max={timelapseSettings.endYear} 
-                      value={timelapseSettings.currentYear}
-                      onChange={(e) => setTimelapseSettings({...timelapseSettings, currentYear: Number(e.target.value), isPlaying: false})}
-                      style={{ width: '100%', cursor: 'pointer' }}
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
-                      <span>{timelapseSettings.startYear}</span>
-                      <span>{timelapseSettings.endYear}</span>
-                    </div>
-                  </div>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
                 )}
+              </button>
 
-                {/* Moved Speed & Loop here */}
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '24px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Speed</label>
-                    <select 
-                      className="tool-select"
-                      style={{ height: '36px', fontSize: '12px' }}
-                      value={timelapseSettings.speed}
-                      onChange={(e) => setTimelapseSettings({...timelapseSettings, speed: e.target.value})}
-                    >
-                      <option>Slow</option>
-                      <option>Medium</option>
-                      <option>Fast</option>
-                    </select>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Loop</label>
-                    <div 
-                      onClick={() => setTimelapseSettings(prev => ({ ...prev, loop: !prev.loop }))}
-                      style={{ 
-                        height: '36px', 
-                        background: timelapseSettings.loop ? '#f0fdf4' : '#f1f5f9',
-                        border: `1px solid ${timelapseSettings.loop ? '#166534' : '#e2e8f0'}`,
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        color: timelapseSettings.loop ? '#166534' : '#64748b'
-                      }}
-                    >
-                      {timelapseSettings.loop ? 'Enabled' : 'Disabled'}
-                    </div>
-                  </div>
+              <button 
+                onClick={() => {
+                  if (timelapseSettings.mode === 'range') {
+                    setTimelapseSettings(prev => ({ ...prev, toYear: Math.min(prev.endYear, prev.toYear + 1), isPlaying: false }));
+                  } else {
+                    setTimelapseSettings(prev => ({ ...prev, currentYear: Math.min(prev.endYear, prev.currentYear + 1), isPlaying: false }));
+                  }
+                }}
+                style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 4L15 12L5 20V4Z" fill="currentColor"/><path d="M19 5V19" strokeWidth="3"/></svg>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Speed</label>
+                <select 
+                  className="tool-select"
+                  style={{ height: '36px', fontSize: '12px' }}
+                  value={timelapseSettings.speed}
+                  onChange={(e) => setTimelapseSettings({...timelapseSettings, speed: e.target.value})}
+                >
+                  <option>Slow</option>
+                  <option>Medium</option>
+                  <option>Fast</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '12px' }}>Loop</label>
+                <div 
+                  onClick={() => setTimelapseSettings(prev => ({ ...prev, loop: !prev.loop }))}
+                  style={{ 
+                    height: '36px', 
+                    background: timelapseSettings.loop ? '#f0fdf4' : '#f1f5f9',
+                    border: `1px solid ${timelapseSettings.loop ? '#166534' : '#e2e8f0'}`,
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: timelapseSettings.loop ? '#166534' : '#64748b'
+                  }}
+                >
+                  {timelapseSettings.loop ? 'Enabled' : 'Disabled'}
                 </div>
-
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-                  <button 
-                    onClick={() => {
-                      if (timelapseSettings.mode === 'range') {
-                        setTimelapseSettings(prev => ({ ...prev, toYear: Math.max(prev.fromYear, prev.toYear - 1), isPlaying: false }));
-                      } else {
-                        setTimelapseSettings(prev => ({ ...prev, currentYear: Math.max(prev.startYear, prev.currentYear - 1), isPlaying: false }));
-                      }
-                    }}
-                    style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 20L9 12L19 4V20Z" fill="currentColor"/><path d="M5 19V5" strokeWidth="3"/></svg>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setTimelapseSettings(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
-                    style={{ background: 'linear-gradient(135deg, #df261c, #002d5d)', border: 'none', width: '60px', height: '60px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 15px rgba(223, 38, 28, 0.3)' }}
-                  >
-                    {timelapseSettings.isPlaying ? (
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    ) : (
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5V19L19 12L8 5Z"/></svg>
-                    )}
-                  </button>
-
-                  <button 
-                    onClick={() => {
-                      if (timelapseSettings.mode === 'range') {
-                        setTimelapseSettings(prev => ({ ...prev, toYear: Math.min(prev.endYear, prev.toYear + 1), isPlaying: false }));
-                      } else {
-                        setTimelapseSettings(prev => ({ ...prev, currentYear: Math.min(prev.endYear, prev.currentYear + 1), isPlaying: false }));
-                      }
-                    }}
-                    style={{ background: '#f1f5f9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e3c72' }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 4L15 12L5 20V4Z" fill="currentColor"/><path d="M19 5V19" strokeWidth="3"/></svg>
-                  </button>
-                </div>
+              </div>
+            </div>
           </div>
         );
 
@@ -885,8 +1302,8 @@ function AppInner() {
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Swipe Direction</label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[
-                  { id: 'horizontal', label: '| Vertical Swipe' },
-                  { id: 'vertical',   label: '— Horizontal Swipe' }
+                  { id: 'vertical',   label: '| Vertical Swipe' },
+                  { id: 'horizontal', label: '— Horizontal Swipe' }
                 ].map(({ id, label }) => (
                   <button
                     key={id}
@@ -1029,6 +1446,9 @@ function AppInner() {
           is3D={is3D} 
           isSplitMode={isSplitModePersistent}
           activeTool={activeTool}
+          identifySettings={identifySettings}
+          onIdentifyResults={(results) => setIdentifySettings(prev => ({ ...prev, results, isQuerying: false }))}
+          onIdentifyQueryStart={() => setIdentifySettings(prev => ({ ...prev, isQuerying: true, results: null }))}
           blendSettings={activeTool === 'blend' ? blendSettings : null}
           arcadeSettings={activeTool === 'arcade' ? arcadeSettings : null}
           spatialSettings={activeTool === 'spatial_analysis' ? spatialSettings : null}
@@ -1061,6 +1481,7 @@ function AppInner() {
         onToolSelect={setActiveTool} 
         is3D={is3D} 
         onToggle3D={() => setIs3D(!is3D)} 
+        is3DDisabled={is3DDisabled}
       />
 
       {mapView && <MapInfoWidget view={mapView} />}
@@ -1068,7 +1489,6 @@ function AppInner() {
       <SidePanel
         isOpen={!!activeTool}
         title={getPanelTitle(activeTool)}
-        footer={getPanelFooter(activeTool)}
         onClose={() => setActiveTool(null)}
         onMinimize={handleMinimize}
       >

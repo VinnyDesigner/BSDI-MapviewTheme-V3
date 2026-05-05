@@ -25,7 +25,9 @@ export const translations = {
       arcade:       'Arcade Expression',
       spatial_analysis: 'Spatial Analysis',
       time_compare:     'Time & Compare',
-      basemap:      'Basemaps',
+      split:            'Swipe',
+      split_view:       'Split View',
+      basemap:          'Basemaps',
     },
 
     // ── Panel titles ─────────────────────────────────────
@@ -44,7 +46,9 @@ export const translations = {
       arcade:       'Arcade Expression',
       spatial_analysis: 'Spatial Analysis',
       time_compare:     'Time & Compare',
-      basemap:      'Basemaps',
+      split:            'Swipe',
+      split_view:       'Split View',
+      basemap:          'Basemaps',
     },
 
     // ── Layers panel ─────────────────────────────────────
@@ -95,13 +99,14 @@ export const translations = {
     unitM:      'm',
 
     // ── Map Controls ─────────────────────────────────────
-    zoomIn:     'Zoom In',
-    zoomOut:    'Zoom Out',
-    home:       'Home',
-    identify:   'Identify',
-    pan:        'Pan',
-    view2D:     '2D View',
-    view3D:     '3D View',
+    zoomIn:            'Zoom In',
+    zoomOut:           'Zoom Out',
+    home:              'Home',
+    identify:          'Identify',
+    pan:               'Pan',
+    view2D:            '2D View',
+    view3D:            '3D View',
+    view3DDisabled:    '3D view is not available in this mode',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'Close panel',
@@ -201,13 +206,14 @@ export const translations = {
     unitM:      'م',
 
     // ── Map Controls ─────────────────────────────────────
-    zoomIn:     'تكبير',
-    zoomOut:    'تصغير',
-    home:       'الرئيسية',
-    identify:   'تحديد',
-    pan:        'تحريك',
-    view2D:     'عرض ثنائي الأبعاد',
-    view3D:     'عرض ثلاثي الأبعاد',
+    zoomIn:            'تكبير',
+    zoomOut:           'تصغير',
+    home:              'الرئيسية',
+    identify:          'تحديد',
+    pan:               'تحريك',
+    view2D:            'عرض ثنائي الأبعاد',
+    view3D:            'عرض ثلاثي الأبعاد',
+    view3DDisabled:    'العرض ثلاثي الأبعاد غير متوفر في هذا الوضع',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'إغلاق اللوحة',

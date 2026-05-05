@@ -3,7 +3,7 @@ import { Plus, Minus, Home, Info, Hand, Map } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import './MapControls.css';
 
-const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D }) => {
+const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDisabled }) => {
   const { t } = useLanguage();
 
   const handleZoomIn  = () => { if (view) view.zoom += 1; };
@@ -31,9 +31,10 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D }) => {
 
       {/* 3. 2D / 3D Toggle */}
       <button
-        className={`map-control-btn square ${is3D ? 'active' : ''}`}
-        onClick={onToggle3D}
-        title={is3D ? (t('view2D') || '2D View') : (t('view3D') || '3D View')}
+        className={`map-control-btn square ${is3D ? 'active' : ''} ${is3DDisabled ? 'disabled' : ''}`}
+        onClick={!is3DDisabled ? onToggle3D : undefined}
+        title={is3DDisabled ? (t('view3DDisabled') || '3D view is not available in this mode') : (is3D ? (t('view2D') || '2D View') : (t('view3D') || '3D View'))}
+        disabled={is3DDisabled}
       >
         <span className="toggle-text">{is3D ? '2D' : '3D'}</span>
       </button>

@@ -150,7 +150,7 @@
   aspect-ratio: 3/2;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: none;
   background-color: #f1f5f9;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
@@ -277,7 +277,7 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(6px);
   z-index: 100;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: none;
   white-space: nowrap;
 }
 
@@ -298,7 +298,7 @@
   height: 40px !important;
   padding: 0 40px 0 12px !important;
   border-radius: 10px !important;
-  border: 1px solid #e2e8f0 !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
   font-size: 13px !important;
   color: #1a2f4d !important;
   background: white !important;
@@ -323,4 +323,475 @@
 
 .tool-select:hover, .tool-input:hover {
   border-color: #cbd5e1 !important;
+}
+
+/* 🗂️ Improved Layer Card UI */
+.layer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 48px;
+  margin-bottom: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+/* Drag Handle */
+.layer-drag-handle {
+  display: flex;
+  align-items: center;
+  color: rgba(0, 0, 0, 0.75);
+  cursor: grab;
+  padding: 2px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s, opacity 0.15s;
+  opacity: 0.5;
+}
+
+.layer-drag-handle:hover {
+  opacity: 1;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.layer-drag-handle:active {
+  cursor: grabbing;
+  opacity: 1;
+  color: #1e3c72;
+}
+
+/* Drag-over feedback */
+.layer-card.drag-over,
+.layer-tree-container.drag-over > .layer-card {
+  border-color: rgba(30, 60, 114, 0.4);
+  background: rgba(30, 60, 114, 0.03);
+  box-shadow: 0 0 0 2px rgba(30, 60, 114, 0.12);
+}
+
+.layer-card:hover {
+  border-color: rgba(223, 38, 28, 0.2);
+  background: #fdfdfd;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.layer-card.active {
+  border-color: rgba(223, 38, 28, 0.3);
+  background: rgba(223, 38, 28, 0.03);
+}
+
+.layer-card-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* Checkbox Reset & Double Border Fix */
+.custom-checkbox, .layer-card-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border: 1.5px solid rgba(0, 0, 0, 0.15); /* Reduced opacity for unchecked */
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  margin: 0;
+  padding: 0;
+  outline: none;
+}
+
+.custom-checkbox:checked, .layer-card-label input[type="checkbox"]:checked {
+  background: #DF261C;
+  border-color: #DF261C;
+  opacity: 1;
+}
+
+.custom-checkbox:checked::after, .layer-card-label input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.custom-checkbox:focus, .layer-card-label input[type="checkbox"]:focus {
+  box-shadow: 0 0 0 2px rgba(223, 38, 28, 0.1);
+}
+
+.layer-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+  user-select: none;
+}
+
+.layer-tree-container {
+  margin-bottom: 8px;
+}
+
+.layer-card.tree-active {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: 0 !important;
+  box-shadow: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.02);
+}
+
+.tree-children {
+  background: #ffffff;
+  margin-bottom: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+  padding-bottom: 8px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0 10px;
+  gap: 6px;
+}
+
+.tree-row:hover {
+  background: rgba(30, 60, 114, 0.04);
+}
+
+/* 🌲 Grid-based Tree Lines */
+.tree-line-spacer {
+  width: 16px;
+  height: 100%;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-line-v {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #E2E8F0;
+  transform: translateX(-0.5px);
+}
+
+/* For the last child, the line shouldn't go all the way down */
+.tree-row-last .tree-line-v {
+  bottom: 50%;
+}
+
+.tree-line-h {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: #E2E8F0;
+}
+
+.tree-expand-icon-wrapper {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-expand-icon {
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+
+.tree-expand-icon.expanded {
+  transform: rotate(90deg);
+  color: #1e3c72;
+}
+
+.tree-checkbox-wrapper {
+  width: 22px; /* Slightly tighter */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-symbol-wrapper {
+  width: 18px; /* Tighter symbol space */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 🎨 Symbols Refined */
+.symbol-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3b82f6; /* Default Blue */
+}
+
+.symbol-line {
+  width: 14px;
+  height: 2px;
+  background: #1e3c72;
+  border-radius: 1px;
+}
+
+.symbol-square {
+  width: 10px;
+  height: 10px;
+  background: rgba(0, 45, 93, 0.1);
+  border: 1.5px solid #002D5D;
+  border-radius: 2px;
+}
+
+/* Specific Color Overrides */
+.symbol-dot.green { background: #10b981; }
+.symbol-dot.blue { background: #3b82f6; }
+.symbol-dot.orange { background: #f59e0b; }
+.symbol-dot.red { background: #ef4444; }
+
+.symbol-square.orange { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+.symbol-line.red { background: #ef4444; }
+
+.symbol-dashed {
+  width: 14px;
+  height: 2px;
+  border-top: 2px dashed #64748b;
+}
+
+/* 🏷️ Typography Hierarchy */
+.tree-label {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  padding-left: 4px;
+}
+
+.tree-label-root { font-weight: 700; color: #0f172a; }
+.tree-label-category { font-weight: 600; color: #334155; }
+.tree-label-leaf { font-weight: 400; color: #64748b; font-size: 11px; }
+
+.layer-card-arrow {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.layer-card-arrow:hover {
+  color: #1e3c72;
+}
+
+.layer-search-input:focus {
+  background: #ffffff !important;
+  border-color: #1e3c72 !important;
+  box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1) !important;
+}
+
+.layer-search-container {
+  padding: 0 0 12px 0;
+}
+
+.layer-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  font-size: 13px !important;
+  background: #f8fafc !important;
+  box-sizing: border-box !important;
+}
+
+.layer-select-all-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 12px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+  margin-bottom: 4px;
+}
+
+.layer-clear-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.layer-clear-btn:hover {
+  color: #df261c;
+  background: rgba(223, 38, 28, 0.05);
+}
+
+/* Checkbox Reset & Double Border Fix */
+.custom-checkbox, .layer-card-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border: 1.5px solid rgba(0, 0, 0, 0.15); /* Reduced opacity for unchecked */
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  margin: 0;
+  padding: 0;
+  outline: none;
+}
+
+.custom-checkbox:checked, .layer-card-label input[type="checkbox"]:checked {
+  background: #DF261C;
+  border-color: #DF261C;
+  opacity: 1;
+}
+
+.custom-checkbox:checked::after, .layer-card-label input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.custom-checkbox:focus, .layer-card-label input[type="checkbox"]:focus {
+  box-shadow: 0 0 0 2px rgba(223, 38, 28, 0.1);
+}
+
+/* Identify Tool Styles */
+.identify-results {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.results-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.results-list::-webkit-scrollbar-thumb {
+  background: rgba(30, 60, 114, 0.1);
+  border-radius: 2px;
+}
+
+.results-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.feature-item {
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.feature-item:hover {
+  border-color: rgba(30, 60, 114, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(30, 60, 114, 0.05);
+  transform: translateX(2px);
+}
+
+.mode-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mode-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.mode-btn:active {
+  transform: translateY(0);
+}
+
+/* Updated Identify Mode Cards */
+.identify-modes-grid {
+  margin-bottom: 12px;
+}
+
+.identify-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #64748b;
+}
+
+.identify-mode-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.identify-mode-card.active {
+  background: rgba(223, 38, 28, 0.05);
+  border-color: #df261c;
+  color: #df261c;
+  box-shadow: 0 4px 12px rgba(223, 38, 28, 0.1);
+}
+
+.identify-mode-card .mode-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.identify-mode-card .mode-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.identify-instruction {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }

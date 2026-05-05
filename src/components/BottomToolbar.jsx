@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { 
-  Layers, Info, Search, Navigation, Ruler, 
+  Layers, Info, Navigation, Ruler, 
   Pencil, Box, Database, Globe, Printer, Bookmark,
   Columns2, Map, Blend
 } from 'lucide-react';
@@ -15,7 +15,6 @@ const TOOL_GROUP_DEFS = [
     id: 'explore',
     tools: [
       { id: 'layers',     icon: Layers },
-      { id: 'search',     icon: Search },
       { id: 'time_compare', icon: () => (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"/>
@@ -24,6 +23,7 @@ const TOOL_GROUP_DEFS = [
           <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
         </svg>
       )},
+      { id: 'split',      icon: Columns2 },
       { id: 'split_view', icon: Map },
       { id: 'blend',      icon: Blend },
       { id: 'arcade',     icon: () => (
