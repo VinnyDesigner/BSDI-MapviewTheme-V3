@@ -5,14 +5,16 @@ import { useLanguage } from '../context/LanguageContext';
 import './Header.css';
 
 const Header = () => {
-  const { t, toggleLanguage } = useLanguage();
+  const { t, toggleLanguage, lang } = useLanguage();
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+
+  const logoSrc = lang === 'AR' ? '/assets/iGA-logo-ar.png' : '/assets/iGA-logo.png';
 
   return (
     <header className="header-container">
       
       <div className="header-left">
-        <img src="/assets/bahrain-logo.png" alt="Bahrain Authority Logo" class="header-logo" />
+        <img src={logoSrc} alt="Information & eGovernment Authority" className="header-logo" />
       </div>
       
       <div className="header-center">

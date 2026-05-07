@@ -6,6 +6,8 @@ import Header from './components/Header'
 import MapControls from './components/MapControls'
 import MapInfoWidget from './components/MapInfoWidget'
 import DualMapView from './components/DualMapView'
+import BookmarkPanel from './components/BookmarkPanel'
+import PrintPanel from './components/PrintPanel'
 import { layersConfig } from './layers'
 import { ewaWddTree } from './ewa_wdd_config'
 import { LanguageProvider, useLanguage } from './context/LanguageContext'
@@ -1413,18 +1415,19 @@ function AppInner() {
         );
 
       case 'print':
+        return <PrintPanel view={mapView} />;
+
+      case 'bookmark':
         return (
-          <div className="tool-content">
-            <div className="form-group">
-              <label>{t('printFormat')}</label>
-              <select className="tool-select">
-                <option>PDF</option>
-                <option>PNG</option>
-                <option>JPG</option>
-              </select>
-            </div>
-            <button className="primary-btn full-width">{t('printExportBtn')}</button>
-          </div>
+          <BookmarkPanel 
+            view={mapView}
+            layerVisibility={layerVisibility}
+            setLayerVisibility={setLayerVisibility}
+            is3D={is3D}
+            setIs3D={setIs3D}
+            currentBasemap={currentBasemap}
+            setCurrentBasemap={setCurrentBasemap}
+          />
         );
 
       default:
