@@ -139,6 +139,12 @@
   overflow-x: hidden;
   color: #475569;
   font-size: 14px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+.side-panel-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .side-panel.minimized {

@@ -209,7 +209,7 @@ const BookmarkPanel = ({
               className="tool-input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Palm Jumeirah Map"
+              placeholder="Enter the title"
               maxLength={50}
             />
           </div>

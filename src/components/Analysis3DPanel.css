@@ -1,0 +1,333 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BSDI 3D Analysis Tools — Final Layout Refactor
+   LEFT SIDE: Tools Panel
+   RIGHT SIDE: Result Panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════
+   LEFT SIDE: TOOLS PANEL
+   Positioned next to the main MapControls on the left
+   ══════════════════════════════════════════════════════ */
+.a3d-tools-panel {
+  position: fixed;
+  z-index: 1000;
+  top: 80px;
+  left: 64px; /* Next to the 16px map controls + padding */
+  width: 200px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  animation: a3dSlideInLeft 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes a3dSlideInLeft {
+  from { opacity: 0; transform: translateX(-16px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0)     scale(1);    }
+}
+
+.a3d-tools-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a2f4d;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.a3d-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.a3d-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 6px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #64748b;
+}
+
+.a3d-tool-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e3c72;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.a3d-tool-btn.active {
+  background: linear-gradient(135deg, #df261c, #002d5d);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 6px 14px rgba(223, 38, 28, 0.25);
+}
+
+.a3d-tool-btn.active .a3d-tool-icon,
+.a3d-tool-btn.active .a3d-tool-label {
+  color: white;
+}
+
+.a3d-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.a3d-tool-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Widget mount container (Inside SidePanel) ────────────────────────────────── */
+.a3d-widget-mount {
+  width: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ── Custom UI Styles ─────────────────────────────────────────────────────── */
+.measure-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.measure-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 !important; /* Removed 16px padding as requested */
+}
+
+.measure-section {
+  margin-bottom: 12px;
+  padding: 0; /* Removed 16px padding as requested */
+}
+
+.section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2f4d;
+  margin-bottom: 6px;
+}
+
+.unit-select-wrapper {
+  position: relative;
+}
+
+.measure-select {
+  width: 100%;
+  padding: 10px 16px;
+  background: white !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  color: #1a2f4d !important;
+  font-weight: 500;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.measure-select:focus {
+  border-color: #df261c !important;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.results-card {
+  margin: 12px 0; /* Removed horizontal 16px margin as requested */
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.res-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.res-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.measure-footer-wrapper {
+  margin-top: auto;
+  padding: 0 16px 16px 16px !important; /* Keep only side/bottom padding for the button */
+  background: transparent !important;
+  border-top: none !important;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.measure-footer-content {
+  width: auto;
+}
+
+.new-measure-btn {
+  width: auto; /* Changed from 100% */
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #df261c, #002d5d);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.new-measure-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(223, 38, 28, 0.2);
+}
+
+/* ══════════════════════════════════════════════════════
+   ARCGIS WIDGET OVERRIDES — make native widget match BSDI theme
+   Only scoped inside .a3d-widget-mount so 2D is NEVER affected
+   ══════════════════════════════════════════════════════ */
+
+/* Root widget container */
+.a3d-widget-mount .esri-widget,
+.a3d-widget-mount .esri-component {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+}
+
+/* Main panel bodies */
+.a3d-widget-mount .esri-direct-line-measurement-3d,
+.a3d-widget-mount .esri-area-measurement-3d,
+.a3d-widget-mount .esri-slice {
+  background: transparent !important;
+  box-shadow: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+}
+
+/* Labels / property names (e.g. "Direct", "Horizontal") */
+.a3d-widget-mount .esri-direct-line-measurement-3d__measurement-item-title,
+.a3d-widget-mount .esri-area-measurement-3d__measurement-item-title,
+.a3d-widget-mount label,
+.a3d-widget-mount .esri-widget__heading {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  color: #94a3b8 !important;
+}
+
+/* Values (e.g. "26.69 m") */
+.a3d-widget-mount .esri-direct-line-measurement-3d__measurement-item-value,
+.a3d-widget-mount .esri-area-measurement-3d__measurement-item-value {
+  font-family: inherit !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.3px !important;
+}
+
+/* Measurement item rows */
+.a3d-widget-mount .esri-direct-line-measurement-3d__measurement-item,
+.a3d-widget-mount .esri-area-measurement-3d__measurement-item {
+  padding: 8px 0 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+.a3d-widget-mount .esri-direct-line-measurement-3d__measurement-item:last-child,
+.a3d-widget-mount .esri-area-measurement-3d__measurement-item:last-child {
+  border-bottom: none !important;
+}
+
+/* Unit selector dropdown (Matching 2D exactly) */
+.a3d-widget-mount .esri-select,
+.a3d-widget-mount select {
+  font-family: inherit !important;
+  width: 100% !important;
+  padding: 10px 16px !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  color: #1a2f4d !important;
+  font-weight: 500 !important;
+  appearance: none !important;
+  cursor: pointer !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+.a3d-widget-mount .esri-select:focus,
+.a3d-widget-mount select:focus {
+  border-color: #df261c !important;
+}
+
+/* "New measurement" button — BSDI gradient */
+.a3d-widget-mount .esri-button,
+.a3d-widget-mount button.esri-widget--button,
+.a3d-widget-mount .esri-widget-button {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  background-image: linear-gradient(135deg, #df261c, #002d5d) !important;
+  background-color: transparent !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 24px !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  margin-top: 14px !important;
+  transition: all 0.2s !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.a3d-widget-mount .esri-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(223, 38, 28, 0.25) !important;
+  opacity: 1 !important;
+}
+
+/* ── RTL support ─────────────────────────────────────────────────────────── */
+[dir="rtl"] .a3d-tools-panel  { left: auto; right: 64px; }

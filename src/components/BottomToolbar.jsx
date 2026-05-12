@@ -37,22 +37,21 @@ const TOOL_GROUP_DEFS = [
           <path d="M22 12A10 10 0 0 0 12 2v10z" />
         </svg>
       )},
-      { id: 'navigation', icon: Navigation },
     ]
   },
   {
     id: 'analysis',
     tools: [
+      { id: 'navigation', icon: Navigation },
       { id: 'measure', icon: Ruler },
       { id: 'draw',    icon: Pencil },
-      { id: 'cad',     icon: Box },
     ]
   },
   {
     id: 'data',
     tools: [
       { id: 'data_request',  icon: Database },
-      { id: 'external_data', icon: Globe },
+      { id: 'add_data', icon: Globe },
     ]
   },
   {

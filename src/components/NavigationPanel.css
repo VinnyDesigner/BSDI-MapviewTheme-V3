@@ -1,0 +1,254 @@
+/* NavigationPanel.css */
+
+.nav-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  background: transparent;
+}
+
+.nav-content-scroll {
+  flex: 1;
+  overflow: hidden;
+  padding: 2px 0 12px 0; /* Reduced from 16px */
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Reduced from 16px */
+}
+
+/* Sections */
+.nav-card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Reduced from 12px */
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Reduced from 10px */
+  color: #1a2f4d;
+}
+
+.section-icon {
+  color: #df261c;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.scale-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.scale-input-field {
+  flex: 1;
+}
+
+.zoom-icon-btn {
+  background: linear-gradient(135deg, #df261c, #002d5d);
+  color: white;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(223, 38, 28, 0.2);
+}
+
+.zoom-icon-btn:hover:not(:disabled) {
+  transform: translateX(2px);
+  box-shadow: 0 6px 16px rgba(223, 38, 28, 0.3);
+}
+
+.zoom-icon-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Inputs */
+.tool-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: white !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  color: #1a2f4d !important;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.tool-input:focus {
+  border-color: #df261c !important;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.05);
+}
+
+/* Buttons */
+.nav-action-btn {
+  display: none; /* Removed as per user request */
+}
+
+.capture-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px; /* Reduced from 10px */
+  width: 100%;
+  padding: 10px; /* Reduced from 12px */
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px; /* Reduced from 12px */
+  color: #475569;
+  font-size: 13px; /* Reduced from 14px */
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.capture-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.capture-btn.active {
+  background: #fff5f5;
+  border: 1px solid #df261c;
+  color: #df261c;
+}
+
+/* Coordinate Table Card */
+.coordinate-table-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  margin-top: 4px;
+}
+
+.table-header {
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.table-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+}
+
+.table-wkid {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.table-body {
+  padding: 0;
+}
+
+.table-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px; /* Reduced from 10px 12px */
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.row-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.row-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* Divider */
+.nav-divider-horizontal {
+  height: 1px;
+  background: #f1f5f9;
+  width: 100%;
+}
+
+/* Error */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff5f5;
+  border-radius: 8px;
+  color: #df261c;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #fed7d7;
+}
+
+/* Footer */
+.nav-footer {
+  padding: 12px 0; /* Reduced from 16px */
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.clear-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #1e3c72;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-all-btn:hover {
+  background: #e2e8f0;
+}
+
+.animate-pulse {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}

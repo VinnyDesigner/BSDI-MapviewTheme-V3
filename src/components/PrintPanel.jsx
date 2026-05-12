@@ -10,16 +10,27 @@ import {
   Minus,
   Plus
 } from 'lucide-react';
+import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
+import Graphic from '@arcgis/core/Graphic';
+import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
 import './PrintPanel.css';
+
+const TEMPLATES = {
+  'A4 Portrait': { width: 210, height: 297, ratio: 210/297 },
+  'A4 Landscape': { width: 297, height: 210, ratio: 297/210 },
+  'A3 Portrait': { width: 297, height: 420, ratio: 297/420 },
+  'A3 Landscape': { width: 420, height: 297, ratio: 420/297 },
+};
 
 const PrintPanel = ({ view }) => {
   const [activeTab, setActiveTab] = useState('layout');
   
   // Layout Form State
-  const [title, setTitle] = useState('Palm Jumeirah Map');
-  const [template, setTemplate] = useState('Nakheel Print Template');
+  const [title, setTitle] = useState('');
+  const [template, setTemplate] = useState('');
   const [showPrintArea, setShowPrintArea] = useState(false);
   const [format, setFormat] = useState('PNG');
+  const [multiPage, setMultiPage] = useState(false);
   
   // Advanced State
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
@@ -35,6 +46,196 @@ const PrintPanel = ({ view }) => {
   // Exports State
   const [exportsList, setExportsList] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printLayer] = useState(() => new GraphicsLayer({ title: "Print Extent", listMode: "hide" }));
+  const [interactionLayer] = useState(() => new GraphicsLayer({ title: "Print Interaction", listMode: "hide" }));
+  const [manualExtent, setManualExtent] = useState(null);
+  const sketchVMRef = React.useRef(null);
+  const boundaryGraphicRef = React.useRef(null);
+
+  // Audit Logger
+  const logPrintActivity = (details) => {
+    const log = {
+      user: "Current User", // In real app, get from auth
+      timestamp: new Date().toISOString(),
+      ...details
+    };
+    console.log("📊 PRINT AUDIT LOG:", log);
+    // Here we would call: fetch('/api/audit/print', { method: 'POST', body: JSON.stringify(log) });
+  };
+
+  const calculateGrid = React.useCallback(() => {
+    if (!view || !template || !scale || !multiPage) return { cols: 1, rows: 1 };
+    const t = TEMPLATES[template];
+    if (!t) return { cols: 1, rows: 1 };
+
+    // Template size in map units
+    const mapWidth = (t.width / 1000) * scale;
+    const mapHeight = (t.height / 1000) * scale;
+
+    // View size in map units
+    const areaWidth = manualExtent ? manualExtent.width : view.extent.width;
+    const areaHeight = manualExtent ? manualExtent.height : view.extent.height;
+
+    // If view is larger than template, we need a grid
+    const cols = Math.ceil(areaWidth / mapWidth);
+    const rows = Math.ceil(areaHeight / mapHeight);
+
+    return { cols: Math.max(1, cols), rows: Math.max(1, rows) };
+  }, [view, template, scale, multiPage, manualExtent]);
+
+  const updatePrintExtent = React.useCallback((grid) => {
+    // 1. Clear individual pages (always updated)
+    printLayer.removeAll();
+
+    if (!showPrintArea || !view || !template) {
+      interactionLayer.removeAll();
+      boundaryGraphicRef.current = null;
+      if (sketchVMRef.current) sketchVMRef.current.cancel();
+      return;
+    }
+
+    const t = TEMPLATES[template];
+    if (!t) return;
+
+    const mapWidth = (t.width / 1000) * scale;
+    const mapHeight = (t.height / 1000) * scale;
+    
+    let extentToUse = manualExtent;
+
+    // Initialize manual extent at center if not exists
+    if (!extentToUse) {
+      const totalWidth = mapWidth * grid.cols;
+      const totalHeight = mapHeight * grid.rows;
+      extentToUse = {
+        xmin: view.center.x - totalWidth / 2,
+        ymin: view.center.y - totalHeight / 2,
+        xmax: view.center.x + totalWidth / 2,
+        ymax: view.center.y + totalHeight / 2,
+        spatialReference: view.spatialReference
+      };
+      // Important: don't setManualExtent here as it would trigger another effect. 
+      // Just use it for calculation.
+    }
+
+    const startX = extentToUse.xmin;
+    const startY = extentToUse.ymin;
+
+    // 2. Add individual pages to printLayer
+    for (let c = 0; c < grid.cols; c++) {
+      for (let r = 0; r < grid.rows; r++) {
+        const xmin = startX + c * mapWidth;
+        const ymin = startY + r * mapHeight;
+        const xmax = xmin + mapWidth;
+        const ymax = ymin + mapHeight;
+
+        printLayer.add(new Graphic({
+          geometry: {
+            type: "extent",
+            xmin, ymin, xmax, ymax,
+            spatialReference: view.spatialReference
+          },
+          symbol: {
+            type: "simple-fill",
+            color: [223, 38, 28, 0.02],
+            outline: { color: [223, 38, 28, 0.4], width: 1, style: "dash" }
+          },
+          attributes: { page: c * grid.rows + r + 1 }
+        }));
+      }
+    }
+
+    // 3. Handle boundary/interaction graphic
+    // Only re-create if it doesn't exist OR we're NOT currently interacting
+    const isInteracting = sketchVMRef.current && (
+      sketchVMRef.current.state === "active" || 
+      sketchVMRef.current.activeGraphic
+    );
+
+    if (!isInteracting) {
+      interactionLayer.removeAll();
+      const boundaryGraphic = new Graphic({
+        geometry: {
+          type: "extent",
+          xmin: extentToUse.xmin,
+          ymin: extentToUse.ymin,
+          xmax: extentToUse.xmax,
+          ymax: extentToUse.ymax,
+          spatialReference: view.spatialReference
+        },
+        symbol: {
+          type: "simple-fill",
+          color: [0, 0, 0, 0],
+          outline: { color: [223, 38, 28, 1], width: 2 }
+        }
+      });
+      boundaryGraphicRef.current = boundaryGraphic;
+      interactionLayer.add(boundaryGraphic);
+      
+      if (sketchVMRef.current) {
+        sketchVMRef.current.update(boundaryGraphic);
+      }
+    }
+  }, [showPrintArea, view, template, scale, manualExtent, printLayer, interactionLayer]);
+
+  const pageGrid = React.useMemo(() => calculateGrid(), [template, scale, multiPage, manualExtent, view?.extent]);
+
+  useEffect(() => {
+    if (view && view.map) {
+      view.map.add(printLayer);
+      view.map.add(interactionLayer);
+
+      const svm = new SketchViewModel({
+        view: view,
+        layer: interactionLayer,
+        updateOnGraphicClick: true,
+        defaultUpdateOptions: {
+          toggleToolOnClick: false,
+          enableRotation: false,
+          enableScaling: true,
+          preserveAspectRatio: !multiPage
+        }
+      });
+
+      svm.on("update", (event) => {
+        if (event.state === "active" || event.state === "complete") {
+          const graphic = event.graphics[0];
+          if (graphic) {
+            setManualExtent(graphic.geometry.extent.clone());
+          }
+        }
+      });
+
+      sketchVMRef.current = svm;
+    }
+    return () => {
+      if (view && view.map) {
+        view.map.remove(printLayer);
+        view.map.remove(interactionLayer);
+      }
+    };
+  }, [view, printLayer, interactionLayer]);
+
+  useEffect(() => {
+    if (sketchVMRef.current) {
+      sketchVMRef.current.defaultUpdateOptions = {
+        ...sketchVMRef.current.defaultUpdateOptions,
+        preserveAspectRatio: !multiPage
+      };
+    }
+  }, [multiPage]);
+
+  useEffect(() => {
+    if (view && view.spatialReference) {
+      const currentWkid = view.spatialReference.latestWkid || view.spatialReference.wkid;
+      if (currentWkid) {
+        setWkid(currentWkid.toString());
+      }
+    }
+  }, [view, view?.spatialReference?.wkid, view?.spatialReference?.latestWkid]);
+
+  useEffect(() => {
+    updatePrintExtent(pageGrid);
+  }, [showPrintArea, template, scale, multiPage, manualExtent, view?.extent, pageGrid]);
 
   const handleEnableScaleToggle = (e) => {
     const checked = e.target.checked;
@@ -49,7 +250,19 @@ const PrintPanel = ({ view }) => {
     setIsPrinting(true);
 
     try {
-      // Simulate print service / screenshot generation
+      // 📝 Audit Logging Start
+      const auditDetails = {
+        title,
+        template,
+        scale,
+        format,
+        dpi,
+        wkid: wkid || view.spatialReference.wkid,
+        layers: view.map.layers.filter(l => l.visible).map(l => l.title).toArray(),
+        extent: manualExtent ? manualExtent.toJSON() : view.extent.toJSON(),
+        pageCount: multiPage ? (pageGrid.cols * pageGrid.rows) : 1
+      };
+
       const screenshot = await view.takeScreenshot({
         format: format.toLowerCase() === 'jpg' ? 'jpg' : 'png',
         quality: 100
@@ -60,13 +273,17 @@ const PrintPanel = ({ view }) => {
         name: `${title || 'Map_Export'}.${format.toLowerCase()}`,
         format: format,
         url: screenshot.dataUrl,
-        date: new Date().toLocaleString()
+        date: new Date().toLocaleString(),
+        pages: multiPage ? (pageGrid.cols * pageGrid.rows) : 1
       };
 
       setExportsList(prev => [newExport, ...prev]);
       setActiveTab('exports');
+      
+      logPrintActivity({ ...auditDetails, status: 'SUCCESS' });
     } catch (err) {
       console.error("Print generation failed", err);
+      logPrintActivity({ title, status: 'FAILED', error: err.message });
       alert("Failed to generate print");
     } finally {
       setIsPrinting(false);
@@ -113,6 +330,7 @@ const PrintPanel = ({ view }) => {
               <input 
                 type="text" 
                 className="tool-input"
+                placeholder="Enter Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -125,7 +343,7 @@ const PrintPanel = ({ view }) => {
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
               >
-                <option>Nakheel Print Template</option>
+                <option value="" disabled>Select Template</option>
                 <option>A4 Portrait</option>
                 <option>A4 Landscape</option>
                 <option>A3 Portrait</option>
@@ -140,7 +358,22 @@ const PrintPanel = ({ view }) => {
                   checked={showPrintArea}
                   onChange={(e) => setShowPrintArea(e.target.checked)}
                 />
-                Show print area
+                Show print area {showPrintArea && pageGrid.cols * pageGrid.rows > 1 && (
+                  <span className="page-count-tag">
+                    ({pageGrid.cols * pageGrid.rows} Pages - {pageGrid.cols}x{pageGrid.rows})
+                  </span>
+                )}
+              </label>
+            </div>
+
+            <div className="form-checkbox-group">
+              <label className="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  checked={multiPage}
+                  onChange={(e) => setMultiPage(e.target.checked)}
+                />
+                Enable Multi-Page Print
               </label>
             </div>
 
@@ -313,20 +546,36 @@ const PrintPanel = ({ view }) => {
       {/* Footer */}
       {activeTab === 'layout' && (
         <div className="print-footer">
-          <button 
-            className="primary-btn full-width" 
-            onClick={handlePrint}
-            disabled={isPrinting || !title.trim()}
-          >
-            {isPrinting ? (
-              <span className="flex-center gap-2">
-                <RefreshCw size={16} className="spinning" />
-                Generating...
-              </span>
-            ) : (
-              'Print'
-            )}
-          </button>
+          <div className="footer-actions">
+            <button 
+              className="secondary-btn"
+              onClick={() => {
+                setTitle('');
+                setTemplate('');
+                setShowPrintArea(false);
+                setMultiPage(false);
+                setManualExtent(null);
+                boundaryGraphicRef.current = null;
+                if (sketchVMRef.current) sketchVMRef.current.cancel();
+              }}
+            >
+              Cancel
+            </button>
+            <button 
+              className="primary-btn" 
+              onClick={handlePrint}
+              disabled={isPrinting || !title.trim()}
+            >
+              {isPrinting ? (
+                <span className="flex-center gap-2">
+                  <RefreshCw size={16} className="spinning" />
+                  Generating...
+                </span>
+              ) : (
+                'Print'
+              )}
+            </button>
+          </div>
         </div>
       )}
     </div>

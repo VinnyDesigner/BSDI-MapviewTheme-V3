@@ -1,0 +1,240 @@
+/* MeasurePanel.css */
+
+.measure-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  background: transparent;
+}
+
+.measure-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 0 16px 0; /* Reduced from 24px */
+}
+
+.measure-header-tools {
+  padding-bottom: 12px; /* Reduced from 16px */
+  background: transparent;
+}
+
+.measure-footer-wrapper {
+  padding: 16px 0;
+  border-top: 1px solid #f1f5f9;
+  background: transparent;
+  margin-top: auto;
+}
+
+.measure-footer-content {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Mode Selection */
+.measure-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px; /* Reduced from 12px */
+  margin-bottom: 16px; /* Reduced from 24px */
+}
+
+.measure-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.measure-card:hover {
+  border-color: #df261c;
+  background: #fffafa;
+  color: #df261c;
+}
+
+.measure-card.active {
+  background: #fff5f5;
+  border: 2px solid #df261c;
+  color: #df261c;
+  box-shadow: 0 4px 12px rgba(223, 38, 28, 0.1);
+}
+
+.measure-card.reset:hover {
+  border-color: #64748b;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.measure-card span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Coordinate Display */
+.coordinate-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.coord-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.coord-info .label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.coord-info .value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Sections */
+.measure-section {
+  margin-bottom: 12px; /* Reduced from 20px */
+}
+
+.section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2f4d;
+  margin-bottom: 6px; /* Reduced from 8px */
+}
+
+/* Unit Select */
+.unit-select-wrapper {
+  position: relative;
+}
+
+.measure-select {
+  width: 100%;
+  padding: 10px 16px;
+  background: white !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  color: #1a2f4d !important;
+  font-weight: 500;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.measure-select:focus {
+  border-color: #df261c;
+  background: white;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* Results Card */
+.results-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Reduced from 12px */
+  margin-top: 4px; /* Reduced from 8px */
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.result-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.res-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.res-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #df261c;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-unit {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Footer */
+.measure-footer {
+  padding-top: 12px; /* Reduced from 16px */
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.new-measure-btn {
+  background: linear-gradient(135deg, #df261c, #002d5d);
+  color: white;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.new-measure-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(223, 38, 28, 0.25);
+}
+
+.new-measure-btn:active {
+  transform: translateY(0);
+}

@@ -82,19 +82,22 @@ export const layersConfig = [
     title: 'EWA Water Distribution (WDD)',
     url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/EWA_WDD/FeatureServer/0',
     visible: false,
-    hasTree: true
+    hasTree: true,
+    restricted: true
   },
   {
     id: 'ewa-etd',
     title: 'EWA Electricity Transmission (ETD)',
     url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/EWA_ETD/FeatureServer/0',
-    visible: false
+    visible: false,
+    restricted: true
   },
   {
     id: 'ewa-edd',
     title: 'EWA Electricity Distribution (EDD)',
     url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/EWA_EDD/FeatureServer/0',
-    visible: false
+    visible: false,
+    restricted: true
   },
   {
     id: 'muharraq-dgs-route',
@@ -178,7 +181,8 @@ export const layersConfig = [
     id: 'cadastral',
     title: 'Cadastral',
     url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/Cadastral/FeatureServer/0',
-    visible: false
+    visible: false,
+    restricted: true
   },
   {
     id: 'caa',
@@ -190,7 +194,8 @@ export const layersConfig = [
     id: 'oil-gas',
     title: 'Oil & Gas',
     url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/Oil_Gas/FeatureServer/0',
-    visible: false
+    visible: false,
+    restricted: true
   },
   {
     id: 'buildings',
@@ -254,11 +259,69 @@ export const layersConfig = [
     time: 1990
   },
   {
-    id: 'blocks-bahrain',
+    id: 'blocks-layer',
     title: 'BLOCKS Bahrain',
     url: 'https://services6.arcgis.com/89H8pYI6ZzNf9H5v/arcgis/rest/services/Blocks_Bahrain/FeatureServer/0',
     type: 'feature',
     visible: false,
-    timeEnabled: true
+    timeEnabled: true,
+    timeField: 'SURVEY_YEAR',
+    startYear: 2018,
+    endYear: 2024,
+    renderer: {
+      type: "unique-value",
+      field: "SURVEY_YEAR",
+      uniqueValueInfos: [
+        { value: 2018, symbol: { type: "simple-fill", color: "#df261c", outline: { color: "white", width: 1 } } },
+        { value: 2019, symbol: { type: "simple-fill", color: "#e85d04", outline: { color: "white", width: 1 } } },
+        { value: 2020, symbol: { type: "simple-fill", color: "#f48c06", outline: { color: "white", width: 1 } } },
+        { value: 2021, symbol: { type: "simple-fill", color: "#ffba08", outline: { color: "white", width: 1 } } },
+        { value: 2022, symbol: { type: "simple-fill", color: "#00b4d8", outline: { color: "white", width: 1 } } },
+        { value: 2023, symbol: { type: "simple-fill", color: "#0077b6", outline: { color: "white", width: 1 } } },
+        { value: 2024, symbol: { type: "simple-fill", color: "#002d5d", outline: { color: "white", width: 1 } } }
+      ]
+    }
+  },
+  {
+    id: 'heritage-layer',
+    title: 'Heritage Sites Timeline',
+    url: 'https://services.arcgis.com/V6ZHFr6zdgNZuXC0/ArcGIS/rest/services/Heritage_Sites/FeatureServer/0',
+    type: 'feature',
+    visible: false,
+    timeEnabled: true,
+    timeField: 'CONSTRUCTION_YEAR',
+    startYear: 1900,
+    endYear: 2024,
+    renderer: {
+      type: "simple",
+      symbol: {
+        type: "simple-marker",
+        color: "#df261c",
+        size: "10px",
+        outline: { color: "white", width: 2 }
+      }
+    }
+  },
+  {
+    id: 'coastal-layer',
+    title: 'Coastal Change',
+    url: 'https://services.arcgis.com/P3ePLMYs2RVChqkv/arcgis/rest/services/USA_Coastal_Counties/FeatureServer/0',
+    type: 'feature',
+    visible: false,
+    timeEnabled: true,
+    timeField: 'SURVEY_DATE',
+    startYear: 2000,
+    endYear: 2025
+  },
+  {
+    id: 'survey-year-layers',
+    title: 'Survey Year Layers',
+    url: 'https://services.iga.gov.bh/arcgis/rest/services/Hosted/Buildings/FeatureServer/0',
+    type: 'feature',
+    visible: false,
+    timeEnabled: true,
+    timeField: 'SURVEY_YEAR',
+    startYear: 2010,
+    endYear: 2024
   }
 ];

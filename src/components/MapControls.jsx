@@ -3,7 +3,7 @@ import { Plus, Minus, Home, Info, Hand, Map } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import './MapControls.css';
 
-const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDisabled }) => {
+const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDisabled, isSplitView, isSwipeMode }) => {
   const { t } = useLanguage();
 
   const handleZoomIn  = () => { if (view) view.zoom += 1; };
@@ -31,7 +31,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
 
       {/* 3. 2D / 3D Toggle */}
       <button
-        className={`map-control-btn square ${is3D ? 'active' : ''} ${is3DDisabled ? 'disabled' : ''}`}
+        className={`map-control-btn square ${is3DDisabled ? 'disabled' : ''}`}
         onClick={!is3DDisabled ? onToggle3D : undefined}
         title={is3DDisabled ? (t('view3DDisabled') || '3D view is not available in this mode') : (is3D ? (t('view2D') || '2D View') : (t('view3D') || '3D View'))}
         disabled={is3DDisabled}
@@ -40,13 +40,15 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
       </button>
 
       {/* 4. Basemap */}
-      <button 
-        className={`map-control-btn square ${activeTool === 'basemap' ? 'active' : ''}`} 
-        onClick={() => onToolSelect('basemap')} 
-        title="Basemap"
-      >
-        <Map size={18} />
-      </button>
+      {!(isSplitView || isSwipeMode) && (
+        <button 
+          className={`map-control-btn square ${activeTool === 'basemap' ? 'active' : ''}`} 
+          onClick={() => onToolSelect('basemap')} 
+          title="Basemap"
+        >
+          <Map size={18} />
+        </button>
+      )}
 
       {/* 5. Pan */}
       <button

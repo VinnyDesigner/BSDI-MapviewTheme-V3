@@ -5,80 +5,173 @@ import MapView from '@arcgis/core/views/MapView';
 import SceneView from '@arcgis/core/views/SceneView';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import TileLayer from '@arcgis/core/layers/TileLayer';
+import * as projection from "@arcgis/core/geometry/projectionUtils";
+import * as arcade from "@arcgis/core/arcade/arcade";
 import SceneLayer from '@arcgis/core/layers/SceneLayer';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
 import Swipe from '@arcgis/core/widgets/Swipe';
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine';
 import Polyline from '@arcgis/core/geometry/Polyline';
+import Point from '@arcgis/core/geometry/Point';
 import HeatmapRenderer from '@arcgis/core/renderers/HeatmapRenderer';
 import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
 import Query from '@arcgis/core/rest/support/Query';
+import Basemap from '@arcgis/core/Basemap';
 import { layersConfig } from '../layers';
 
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
 const ArcGISMap = ({ 
-  layerVisibility, onViewReady, isSplitMode, splitLayers, 
+  layerVisibility, onViewReady, isSplitMode, splitLayers, splitBasemaps,
   blendSettings, arcadeSettings, onArcadePreview, 
   spatialSettings, onSpatialResult, 
   timelapseSettings, onTimelapseYearChange, 
   basemap, is3D, swipeMode = 'vertical', onSwipePositionChange,
-  activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart
+  activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart,
+  onRequestData, onDataRequestAOIChange, dataRequestDrawingTool
 }) => {
-  const mapDiv = useRef(null);
-  const viewRef = useRef(null);
+  const map2DDiv = useRef(null);
+  const map3DDiv = useRef(null);
+  const view2DRef = useRef(null);
+  const view3DRef = useRef(null);
+  const viewRef = useRef(null); // Active view
   const swipeRef = useRef(null);
   const layersRef = useRef({});
+  const layers3DRef = useRef({});
   const graphicsLayerRef = useRef(new GraphicsLayer());
   const [isLoading, setIsLoading] = useState(true);
   
-  // 1. Initialize Map, View and ALL Layers
+  // 1. Initialize MapView (2D)
   useEffect(() => {
-    if (!mapDiv.current) return;
+    if (!map2DDiv.current || view2DRef.current) return;
 
     const map = new Map({
       basemap: basemap || 'streets-navigation-vector'
     });
 
-    const ViewClass = is3D ? SceneView : MapView;
-    const viewConfig = {
-      container: mapDiv.current,
+    const view = new MapView({
+      container: map2DDiv.current,
       map: map,
       center: [50.55, 26.22],
       zoom: 9,
       ui: { components: [] }
-    };
+    });
 
-    if (is3D) {
-      viewConfig.camera = {
-        position: {
-          x: 50.55,
-          y: 26.15, // Offset slightly south for better tilt view
-          z: 5000   // Altitude in meters
-        },
+    view2DRef.current = view;
+    if (!is3D) viewRef.current = view;
+
+    // Load layers into 2D map
+    layersConfig.forEach(config => {
+      const LayerClass = config.type === 'tile' ? TileLayer : FeatureLayer;
+      const layer = new LayerClass({
+        id: config.id,
+        url: config.url,
+        title: config.title,
+        visible: false,
+        popupTemplate: config.type !== 'tile' ? { title: "{*}", content: "{*}" } : null
+      });
+      map.add(layer);
+      layersRef.current[config.id] = layer;
+    });
+
+    view.when(() => {
+      if (!is3D) {
+        setIsLoading(false);
+        if (onViewReady) onViewReady(view);
+      }
+    });
+
+    return () => {
+      // Don't destroy immediately to allow fast switching, 
+      // but in a real app you might want to cleanup if unmounting the whole component
+    };
+  }, []);
+
+  // 2. Initialize SceneView (3D) - Only when first needed
+  useEffect(() => {
+    if (!map3DDiv.current || view3DRef.current || !is3D) return;
+
+    // Use a 3D-compatible basemap and set ground elevation (required for SceneView)
+    const map = new Map({
+      basemap: 'topo-3d',           // 3D-compatible basemap
+      ground: 'world-elevation'     // Essential — without this SceneView is blank
+    });
+
+    const view = new SceneView({
+      container: map3DDiv.current,
+      map: map,
+      camera: {
+        position: { x: 50.55, y: 26.15, z: 5000 },
         tilt: 65,
         heading: 0
+      },
+      ui: { components: [] }
+    });
+
+    view3DRef.current = view;
+    if (is3D) viewRef.current = view;
+
+    // Add 3D Buildings
+    const buildingsLayer = new SceneLayer({
+      url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
+      title: "3D Buildings",
+      id: "3d-buildings",
+      popupEnabled: false,
+      opacity: 0.8
+    });
+    map.add(buildingsLayer);
+
+    // =======================================
+    // BSDI 3D Building — Only in SceneView
+    // =======================================
+    const buildingLayer = new GraphicsLayer({
+      title: "BSDI Demo Building",
+      id: "bsdi-building-layer"
+    });
+    map.add(buildingLayer);
+
+    const buildingPoint = new Point({
+      longitude: 50.5478,
+      latitude: 26.2212,
+      z: 0
+    });
+
+    const buildingGraphic = new Graphic({
+      geometry: buildingPoint,
+      symbol: {
+        type: "point-3d",
+        symbolLayers: [{
+          type: "object",
+          resource: { href: "/models/bsdi-building.glb" },
+          anchor: "bottom",
+          width: 80,
+          height: 80,
+          depth: 80
+        }]
+      }
+    });
+
+    buildingLayer.add(buildingGraphic);
+
+    // Camera + Lighting
+    view.when(() => {
+      view.environment = {
+        lighting: {
+          directShadowsEnabled: true,
+          ambientOcclusionEnabled: true
+        }
       };
-    }
+      view.goTo({
+        target: buildingPoint,
+        zoom: 19,
+        tilt: 75,
+        heading: 45
+      }, { duration: 3000 });
+    });
 
-    const view = new ViewClass(viewConfig);
-    viewRef.current = view;
-
-    // Add 3D Buildings if in 3D mode
-    if (is3D) {
-      const buildingsLayer = new SceneLayer({
-        url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
-        title: "3D Buildings",
-        id: "3d-buildings",
-        popupEnabled: false,
-        opacity: 0.8
-      });
-      map.add(buildingsLayer);
-    }
-
-    // Preload layers
+    // Load layers into 3D map
     layersConfig.forEach(config => {
       const LayerClass = config.type === 'tile' ? TileLayer : FeatureLayer;
       const layer = new LayerClass({
@@ -87,40 +180,48 @@ const ArcGISMap = ({
         title: config.title,
         visible: false
       });
-
-      if (config.id.includes('historical')) {
-        layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
-      }
-
+      if (config.renderer) layer.renderer = config.renderer;
       map.add(layer);
-      layersRef.current[config.id] = layer;
+      layers3DRef.current[config.id] = layer;
     });
 
     view.when(() => {
       setIsLoading(false);
       if (onViewReady) onViewReady(view);
-
-      // Smooth transition for 3D
-      if (is3D) {
-        view.goTo({
-          center: [50.55, 26.22],
-          tilt: 65,
-          heading: 0,
-          zoom: 15 // Zoom in to see buildings
-        }, {
-          duration: 2000,
-          easing: "ease-in-out"
-        });
-      }
+    }).catch(err => {
+      console.error('SceneView failed to load:', err);
+      setIsLoading(false);
     });
+  }, [is3D]);
 
-    return () => {
-      if (swipeRef.current) swipeRef.current.destroy();
-      view.destroy();
-    };
-  }, [is3D]); 
+  // 3. Handle View Switching & State Sync
+  useEffect(() => {
+    const activeView = is3D ? view3DRef.current : view2DRef.current;
+    const inactiveView = is3D ? view2DRef.current : view3DRef.current;
 
+    if (activeView) {
+      viewRef.current = activeView;
+      if (onViewReady) onViewReady(activeView);
+      
+      // Sync state from inactive to active
+      if (inactiveView && inactiveView.ready && activeView.ready) {
+        if (is3D) {
+          // Sync 2D -> 3D
+          activeView.goTo({
+            center: inactiveView.center,
+            zoom: inactiveView.zoom
+          });
+        } else {
+          // Sync 3D -> 2D
+          activeView.center = inactiveView.center;
+          activeView.zoom = inactiveView.zoom;
+        }
+      }
+    }
+  }, [is3D]);
   // 2. Manage Split Visibility & Swipe Logic (Targeting LEFT/RIGHT comparison)
+  const swipeBasemapLayersRef = useRef({ left: [], right: [] });
+
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -145,25 +246,50 @@ const ArcGISMap = ({
         const buildingsLayer = view.map.findLayerById('3d-buildings');
         if (buildingsLayer) buildingsLayer.visible = false;
 
-        // 2. Clear existing swipe
-        if (swipeRef.current) {
-          try {
-            view.ui.remove(swipeRef.current);
-            swipeRef.current.destroy();
-          } catch (e) {}
-          swipeRef.current = null;
-        }
-
         // 3. Create fresh swipe with current mode after view is ready
-        view.when(() => {
+        view.when(async () => {
           if (view.destroyed || !isSplitMode) return;
+
+          // Load basemap layers
+          let leftBaseLayers = [];
+          let rightBaseLayers = [];
+
+          if (splitBasemaps && splitBasemaps.left) {
+            const leftBm = Basemap.fromId(splitBasemaps.left);
+            await leftBm.load();
+            leftBaseLayers = leftBm.baseLayers.toArray();
+          }
+
+          if (splitBasemaps && splitBasemaps.right) {
+            const rightBm = Basemap.fromId(splitBasemaps.right);
+            await rightBm.load();
+            rightBaseLayers = rightBm.baseLayers.toArray();
+          }
+
+          if (view.destroyed || !isSplitMode) return;
+
+          // Clear existing swipe
+          if (swipeRef.current) {
+            try {
+              view.ui.remove(swipeRef.current);
+              swipeRef.current.destroy();
+            } catch (e) {}
+            swipeRef.current = null;
+          }
+
+          // Remove previously added swipe basemap layers
+          view.map.removeMany([...swipeBasemapLayersRef.current.left, ...swipeBasemapLayersRef.current.right]);
+
+          // Add new basemap layers to the bottom of the map
+          view.map.addMany([...leftBaseLayers, ...rightBaseLayers], 0);
+          swipeBasemapLayersRef.current = { left: leftBaseLayers, right: rightBaseLayers };
 
           const swipe = new Swipe({
             view: view,
-            leadingLayers: [leftLayer],
-            trailingLayers: [rightLayer],
+            leadingLayers: [...leftBaseLayers, leftLayer],
+            trailingLayers: [...rightBaseLayers, rightLayer],
             direction: swipeMode,   // 'vertical' or 'horizontal'
-            position: 50
+            position: swipeRef.current?.position || 50
           });
 
           view.ui.add(swipe);
@@ -189,6 +315,12 @@ const ArcGISMap = ({
         } catch (e) {}
         swipeRef.current = null;
       }
+
+      // Remove basemap layers
+      if (view.map) {
+        view.map.removeMany([...swipeBasemapLayersRef.current.left, ...swipeBasemapLayersRef.current.right]);
+      }
+      swipeBasemapLayersRef.current = { left: [], right: [] };
       
       Object.keys(layersRef.current).forEach(id => {
         if (layersRef.current[id]) {
@@ -200,28 +332,28 @@ const ArcGISMap = ({
       const buildingsLayer = view.map.findLayerById('3d-buildings');
       if (buildingsLayer) buildingsLayer.visible = is3D;
     }
-  }, [isSplitMode, splitLayers, layerVisibility, swipeMode, is3D]);
+  }, [isSplitMode, splitLayers, splitBasemaps, layerVisibility, swipeMode, is3D]);
 
   // 4. Manage Layer Blending
   useEffect(() => {
     const view = viewRef.current;
     if (!view || isSplitMode) return;
 
-    if (blendSettings) {
-      // 1. Hide all layers first and reset properties
-      Object.keys(layersRef.current).forEach(id => {
-        const layer = layersRef.current[id];
-        if (layer) {
-          layer.visible = false;
-          layer.opacity = 1;
-          layer.blendMode = 'normal';
-        }
-      });
-
+    if (blendSettings && blendSettings.baseLayerId && blendSettings.overlayLayerId) {
       const base = layersRef.current[blendSettings.baseLayerId];
       const overlay = layersRef.current[blendSettings.overlayLayerId];
 
       if (base && overlay) {
+        // 1. Hide other layers and reset properties
+        Object.keys(layersRef.current).forEach(id => {
+          const layer = layersRef.current[id];
+          if (layer && id !== blendSettings.baseLayerId && id !== blendSettings.overlayLayerId) {
+            layer.visible = false;
+            layer.opacity = 1;
+            layer.blendMode = 'normal';
+          }
+        });
+
         // 2. Setup base layer (bottom)
         base.visible = true;
         base.opacity = 1;
@@ -233,25 +365,64 @@ const ArcGISMap = ({
         overlay.opacity = blendSettings.opacity;
         overlay.blendMode = blendSettings.blendMode;
         view.map.reorder(overlay, 1);
+      } else if (overlay) {
+        // Only overlay is a valid operational layer, base might be a basemap
+        overlay.visible = true;
+        overlay.opacity = blendSettings.opacity;
+        overlay.blendMode = blendSettings.blendMode;
+        view.map.reorder(overlay, view.map.layers.length); // Top
       }
-    } else {
-      // Restore standard visibility and reset blending
-      Object.keys(layersRef.current).forEach(id => {
-        if (layersRef.current[id]) {
-          layersRef.current[id].visible = !!layerVisibility[id];
-          layersRef.current[id].opacity = 1;
-          layersRef.current[id].blendMode = 'normal';
+    }
+
+    // Function to sync visibility for both 2D and 3D layers
+    const syncVisibility = (layersMap, visibilityMap) => {
+      Object.keys(layersMap).forEach(id => {
+        const layer = layersMap[id];
+        if (layer) {
+          layer.visible = !!visibilityMap[id];
+          layer.opacity = 1;
+          layer.blendMode = 'normal';
         }
       });
+    };
+
+    if (isSplitMode) {
+      // Split mode logic (only for 2D currently as per existing app patterns)
+      const leftLayer = layersRef.current[splitLayers.left];
+      const rightLayer = layersRef.current[splitLayers.right];
+      if (leftLayer) leftLayer.visible = true;
+      if (rightLayer) rightLayer.visible = true;
+      
+      Object.keys(layersRef.current).forEach(id => {
+        if (id !== splitLayers.left && id !== splitLayers.right) {
+          layersRef.current[id].visible = false;
+        }
+      });
+    } else if (blendSettings?.layerId) {
+      // Blend logic
+      syncVisibility(layersRef.current, layerVisibility);
+      syncVisibility(layers3DRef.current, layerVisibility);
+      
+      const overlay = layersRef.current[blendSettings.layerId];
+      if (overlay) {
+        overlay.visible = true;
+        overlay.opacity = blendSettings.opacity;
+        overlay.blendMode = blendSettings.blendMode;
+      }
+    } else {
+      // Standard sync
+      syncVisibility(layersRef.current, layerVisibility);
+      syncVisibility(layers3DRef.current, layerVisibility);
     }
-  }, [blendSettings, layerVisibility, isSplitMode]);
+  }, [blendSettings, layerVisibility, isSplitMode, is3D]);
 
   // 5. Manage Arcade Expressions
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !arcadeSettings?.lastApplied) return;
+    if (!view || !arcadeSettings?.lastRun) return;
 
-    const layer = layersRef.current[arcadeSettings.layerId];
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    const layer = activeLayers[arcadeSettings.layerId];
     if (!layer) return;
 
     const { expression, applyTo } = arcadeSettings;
@@ -261,7 +432,7 @@ const ArcGISMap = ({
         // Apply Arcade to Renderer
         layer.renderer = {
           type: "simple",
-          symbol: {
+          symbol: layer.renderer.symbol || {
             type: "simple-fill",
             color: [150, 150, 150, 0.5],
             outline: { color: [255, 255, 255, 0.8], width: 1 }
@@ -271,6 +442,8 @@ const ArcGISMap = ({
             valueExpression: expression,
             stops: [
               { value: 0, color: "#f7fcf0" },
+              { value: 10, color: "#e0f3db" },
+              { value: 50, color: "#a8ddb5" },
               { value: 100, color: "#084081" }
             ]
           }]
@@ -284,18 +457,18 @@ const ArcGISMap = ({
             type: "text",
             color: "white",
             haloColor: "#1e3c72",
-            haloSize: "2px",
-            font: { size: 12, weight: "bold", family: "Inter" }
+            haloSize: "1.5px",
+            font: { size: 11, weight: "bold", family: "Inter" }
           }
         }];
         layer.labelsVisible = true;
       } else if (applyTo === 'Popup') {
         // Apply Arcade to Popups
         layer.popupTemplate = {
-          title: "Arcade Computation",
+          title: "Arcade Result",
           content: [{
             type: "text",
-            text: `The computed result for this feature is: <b>{expression/custom-arcade}</b>`
+            text: `Calculated Value: <b>{expression/custom-arcade}</b>`
           }],
           expressionInfos: [{
             name: "custom-arcade",
@@ -304,22 +477,27 @@ const ArcGISMap = ({
           }]
         };
       } else if (applyTo === 'Filtering') {
-        // Note: For filtering, we typically use definitionExpression which is SQL-like.
-        // However, we can use it for visual variables to "hide" features (opacity = 0).
+        // We use visual variables to hide features based on Arcade truthiness
         layer.renderer = {
           type: "simple",
-          symbol: layer.renderer.symbol || { type: "simple-fill", color: "blue" },
+          symbol: layer.renderer.symbol || { type: "simple-fill", color: "#1e3c72" },
           visualVariables: [{
             type: "opacity",
-            valueExpression: `if (${expression}) { return 1 } else { return 0 }`,
-            stops: [{ value: 0, opacity: 0 }, { value: 1, opacity: 1 }]
+            valueExpression: `if (${expression}) { return 1; } else { return 0; }`,
+            stops: [
+              { value: 0, opacity: 0 },
+              { value: 1, opacity: 1 }
+            ]
           }]
         };
       }
+      
+      // Refresh layer
+      layer.refresh();
     } catch (err) {
       console.error("Arcade Apply Error:", err);
     }
-  }, [arcadeSettings?.lastApplied]);
+  }, [arcadeSettings?.lastRun]);
 
   // 6. Live Arcade Preview
   useEffect(() => {
@@ -329,10 +507,10 @@ const ArcGISMap = ({
       return;
     }
 
-    const layer = layersRef.current[arcadeSettings.layerId];
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    const layer = activeLayers[arcadeSettings.layerId];
     if (!layer) return;
 
-    // Evaluate expression on a sample feature
     const evalPreview = async () => {
       try {
         await layer.when();
@@ -340,67 +518,37 @@ const ArcGISMap = ({
           where: "1=1",
           outFields: ["*"],
           num: 1,
-          returnGeometry: false
+          returnGeometry: true
         });
 
         if (results.features.length > 0) {
           const feature = results.features[0];
-          const attrs = feature.attributes;
-          let result = "---";
           const expr = arcadeSettings.expression.trim();
           
-          // Basic field substitution for preview
-          if (expr.includes('$feature.')) {
-            // Extract field names from $feature.field
-            const matches = [...expr.matchAll(/\$feature\.(\w+)/g)];
-            let tempResult = expr;
-            let fieldMissing = null;
+          try {
+            // Create a real Arcade executor
+            const executor = await arcade.createArcadeExecutor(expr, {
+              profile: "popup" // Use popup profile as it's the most flexible for attribute access
+            });
 
-            for (const match of matches) {
-              const fieldName = match[1];
-              const val = attrs[fieldName] || attrs[fieldName.toUpperCase()] || attrs[fieldName.toLowerCase()];
-              
-              if (val === undefined) {
-                fieldMissing = fieldName;
-                break;
-              }
-              // Replace for simulation
-              tempResult = tempResult.replace(`$feature.${fieldName}`, val);
-            }
+            const result = await executor.execute({
+              $feature: feature
+            });
 
-            if (fieldMissing) {
-              result = `Error: Field "${fieldMissing}" not found in layer`;
-            } else if (expr.includes('/') || expr.includes('*')) {
-              // Simulated math
-              try {
-                // Strip return/When for simple math eval
-                const mathExpr = expr.replace('return', '').replace(';', '').trim();
-                const evalExpr = mathExpr.replace(/\$feature\.(\w+)/g, (m, f) => {
-                  return attrs[f] || attrs[f.toUpperCase()] || attrs[f.toLowerCase()] || 0;
-                });
-                result = eval(evalExpr);
-              } catch (e) {
-                result = "Error: Invalid math expression";
-              }
-            } else if (matches.length > 0) {
-              const f0 = matches[0][1];
-              result = attrs[f0] || attrs[f0.toUpperCase()] || attrs[f0.toLowerCase()];
-            }
-          } else {
-            result = "Expression Valid (Logic Ready)";
+            onArcadePreview(String(result), feature.attributes);
+          } catch (arcadeErr) {
+            onArcadePreview(`Syntax Error: ${arcadeErr.message}`, null);
           }
-          
-          onArcadePreview(String(result), attrs);
         } else {
-          onArcadePreview("No sample features found", null);
+          onArcadePreview("No sample features found in layer", null);
         }
       } catch (err) {
         console.error("Preview Eval Error:", err);
-        onArcadePreview("Evaluation Error", null);
+        onArcadePreview("Evaluation Error: Check field names", null);
       }
     };
 
-    const timer = setTimeout(evalPreview, 300);
+    const timer = setTimeout(evalPreview, 400);
     return () => clearTimeout(timer);
   }, [arcadeSettings?.expression, arcadeSettings?.layerId]);
 
@@ -429,7 +577,8 @@ const ArcGISMap = ({
     }
 
     const { subTool, layerId, bufferDistance, bufferUnit, isWaitingForClick } = spatialSettings;
-    const layer = layersRef.current[layerId];
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    const layer = activeLayers[layerId];
     if (!layer) return;
 
     let clickHandler = null;
@@ -533,67 +682,58 @@ const ArcGISMap = ({
   // 8. Handle Timelapse Animation
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !timelapseSettings) return;
+    if (!view) return;
 
-    const { layerId, currentYear, fromYear, toYear, isPlaying, speed, loop, startYear, endYear, mode } = timelapseSettings;
-    const layer = layersRef.current[layerId];
-    if (!layer) return;
+    // Helper to get layer by ID
+    const getLayer = (id) => layersRef.current[id];
 
-    if (mode === 'range') {
-      // Apply Range Filter (Attribute Based)
-      layer.visible = true;
-      layer.definitionExpression = `SURVEY_YEAR >= ${fromYear} AND SURVEY_YEAR <= ${toYear}`;
-    } else {
-      // Apply Snapshot Filter (Layer Visibility Based)
-      const timeLayers = layersConfig.filter(l => l.time !== undefined);
-      let activeTimeLayerId = null;
-      let maxFoundTime = -1;
-
-      timeLayers.forEach(l => {
-        if (l.time <= currentYear && l.time > maxFoundTime) {
-          maxFoundTime = l.time;
-          activeTimeLayerId = l.id;
+    // Cleanup logic: Clear filters on all time-enabled layers when tool is inactive
+    if (!timelapseSettings) {
+      layersConfig.forEach(l => {
+        if (l.timeEnabled) {
+          const layer = getLayer(l.id);
+          if (layer) layer.definitionExpression = null;
         }
       });
-
-      timeLayers.forEach(l => {
-        const tLayer = layersRef.current[l.id];
-        if (tLayer) {
-          tLayer.visible = (l.id === activeTimeLayerId);
-          tLayer.opacity = (l.id === activeTimeLayerId) ? 1 : 0;
-        }
-      });
+      return;
     }
+
+    const { layerId, fromYear, toYear, isPlaying, playbackInterval, startYear, endYear } = timelapseSettings;
+    const activeLayerConfig = layersConfig.find(l => l.id === layerId);
+    const layer = getLayer(layerId);
+    
+    if (!layer || !activeLayerConfig) return;
+
+    // Ensure layer is visible
+    layer.visible = true;
+
+    // Apply temporal filter
+    // Standard logic: FIELD >= FROM AND FIELD <= TO
+    const timeField = activeLayerConfig.timeField || 'SURVEY_YEAR';
+    layer.definitionExpression = `${timeField} >= ${fromYear} AND ${timeField} <= ${toYear}`;
+    
+    // Refresh to show changes
+    layer.refresh();
 
     // Handle Animation Loop
     let intervalId = null;
     if (isPlaying) {
-      const ms = speed === 'Slow' ? 2000 : speed === 'Medium' ? 1000 : 500;
+      // Speed could be dynamic, but defaulting to 1s for consistency
+      const ms = 1000; 
       
       intervalId = setInterval(() => {
-        if (mode === 'range') {
-          let nextTo = toYear + 1;
-          if (nextTo > endYear) {
-            if (loop) nextTo = fromYear;
-            else { clearInterval(intervalId); return; }
-          }
-          // We need a way to update toYear. Let's assume onTimelapseYearChange can handle an object or just the year
-          onTimelapseYearChange(nextTo);
-        } else {
-          let nextYear = currentYear + 1;
-          if (nextYear > endYear) {
-            if (loop) nextYear = startYear;
-            else { clearInterval(intervalId); return; }
-          }
-          onTimelapseYearChange(nextYear);
+        let nextTo = toYear + 1;
+        if (nextTo > endYear) {
+          nextTo = startYear; // Auto-loop for smooth UX
         }
+        onTimelapseYearChange(nextTo);
       }, ms);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [timelapseSettings?.isPlaying, timelapseSettings?.currentYear, timelapseSettings?.fromYear, timelapseSettings?.toYear, timelapseSettings?.speed, timelapseSettings?.layerId]);
+  }, [timelapseSettings?.isPlaying, timelapseSettings?.fromYear, timelapseSettings?.toYear, timelapseSettings?.layerId, timelapseSettings?.lastApply]);
 
   // 3. Handle Dynamic Basemap Switching
   useEffect(() => {
@@ -603,10 +743,15 @@ const ArcGISMap = ({
     }
   }, [basemap]);
 
-  // 4. Identify Tool Logic
+  // Identify Tool Logic
   const identifyGraphicsLayer = useRef(new GraphicsLayer({ id: 'identify-highlights' }));
   const sketchLayer = useRef(new GraphicsLayer({ id: 'identify-sketch-layer' }));
   const sketchVM = useRef(null);
+
+  // Data Request Logic
+  const dataRequestLayer = useRef(new GraphicsLayer({ id: 'data-request-aoi-layer' }));
+  const dataRequestFinalLayer = useRef(new GraphicsLayer({ id: 'data-request-final-layer' }));
+  const dataRequestSketchVM = useRef(null);
 
   // Sync layers with map when view changes
   useEffect(() => {
@@ -617,6 +762,12 @@ const ArcGISMap = ({
       }
       if (!view.map.findLayerById('identify-sketch-layer')) {
         view.map.add(sketchLayer.current);
+      }
+      if (!view.map.findLayerById('data-request-aoi-layer')) {
+        view.map.add(dataRequestLayer.current);
+      }
+      if (!view.map.findLayerById('data-request-final-layer')) {
+        view.map.add(dataRequestFinalLayer.current);
       }
     }
   }, [is3D]); // Re-add layers if map/view changes due to 3D toggle
@@ -751,6 +902,68 @@ const ArcGISMap = ({
   }, [activeTool, identifySettings.mode, identifySettings.selectedLayerId, layerVisibility, is3D]);
 
   // Clear highlights when results are nullified manually
+  // Data Request Logic initialization
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    if (activeTool !== 'data_request') {
+      if (dataRequestSketchVM.current) dataRequestSketchVM.current.cancel();
+      dataRequestLayer.current.removeAll();
+      dataRequestFinalLayer.current.removeAll();
+      return;
+    }
+
+    if (!dataRequestSketchVM.current) {
+      dataRequestSketchVM.current = new SketchViewModel({
+        view: view,
+        layer: dataRequestLayer.current,
+        updateOnGraphicClick: true,
+        defaultCreateOptions: { hasZ: false },
+        pointSymbol: { type: "simple-marker", style: "circle", color: "#df261c", size: "8px" },
+        polylineSymbol: { type: "simple-line", color: "#df261c", width: 2 },
+        polygonSymbol: { 
+          type: "simple-fill", 
+          color: [223, 38, 28, 0.1], 
+          outline: { color: "#df261c", width: 2, style: "dash" } 
+        }
+      });
+
+      dataRequestSketchVM.current.on(['create', 'update'], async (event) => {
+        if (event.state === 'complete' || event.state === 'active') {
+          const geometry = event.graphic?.geometry || event.graphics?.[0]?.geometry;
+          if (geometry) {
+            if (event.state === 'complete') {
+              // Finalize to the permanent layer
+              dataRequestLayer.current.removeAll();
+              const permanentGraphic = event.graphic.clone();
+              dataRequestFinalLayer.current.add(permanentGraphic);
+            }
+
+            const restrictedLayers = layersConfig.filter(l => l.restricted).map(l => ({
+              id: l.id,
+              title: l.title,
+              intersecting: true
+            }));
+            onDataRequestAOIChange(geometry, restrictedLayers, event.state === 'complete');
+          }
+        }
+      });
+    }
+  }, [activeTool, onDataRequestAOIChange]);
+
+  // Trigger drawing tool only when it changes
+  useEffect(() => {
+    if (activeTool === 'data_request' && dataRequestDrawingTool && dataRequestSketchVM.current) {
+      dataRequestFinalLayer.current.removeAll();
+      dataRequestLayer.current.removeAll();
+      dataRequestSketchVM.current.create(
+        dataRequestDrawingTool === 'rectangle' ? 'rectangle' : 
+        dataRequestDrawingTool === 'circle' ? 'circle' : 'polygon'
+      );
+    }
+  }, [dataRequestDrawingTool]);
+
   useEffect(() => {
     if (!identifySettings.results) {
       identifyGraphicsLayer.current.removeAll();
@@ -759,8 +972,29 @@ const ArcGISMap = ({
   }, [identifySettings.results]);
 
   return (
-    <div className="map-view-container">
-      <div ref={mapDiv} style={{ width: '100%', height: '100%' }} />
+    <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+      <div 
+        ref={map2DDiv} 
+        id="mapViewDiv"
+        style={{ 
+          height: '100%', 
+          width: '100%', 
+          position: 'absolute',
+          visibility: is3D ? 'hidden' : 'visible',
+          pointerEvents: is3D ? 'none' : 'auto'
+        }} 
+      />
+      <div 
+        ref={map3DDiv} 
+        id="sceneViewDiv"
+        style={{ 
+          height: '100%', 
+          width: '100%', 
+          position: 'absolute',
+          visibility: is3D ? 'visible' : 'hidden',
+          pointerEvents: is3D ? 'auto' : 'none'
+        }} 
+      />
       
       {isLoading && (
         <div style={{

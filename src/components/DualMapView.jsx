@@ -6,7 +6,7 @@ import TileLayer from '@arcgis/core/layers/TileLayer';
 import * as reactiveUtils from '@arcgis/core/core/reactiveUtils';
 import { layersConfig } from '../layers';
 
-const DualMapView = ({ isSplitView, splitLayers, basemap, syncMode, onExit }) => {
+const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMode, onExit }) => {
   const leftMapDiv = useRef(null);
   const rightMapDiv = useRef(null);
   
@@ -19,8 +19,8 @@ const DualMapView = ({ isSplitView, splitLayers, basemap, syncMode, onExit }) =>
   useEffect(() => {
     if (!isSplitView || !leftMapDiv.current || !rightMapDiv.current) return;
 
-    // Create Left Map (Historical)
-    const leftMap = new Map({ basemap: basemap || 'gray-vector' });
+    // Create Left Map
+    const leftMap = new Map({ basemap: splitBasemaps?.left || basemap || 'streets-navigation-vector' });
     const viewLeft = new MapView({
       container: leftMapDiv.current,
       map: leftMap,
@@ -29,8 +29,8 @@ const DualMapView = ({ isSplitView, splitLayers, basemap, syncMode, onExit }) =>
       ui: { components: [] }
     });
 
-    // Create Right Map (Current)
-    const rightMap = new Map({ basemap: basemap || 'satellite' });
+    // Create Right Map
+    const rightMap = new Map({ basemap: splitBasemaps?.right || basemap || 'satellite' });
     const viewRight = new MapView({
       container: rightMapDiv.current,
       map: rightMap,
@@ -57,9 +57,6 @@ const DualMapView = ({ isSplitView, splitLayers, basemap, syncMode, onExit }) =>
               if (syncMode === 'both') {
                 slave.viewpoint = vp;
               } else if (syncMode === 'zoom') {
-                // For zoom only, we keep the slave center but match the scale
-                slave.scale = vp.targetGeometry.type === 'point' ? master.scale : slave.scale;
-                // Alternatively, more simply:
                 if (slave.zoom !== master.zoom) {
                   slave.zoom = master.zoom;
                 }
@@ -81,7 +78,17 @@ const DualMapView = ({ isSplitView, splitLayers, basemap, syncMode, onExit }) =>
       viewLeft.destroy();
       viewRight.destroy();
     };
-  }, [isSplitView, basemap, syncMode]);
+  }, [isSplitView, syncMode]); // Removed basemap/splitBasemaps from here to handle them dynamically below
+
+  // Update Basemaps dynamically
+  useEffect(() => {
+    if (leftView && splitBasemaps?.left) {
+      leftView.map.basemap = splitBasemaps.left;
+    }
+    if (rightView && splitBasemaps?.right) {
+      rightView.map.basemap = splitBasemaps.right;
+    }
+  }, [leftView, rightView, splitBasemaps]);
 
   // Update Layers dynamically when splitLayers changes
   useEffect(() => {
