@@ -5,6 +5,7 @@ import MapView from '@arcgis/core/views/MapView';
 import SceneView from '@arcgis/core/views/SceneView';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import TileLayer from '@arcgis/core/layers/TileLayer';
+import MapImageLayer from '@arcgis/core/layers/MapImageLayer';
 import * as projection from "@arcgis/core/geometry/projectionUtils";
 import * as arcade from "@arcgis/core/arcade/arcade";
 import SceneLayer from '@arcgis/core/layers/SceneLayer';
@@ -64,14 +65,30 @@ const ArcGISMap = ({
 
     // Load layers into 2D map
     layersConfig.forEach(config => {
-      const LayerClass = config.type === 'tile' ? TileLayer : FeatureLayer;
-      const layer = new LayerClass({
-        id: config.id,
-        url: config.url,
-        title: config.title,
-        visible: false,
-        popupTemplate: config.type !== 'tile' ? { title: "{*}", content: "{*}" } : null
-      });
+      let layer;
+      if (config.type === 'tile') {
+        layer = new TileLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false
+        });
+      } else if (config.type === 'map-image') {
+        layer = new MapImageLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false
+        });
+      } else {
+        layer = new FeatureLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false,
+          popupTemplate: { title: "{*}", content: "{*}" }
+        });
+      }
       map.add(layer);
       layersRef.current[config.id] = layer;
     });
@@ -173,14 +190,30 @@ const ArcGISMap = ({
 
     // Load layers into 3D map
     layersConfig.forEach(config => {
-      const LayerClass = config.type === 'tile' ? TileLayer : FeatureLayer;
-      const layer = new LayerClass({
-        id: config.id,
-        url: config.url,
-        title: config.title,
-        visible: false
-      });
-      if (config.renderer) layer.renderer = config.renderer;
+      let layer;
+      if (config.type === 'tile') {
+        layer = new TileLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false
+        });
+      } else if (config.type === 'map-image') {
+        layer = new MapImageLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false
+        });
+      } else {
+        layer = new FeatureLayer({
+          id: config.id,
+          url: config.url,
+          title: config.title,
+          visible: false
+        });
+        if (config.renderer) layer.renderer = config.renderer;
+      }
       map.add(layer);
       layers3DRef.current[config.id] = layer;
     });
