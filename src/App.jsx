@@ -62,6 +62,10 @@ function AppInner() {
     left: 'streets-navigation-vector',
     right: 'satellite'
   });
+  const [splitModes, setSplitModes] = useState({
+    left: '2D',
+    right: '2D'
+  });
   const [isSplitModePersistent, setIsSplitModePersistent] = useState(false);
   const [isSplitView, setIsSplitView] = useState(false);
   const [syncMode, setSyncMode] = useState('both'); // 'both' | 'zoom' | 'none'
@@ -1308,6 +1312,16 @@ function AppInner() {
                 >
                   <Map size={16} />
                 </button>
+                <div className="view-mode-toggle" style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
+                  <button 
+                    onClick={() => setSplitModes(prev => ({ ...prev, left: '2D' }))}
+                    style={{ border: 'none', background: splitModes.left === '2D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.left === '2D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >2D</button>
+                  <button 
+                    onClick={() => setSplitModes(prev => ({ ...prev, left: '3D' }))}
+                    style={{ border: 'none', background: splitModes.left === '3D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.left === '3D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >3D</button>
+                </div>
 
                 {showSplitBasemap.left && (
                   <div className="split-basemap-popup left">
@@ -1344,6 +1358,16 @@ function AppInner() {
                 >
                   <Map size={16} />
                 </button>
+                <div className="view-mode-toggle" style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
+                  <button 
+                    onClick={() => setSplitModes(prev => ({ ...prev, right: '2D' }))}
+                    style={{ border: 'none', background: splitModes.right === '2D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.right === '2D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >2D</button>
+                  <button 
+                    onClick={() => setSplitModes(prev => ({ ...prev, right: '3D' }))}
+                    style={{ border: 'none', background: splitModes.right === '3D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.right === '3D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >3D</button>
+                </div>
 
                 {showSplitBasemap.right && (
                   <div className="split-basemap-popup right">
@@ -1488,6 +1512,7 @@ function AppInner() {
         isSplitView={isSplitView} 
         splitLayers={splitLayers} 
         splitBasemaps={splitBasemaps}
+        splitModes={splitModes}
         basemap={currentBasemap} 
         syncMode={syncMode}
         onExit={() => setIsSplitView(false)}

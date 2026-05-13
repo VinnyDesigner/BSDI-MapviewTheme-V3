@@ -1,12 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Map from '@arcgis/core/Map';
+import WebScene from '@arcgis/core/WebScene';
 import MapView from '@arcgis/core/views/MapView';
+import SceneView from '@arcgis/core/views/SceneView';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 import TileLayer from '@arcgis/core/layers/TileLayer';
+import SceneLayer from '@arcgis/core/layers/SceneLayer';
+import BuildingSceneLayer from '@arcgis/core/layers/BuildingSceneLayer';
+import IntegratedMeshLayer from '@arcgis/core/layers/IntegratedMeshLayer';
+import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
+import Graphic from '@arcgis/core/Graphic';
+import Point from '@arcgis/core/geometry/Point';
+import MapImageLayer from '@arcgis/core/layers/MapImageLayer';
 import * as reactiveUtils from '@arcgis/core/core/reactiveUtils';
 import { layersConfig } from '../layers';
 
-const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMode, onExit }) => {
+const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, basemap, syncMode, onExit }) => {
   const leftMapDiv = useRef(null);
   const rightMapDiv = useRef(null);
   
@@ -19,66 +28,141 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMod
   useEffect(() => {
     if (!isSplitView || !leftMapDiv.current || !rightMapDiv.current) return;
 
-    // Create Left Map
-    const leftMap = new Map({ basemap: splitBasemaps?.left || basemap || 'streets-navigation-vector' });
-    const viewLeft = new MapView({
-      container: leftMapDiv.current,
-      map: leftMap,
-      center: [50.55, 26.22],
-      zoom: 9,
-      ui: { components: [] }
-    });
+    let vLeft, vRight;
 
-    // Create Right Map
-    const rightMap = new Map({ basemap: splitBasemaps?.right || basemap || 'satellite' });
-    const viewRight = new MapView({
-      container: rightMapDiv.current,
-      map: rightMap,
-      center: [50.55, 26.22],
-      zoom: 9,
-      ui: { components: [] }
-    });
+    // Use requestAnimationFrame to ensure divs have dimensions before view creation
+    requestAnimationFrame(() => {
+      if (!leftMapDiv.current || !rightMapDiv.current) return;
 
-    setLeftView(viewLeft);
-    setRightView(viewRight);
+      const createSideView = (container, side) => {
+        const mode = splitModes?.[side] || '2D';
+        
+        const map = mode === '3D' 
+          ? new WebScene({
+              basemap: splitBasemaps?.[side] || basemap || 'topo-3d',
+              ground: 'world-elevation'
+            })
+          : new Map({
+              basemap: splitBasemaps?.[side] || basemap || 'streets-navigation-vector'
+            });
 
-    // Sync views logic
-    let leftWatch, rightWatch;
-    
-    viewLeft.when(() => {
-      viewRight.when(() => {
-        const sync = (master, slave) => {
-          return reactiveUtils.watch(
-            () => master.viewpoint,
-            (vp) => {
-              // Only sync if the master is being moved by the user or an animation
-              if (!master.interacting && !master.animation) return;
-              
-              if (syncMode === 'both') {
-                slave.viewpoint = vp;
-              } else if (syncMode === 'zoom') {
-                if (slave.zoom !== master.zoom) {
-                  slave.zoom = master.zoom;
-                }
-              }
-            }
-          );
+        const ViewClass = mode === '3D' ? SceneView : MapView;
+        const viewOptions = {
+          container,
+          map,
+          ui: { components: [] }
         };
 
-        if (syncMode !== 'none') {
-          leftWatch = sync(viewLeft, viewRight);
-          rightWatch = sync(viewRight, viewLeft);
+        if (mode === '3D') {
+          viewOptions.qualityProfile = "high";
+          viewOptions.camera = {
+            position: { longitude: 50.55, latitude: 26.22, z: 1200 },
+            tilt: 70,
+            heading: 25
+          };
+          viewOptions.environment = {
+            lighting: {
+              directShadowsEnabled: true,
+              ambientOcclusionEnabled: true,
+              date: new Date("May 15, 2024 10:00:00 UTC")
+            },
+            atmosphereEnabled: true,
+            starsEnabled: false
+          };
+        } else {
+          viewOptions.center = [50.55, 26.22];
+          viewOptions.zoom = 9;
         }
+
+        const view = new ViewClass(viewOptions);
+
+        if (mode === '3D') {
+          // 1. Add Integrated Mesh if available (Placeholder URL as per common ArcGIS examples if not specific)
+          // const mesh = new IntegratedMeshLayer({ url: "..." });
+          // map.add(mesh);
+
+          // 2. Add 3D Buildings (OSM)
+          const buildingsLayer = new SceneLayer({
+            url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
+            title: "3D Buildings",
+            id: "3d-buildings",
+            popupEnabled: false,
+            opacity: 0.8
+          });
+          map.add(buildingsLayer);
+
+          // 3. Add BuildingSceneLayer
+          const specializedBuildings = new BuildingSceneLayer({
+            portalItem: { id: "ca0470dbbddb4db28bad74ed39949e25" },
+            title: "Detailed Buildings",
+            id: "detailed-buildings"
+          });
+          map.add(specializedBuildings);
+
+          // 4. Add BSDI Demo Building (Graphics)
+          const bsdiLayer = new GraphicsLayer({ id: "bsdi-building-layer", title: "BSDI Demo Building" });
+          map.add(bsdiLayer);
+          bsdiLayer.add(new Graphic({
+            geometry: new Point({ longitude: 50.5478, latitude: 26.2212, z: 0 }),
+            symbol: {
+              type: "point-3d",
+              symbolLayers: [{
+                type: "object",
+                resource: { href: "/models/bsdi-building.glb" },
+                anchor: "bottom",
+                width: 80, height: 80, depth: 80
+              }]
+            }
+          }));
+        }
+
+        return view;
+      };
+
+      vLeft = createSideView(leftMapDiv.current, 'left');
+      vRight = createSideView(rightMapDiv.current, 'right');
+
+      setLeftView(vLeft);
+      setRightView(vRight);
+
+      // Sync logic inside the frame
+      vLeft.when(() => {
+        vRight.when(() => {
+          const sync = (master, slave) => {
+            return reactiveUtils.watch(
+              () => master.viewpoint,
+              (vp) => {
+                if (!master.interacting && !master.animation) return;
+                if (syncMode === 'both') {
+                  slave.viewpoint = vp;
+                } else if (syncMode === 'zoom') {
+                  if (slave.zoom !== master.zoom) slave.zoom = master.zoom;
+                }
+              }
+            );
+          };
+
+          if (syncMode !== 'none') {
+            vLeft._syncHandle = sync(vLeft, vRight);
+            vRight._syncHandle = sync(vRight, vLeft);
+          }
+        });
       });
     });
 
     return () => {
-      if (leftWatch) leftWatch.remove();
-      if (rightWatch) rightWatch.remove();
-      viewLeft.destroy();
-      viewRight.destroy();
+      if (vLeft) {
+        if (vLeft._syncHandle) vLeft._syncHandle.remove();
+        vLeft.destroy();
+      }
+      if (vRight) {
+        if (vRight._syncHandle) vRight._syncHandle.remove();
+        vRight.destroy();
+      }
+      setLeftView(null);
+      setRightView(null);
     };
-  }, [isSplitView, syncMode]); // Removed basemap/splitBasemaps from here to handle them dynamically below
+  }, [isSplitView, splitModes, syncMode]); // Removed basemap/splitBasemaps from here to handle them dynamically below
 
   // Update Basemaps dynamically
   useEffect(() => {
@@ -98,16 +182,26 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMod
     const rightConfig = layersConfig.find(l => l.id === splitLayers.right);
 
     const updateMapLayers = (map, config, isHistorical) => {
-      map.removeAll();
+      // Remove only operational layers, preserve buildings
+      const toRemove = map.layers.filter(lyr => 
+        lyr.id !== '3d-buildings' && lyr.id !== 'detailed-buildings' && lyr.id !== 'osm-buildings'
+      );
+      map.removeMany(toRemove.toArray());
+
       if (config) {
-        const LayerClass = config.type === 'tile' ? TileLayer : FeatureLayer;
-        const layer = new LayerClass({
-          id: config.id,
-          url: config.url,
-          title: config.title
-        });
+        let layer;
+        if (config.type === 'tile') {
+          layer = new TileLayer({ id: config.id, url: config.url, title: config.title });
+        } else if (config.type === 'map-image') {
+          layer = new MapImageLayer({ id: config.id, url: config.url, title: config.title });
+        } else {
+          layer = new FeatureLayer({ id: config.id, url: config.url, title: config.title });
+        }
+
         if (isHistorical) layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
-        map.add(layer);
+        
+        // Add at index 0 to stay below buildings
+        map.add(layer, 0);
       }
     };
 
@@ -148,7 +242,9 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMod
   return (
     <div className="split-container" ref={containerRef}>
       <div ref={leftMapDiv} className="map-panel" style={{ width: `${splitPercentage}%` }}>
-        <div className="map-label left-label">Left: {layersConfig.find(l => l.id === splitLayers.left)?.title || 'Historical View'}</div>
+        <div className="map-label left-label">
+          {splitModes?.left || '2D'} | {layersConfig.find(l => l.id === splitLayers.left)?.title || 'No Layer'}
+        </div>
       </div>
       
       <div 
@@ -163,7 +259,9 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, basemap, syncMod
       </div>
 
       <div ref={rightMapDiv} className="map-panel" style={{ width: `${100 - splitPercentage}%` }}>
-        <div className="map-label right-label">Right: {layersConfig.find(l => l.id === splitLayers.right)?.title || 'Current View'}</div>
+        <div className="map-label right-label">
+          {splitModes?.right || '2D'} | {layersConfig.find(l => l.id === splitLayers.right)?.title || 'No Layer'}
+        </div>
       </div>
 
     </div>

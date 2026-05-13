@@ -1008,6 +1008,18 @@
   gap: 10px !important; /* Restored to 10px from 8px */
 }
 
+.view-mode-toggle button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-mode-toggle button:hover {
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+.view-mode-toggle button:active {
+  transform: scale(0.95);
+}
+
 .nav-divider-horizontal {
   margin: 6px 0 !important; /* Compact dividers */
 }
