@@ -9,6 +9,7 @@
 .draw-content-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 2px 3px 24px 0;
 }
 

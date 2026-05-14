@@ -30,123 +30,128 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
 
     let vLeft, vRight;
 
-    // Use requestAnimationFrame to ensure divs have dimensions before view creation
-    requestAnimationFrame(() => {
-      if (!leftMapDiv.current || !rightMapDiv.current) return;
+    const init3DStack = (map) => {
+      // 1. Esri 3D Buildings (V1)
+      const buildingsLayer = new SceneLayer({
+        url: "https://basemaps3d.arcgis.com/arcgis/rest/services/Esri3D_Buildings_v1/SceneServer",
+        title: "Esri 3D Buildings",
+        id: "esri-3d-buildings",
+        popupEnabled: true,
+        opacity: 1.0
+      });
+      map.add(buildingsLayer);
 
-      const createSideView = (container, side) => {
-        const mode = splitModes?.[side] || '2D';
-        
-        const map = mode === '3D' 
-          ? new WebScene({
-              basemap: splitBasemaps?.[side] || basemap || 'topo-3d',
-              ground: 'world-elevation'
-            })
-          : new Map({
-              basemap: splitBasemaps?.[side] || basemap || 'streets-navigation-vector'
-            });
+      // 2. Open3D Trees
+      const treesLayer = new SceneLayer({
+        url: "https://basemaps3d.arcgis.com/arcgis/rest/services/Open3D_Trees_v1/SceneServer",
+        title: "3D Trees",
+        id: "3d-trees",
+        popupEnabled: false
+      });
+      map.add(treesLayer);
 
-        const ViewClass = mode === '3D' ? SceneView : MapView;
-        const viewOptions = {
+      // 3. Open3D Dark Labels (ensure they are at the top)
+      const labelsLayer = new SceneLayer({
+        url: "https://basemaps3d.arcgis.com/arcgis/rest/services/Open3D_DarkLabels_v1/SceneServer",
+        title: "3D Labels",
+        id: "3d-labels",
+        popupEnabled: false
+      });
+      map.add(labelsLayer);
+
+      // 4. Fallback/Complementary: BuildingSceneLayer for interior details
+      const specializedBuildings = new BuildingSceneLayer({
+        portalItem: { id: "ca0470dbbddb4db28bad74ed39949e25" },
+        title: "Detailed Interior Buildings",
+        id: "detailed-buildings"
+      });
+      map.add(specializedBuildings);
+    };
+
+    const createView = (container, side) => {
+      const mode = splitModes?.[side] || '2D';
+      
+      if (mode === '3D') {
+        const scene = new WebScene({
+          basemap: splitBasemaps?.[side] || basemap || 'satellite',
+          ground: 'world-elevation'
+        });
+
+        init3DStack(scene);
+
+        const view = new SceneView({
           container,
-          map,
-          ui: { components: [] }
-        };
-
-        if (mode === '3D') {
-          viewOptions.qualityProfile = "high";
-          viewOptions.camera = {
-            position: { longitude: 50.55, latitude: 26.22, z: 1200 },
-            tilt: 70,
+          map: scene,
+          qualityProfile: "high",
+          viewingMode: "global",
+          constraints: {
+            tilt: {
+              max: 179 // Ensure tilt is NOT locked
+            }
+          },
+          camera: {
+            position: { longitude: 50.55, latitude: 26.22, z: 800 },
+            tilt: 75,
             heading: 25
-          };
-          viewOptions.environment = {
+          },
+          environment: {
+            atmosphereEnabled: true,
+            starsEnabled: false,
             lighting: {
               directShadowsEnabled: true,
               ambientOcclusionEnabled: true,
               date: new Date("May 15, 2024 10:00:00 UTC")
-            },
-            atmosphereEnabled: true,
-            starsEnabled: false
-          };
-        } else {
-          viewOptions.center = [50.55, 26.22];
-          viewOptions.zoom = 9;
-        }
-
-        const view = new ViewClass(viewOptions);
-
-        if (mode === '3D') {
-          // 1. Add Integrated Mesh if available (Placeholder URL as per common ArcGIS examples if not specific)
-          // const mesh = new IntegratedMeshLayer({ url: "..." });
-          // map.add(mesh);
-
-          // 2. Add 3D Buildings (OSM)
-          const buildingsLayer = new SceneLayer({
-            url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
-            title: "3D Buildings",
-            id: "3d-buildings",
-            popupEnabled: false,
-            opacity: 0.8
-          });
-          map.add(buildingsLayer);
-
-          // 3. Add BuildingSceneLayer
-          const specializedBuildings = new BuildingSceneLayer({
-            portalItem: { id: "ca0470dbbddb4db28bad74ed39949e25" },
-            title: "Detailed Buildings",
-            id: "detailed-buildings"
-          });
-          map.add(specializedBuildings);
-
-          // 4. Add BSDI Demo Building (Graphics)
-          const bsdiLayer = new GraphicsLayer({ id: "bsdi-building-layer", title: "BSDI Demo Building" });
-          map.add(bsdiLayer);
-          bsdiLayer.add(new Graphic({
-            geometry: new Point({ longitude: 50.5478, latitude: 26.2212, z: 0 }),
-            symbol: {
-              type: "point-3d",
-              symbolLayers: [{
-                type: "object",
-                resource: { href: "/models/bsdi-building.glb" },
-                anchor: "bottom",
-                width: 80, height: 80, depth: 80
-              }]
             }
-          }));
-        }
+          },
+          ui: { components: [] }
+        });
 
         return view;
-      };
-
-      vLeft = createSideView(leftMapDiv.current, 'left');
-      vRight = createSideView(rightMapDiv.current, 'right');
-
-      setLeftView(vLeft);
-      setRightView(vRight);
-
-      // Sync logic inside the frame
-      vLeft.when(() => {
-        vRight.when(() => {
-          const sync = (master, slave) => {
-            return reactiveUtils.watch(
-              () => master.viewpoint,
-              (vp) => {
-                if (!master.interacting && !master.animation) return;
-                if (syncMode === 'both') {
-                  slave.viewpoint = vp;
-                } else if (syncMode === 'zoom') {
-                  if (slave.zoom !== master.zoom) slave.zoom = master.zoom;
-                }
-              }
-            );
-          };
-
-          if (syncMode !== 'none') {
-            vLeft._syncHandle = sync(vLeft, vRight);
-            vRight._syncHandle = sync(vRight, vLeft);
-          }
+      } else {
+        const map = new Map({
+          basemap: splitBasemaps?.[side] || basemap || 'streets-navigation-vector'
         });
+
+        return new MapView({
+          container,
+          map,
+          center: [50.55, 26.22],
+          zoom: 12,
+          ui: { components: [] }
+        });
+      }
+    };
+
+    vLeft = createView(leftMapDiv.current, 'left');
+    vRight = createView(rightMapDiv.current, 'right');
+
+    console.log(`[SplitView] Left View Type: ${vLeft.type}`);
+    console.log(`[SplitView] Right View Type: ${vRight.type}`);
+
+    setLeftView(vLeft);
+    setRightView(vRight);
+
+    // Sync logic
+    vLeft.when(() => {
+      vRight.when(() => {
+        const sync = (master, slave) => {
+          return reactiveUtils.watch(
+            () => master.viewpoint,
+            (vp) => {
+              if (!master.interacting && !master.animation) return;
+              if (syncMode === 'both') {
+                slave.viewpoint = vp;
+              } else if (syncMode === 'zoom') {
+                if (slave.zoom !== master.zoom) slave.zoom = master.zoom;
+              }
+            }
+          );
+        };
+
+        if (syncMode !== 'none') {
+          vLeft._syncHandle = sync(vLeft, vRight);
+          vRight._syncHandle = sync(vRight, vLeft);
+        }
       });
     });
 
@@ -182,9 +187,13 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
     const rightConfig = layersConfig.find(l => l.id === splitLayers.right);
 
     const updateMapLayers = (map, config, isHistorical) => {
-      // Remove only operational layers, preserve buildings
+      // Remove only operational layers, preserve all core 3D scene environment layers
       const toRemove = map.layers.filter(lyr => 
-        lyr.id !== '3d-buildings' && lyr.id !== 'detailed-buildings' && lyr.id !== 'osm-buildings'
+        lyr.id !== 'esri-3d-buildings' && 
+        lyr.id !== '3d-trees' && 
+        lyr.id !== '3d-labels' &&
+        lyr.id !== 'detailed-buildings' && 
+        lyr.id !== 'mesh-layer'
       );
       map.removeMany(toRemove.toArray());
 
@@ -200,7 +209,7 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
 
         if (isHistorical) layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
         
-        // Add at index 0 to stay below buildings
+        // Add at index 0 to stay below buildings/mesh
         map.add(layer, 0);
       }
     };

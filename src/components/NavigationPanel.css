@@ -252,3 +252,205 @@
   0%, 100% { opacity: 1; }
   50% { opacity: .3; }
 }
+
+/* Go to XY Form Enhancements */
+.xy-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.xy-top-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.xy-top-row .custom-dropdown-container {
+  flex: 1;
+}
+
+.coord-main-input {
+  display: none; /* Removed as per user request */
+}
+
+.compact-capture-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.compact-capture-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.compact-capture-btn.active {
+  background: #fff5f5;
+  border: 1px solid #df261c;
+  color: #df261c;
+}
+
+/* Custom Dropdown */
+.custom-dropdown-container {
+  position: relative;
+  width: 100%;
+}
+
+.dropdown-trigger {
+  width: 100%;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2f4d;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dropdown-trigger:hover {
+  border-color: #df261c;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s;
+  color: #64748b;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.dropdown-item {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #f8fafc;
+  color: #df261c;
+}
+
+.dropdown-item.active {
+  background: rgba(223, 38, 28, 0.05);
+  color: #df261c;
+  font-weight: 600;
+}
+
+/* Coord Input */
+.coord-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coord-example {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+  font-style: italic;
+  padding-left: 2px;
+}
+
+/* Display Section */
+.coords-display-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.display-divider {
+  height: 1px;
+  background: #f1f5f9;
+  width: 100%;
+}
+
+.display-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+}
+
+.coords-values-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coord-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coord-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  min-width: 70px;
+}
+
+.coord-data {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+}
+
+/* Header Copy Button */
+.header-copy-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.header-copy-btn:hover {
+  background: #f1f5f9;
+  color: #1e3c72;
+}
+
+.header-copy-btn.success {
+  color: #10b981;
+}

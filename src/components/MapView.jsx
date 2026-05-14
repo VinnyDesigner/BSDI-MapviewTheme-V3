@@ -101,8 +101,11 @@ const ArcGISMap = ({
     });
 
     return () => {
-      // Don't destroy immediately to allow fast switching, 
-      // but in a real app you might want to cleanup if unmounting the whole component
+      if (view2DRef.current) {
+        console.log("Cleanup: Destroying 2D View");
+        view2DRef.current.destroy();
+        view2DRef.current = null;
+      }
     };
   }, []);
 
@@ -225,6 +228,13 @@ const ArcGISMap = ({
       console.error('SceneView failed to load:', err);
       setIsLoading(false);
     });
+
+    return () => {
+      if (view3DRef.current) {
+        view3DRef.current.destroy();
+        view3DRef.current = null;
+      }
+    };
   }, [is3D]);
 
   // 3. Handle View Switching & State Sync
@@ -365,7 +375,7 @@ const ArcGISMap = ({
       const buildingsLayer = view.map.findLayerById('3d-buildings');
       if (buildingsLayer) buildingsLayer.visible = is3D;
     }
-  }, [isSplitMode, splitLayers, splitBasemaps, layerVisibility, swipeMode, is3D]);
+  }, [isSplitMode, splitLayers, splitBasemaps, layerVisibility, swipeMode, is3D, onViewReady, onSwipePositionChange]);
 
   // 4. Manage Layer Blending
   useEffect(() => {
@@ -415,6 +425,27 @@ const ArcGISMap = ({
           layer.visible = !!visibilityMap[id];
           layer.opacity = 1;
           layer.blendMode = 'normal';
+
+          // Handle MapImageLayer sublayers
+          if (layer.type === 'map-image') {
+            const applySubVisibility = (sublayers) => {
+              sublayers.forEach(s => {
+                const subKey = `${id}_sub_${s.id}`;
+                if (visibilityMap[subKey] !== undefined) {
+                  s.visible = !!visibilityMap[subKey];
+                }
+                if (s.sublayers) applySubVisibility(s.sublayers);
+              });
+            };
+
+            if (layer.loaded) {
+              applySubVisibility(layer.sublayers);
+            } else {
+              layer.when(() => {
+                applySubVisibility(layer.sublayers);
+              });
+            }
+          }
         }
       });
     };

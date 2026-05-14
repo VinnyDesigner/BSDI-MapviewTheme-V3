@@ -99,6 +99,53 @@ function AppInner() {
     lastRun: null
   });
 
+  const [dynamicMapServerData, setDynamicMapServerData] = useState({});
+
+  // Fetch MapServer data for dynamic layers
+  useEffect(() => {
+    const fetchMapServerData = async () => {
+      const dynamicLayers = layersConfig.filter(l => l.type === 'map-image');
+      const dataUpdates = {};
+
+      for (const layer of dynamicLayers) {
+        try {
+          // Fetch main metadata
+          const metaResponse = await fetch(`${layer.url}?f=pjson`);
+          const metaData = await metaResponse.json();
+          
+          // Fetch legend data
+          const legendResponse = await fetch(`${layer.url}/legend?f=pjson`);
+          const legendData = await legendResponse.json();
+
+          dataUpdates[layer.id] = {
+            metadata: metaData,
+            legend: legendData
+          };
+
+          // Initialize sublayer visibility if not already set
+          if (metaData.layers) {
+            setLayerVisibility(prev => {
+              const newVis = { ...prev };
+              metaData.layers.forEach(sub => {
+                const subKey = `${layer.id}_sub_${sub.id}`;
+                if (newVis[subKey] === undefined) {
+                  newVis[subKey] = false;
+                }
+              });
+              return newVis;
+            });
+          }
+        } catch (error) {
+          console.error(`Error fetching metadata for ${layer.title}:`, error);
+        }
+      }
+
+      setDynamicMapServerData(prev => ({ ...prev, ...dataUpdates }));
+    };
+
+    fetchMapServerData();
+  }, []);
+
   const [layerSearch, setLayerSearch] = useState('');
   const [layerOrder, setLayerOrder] = useState(() => layersConfig.map(l => l.id));
   const [dragOverId, setDragOverId] = useState(null);
@@ -431,6 +478,30 @@ function AppInner() {
   const toggleLayer = (id) =>
     setLayerVisibility(prev => ({ ...prev, [id]: !prev[id] }))
 
+  const toggleSubLayer = (layerId, subId, checked) => {
+    setLayerVisibility(prev => {
+      const updates = { [`${layerId}_sub_${subId}`]: checked };
+      
+      // If we're toggling a group layer, toggle all its children
+      const layerData = dynamicMapServerData[layerId];
+      if (layerData && layerData.metadata.layers) {
+        const sub = layerData.metadata.layers.find(l => l.id === subId);
+        if (sub && sub.subLayerIds) {
+          const toggleChildren = (ids) => {
+            ids.forEach(childId => {
+              updates[`${layerId}_sub_${childId}`] = checked;
+              const child = layerData.metadata.layers.find(l => l.id === childId);
+              if (child && child.subLayerIds) toggleChildren(child.subLayerIds);
+            });
+          };
+          toggleChildren(sub.subLayerIds);
+        }
+      }
+      
+      return { ...prev, ...updates };
+    });
+  }
+
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
   // ❌ Dynamic data (layer.title, API values) is rendered directly — never t(layer.title).
@@ -518,7 +589,7 @@ function AppInner() {
               </button>
             </div>
 
-            <div className="layer-list" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+            <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '2px 4px 1px 1px' }}>
               {filteredLayers.map(layer => {
                 if (layer.hasTree && layer.id === 'ewa-wdd') {
                   const dsState = getDatasetState();
@@ -628,6 +699,112 @@ function AppInner() {
                                 ))}
                               </React.Fragment>
                             );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (layer.type === 'map-image' && dynamicMapServerData[layer.id]) {
+                  const mapData = dynamicMapServerData[layer.id];
+                  const isExpanded = treeExpanded[layer.id];
+
+                  return (
+                    <div 
+                      key={layer.id}
+                      className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, layer.id)}
+                      onDragOver={(e) => handleDragOver(e, layer.id)}
+                      onDrop={handleDrop}
+                      onDragEnd={handleDragEnd}
+                    >
+                      {/* Root Layer Row */}
+                      <div 
+                        className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setTreeExpanded(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+                      >
+                        <div className="layer-card-label" onClick={(e) => e.stopPropagation()}>
+                          <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
+                            <DragHandle />
+                          </span>
+                          <input 
+                            type="checkbox" 
+                            className="custom-checkbox"
+                            checked={layerVisibility[layer.id]}
+                            onChange={() => toggleLayer(layer.id)}
+                          />
+                          <span className="layer-card-name">{layer.title}</span>
+                        </div>
+                        <div className="tree-expand-icon-wrapper">
+                          <ChevronRight size={14} className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`} />
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="tree-children">
+                          {mapData.metadata.layers.map(sub => {
+                            // Only render top-level sublayers here; recursion handles children
+                            if (sub.parentLayerId !== -1) return null;
+
+                            const renderSubLayer = (s, depth = 1) => {
+                              const subIsExpanded = treeExpanded[`${layer.id}_sub_${s.id}`];
+                              const hasChildren = s.subLayerIds && s.subLayerIds.length > 0;
+                              const isVisible = layerVisibility[`${layer.id}_sub_${s.id}`];
+                              const legendItem = mapData.legend.layers.find(l => l.layerId === s.id);
+
+                              return (
+                                <React.Fragment key={s.id}>
+                                  <div 
+                                    className="tree-row" 
+                                    style={{ cursor: hasChildren ? 'pointer' : 'default' }}
+                                    onClick={() => hasChildren && setTreeExpanded(prev => ({ ...prev, [`${layer.id}_sub_${s.id}`]: !subIsExpanded }))}
+                                  >
+                                    {[...Array(depth)].map((_, i) => (
+                                      <div key={i} className="tree-line-spacer">
+                                        <div className="tree-line-v" />
+                                        {i === depth - 1 && <div className="tree-line-h" />}
+                                      </div>
+                                    ))}
+                                    <div className="tree-checkbox-wrapper">
+                                      <input 
+                                        type="checkbox" 
+                                        className="custom-checkbox"
+                                        checked={isVisible}
+                                        onChange={(e) => { e.stopPropagation(); toggleSubLayer(layer.id, s.id, e.target.checked); }}
+                                      />
+                                    </div>
+                                    
+                                    {legendItem && legendItem.legend && legendItem.legend[0] && (
+                                      <div className="tree-symbol-wrapper">
+                                        <img 
+                                          src={`data:${legendItem.legend[0].contentType};base64,${legendItem.legend[0].imageData}`} 
+                                          alt="" 
+                                          style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+                                        />
+                                      </div>
+                                    )}
+
+                                    <span className={`tree-label ${hasChildren ? 'tree-label-category' : 'tree-label-leaf'}`}>{s.name}</span>
+                                    
+                                    <div className="tree-expand-icon-wrapper">
+                                      {hasChildren && (
+                                        <ChevronRight size={14} className={`tree-expand-icon ${subIsExpanded ? 'expanded' : ''}`} />
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {hasChildren && subIsExpanded && s.subLayerIds.map(childId => {
+                                    const child = mapData.metadata.layers.find(l => l.id === childId);
+                                    return child ? renderSubLayer(child, depth + 1) : null;
+                                  })}
+                                </React.Fragment>
+                              );
+                            };
+
+                            return renderSubLayer(sub);
                           })}
                         </div>
                       )}
@@ -1312,16 +1489,13 @@ function AppInner() {
                 >
                   <Map size={16} />
                 </button>
-                <div className="view-mode-toggle" style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
-                  <button 
-                    onClick={() => setSplitModes(prev => ({ ...prev, left: '2D' }))}
-                    style={{ border: 'none', background: splitModes.left === '2D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.left === '2D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-                  >2D</button>
-                  <button 
-                    onClick={() => setSplitModes(prev => ({ ...prev, left: '3D' }))}
-                    style={{ border: 'none', background: splitModes.left === '3D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.left === '3D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-                  >3D</button>
-                </div>
+                <button 
+                   className="view-mode-single-btn"
+                   onClick={() => setSplitModes(prev => ({ ...prev, left: prev.left === '2D' ? '3D' : '2D' }))}
+                   style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                 >
+                   {splitModes.left === '2D' ? '3D' : '2D'}
+                 </button>
 
                 {showSplitBasemap.left && (
                   <div className="split-basemap-popup left">
@@ -1358,16 +1532,14 @@ function AppInner() {
                 >
                   <Map size={16} />
                 </button>
-                <div className="view-mode-toggle" style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
-                  <button 
-                    onClick={() => setSplitModes(prev => ({ ...prev, right: '2D' }))}
-                    style={{ border: 'none', background: splitModes.right === '2D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.right === '2D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-                  >2D</button>
-                  <button 
-                    onClick={() => setSplitModes(prev => ({ ...prev, right: '3D' }))}
-                    style={{ border: 'none', background: splitModes.right === '3D' ? 'white' : 'transparent', color: '#1a2f4d', padding: '4px 8px', fontSize: '11px', fontWeight: '700', borderRadius: '6px', cursor: 'pointer', boxShadow: splitModes.right === '3D' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-                  >3D</button>
-                </div>
+                <button 
+                  className="view-mode-single-btn"
+                  onClick={() => setSplitModes(prev => ({ ...prev, right: prev.right === '2D' ? '3D' : '2D' }))}
+                  style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                >
+                  {splitModes.right === '2D' ? '3D' : '2D'}
+                </button>
+              </div>
 
                 {showSplitBasemap.right && (
                   <div className="split-basemap-popup right">
@@ -1383,7 +1555,6 @@ function AppInner() {
                   </div>
                 )}
               </div>
-            </div>
 
             <div className="form-group" style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Extent Synchronization</label>

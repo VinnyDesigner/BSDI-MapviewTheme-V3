@@ -191,6 +191,8 @@ const AddDataPanel = ({ view }) => {
                 <option>Excel</option>
                 <option>KML</option>
                 <option>DXF</option>
+                <option>DWG</option>
+                <option>DGN</option>
               </select>
             </div>
 
@@ -205,7 +207,7 @@ const AddDataPanel = ({ view }) => {
                 ref={fileInputRef} 
                 style={{ display: 'none' }} 
                 onChange={onFileChange}
-                accept=".geojson,.zip,.csv,.xlsx,.xls,.kml,.dxf,.dwg"
+                accept=".geojson,.zip,.csv,.xlsx,.xls,.kml,.dxf,.dwg,.dgn"
               />
               <div className="upload-content">
                 <div className="upload-icon-wrapper">

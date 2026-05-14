@@ -13,6 +13,11 @@ import {
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Graphic from '@arcgis/core/Graphic';
 import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
+import Extent from '@arcgis/core/geometry/Extent';
+import * as print from "@arcgis/core/rest/print";
+import PrintParameters from "@arcgis/core/rest/support/PrintParameters";
+import PrintTemplate from "@arcgis/core/rest/support/PrintTemplate";
+import PrintViewModel from "@arcgis/core/widgets/Print/PrintViewModel";
 import './PrintPanel.css';
 
 const TEMPLATES = {
@@ -42,6 +47,8 @@ const PrintPanel = ({ view }) => {
   const [wkid, setWkid] = useState('');
   const [includeLegend, setIncludeLegend] = useState(false);
   const [includeNorthArrow, setIncludeNorthArrow] = useState(false);
+  const [isSelectingBoundary, setIsSelectingBoundary] = useState(false);
+  const [scaleInput, setScaleInput] = useState(scale.toString());
 
   // Exports State
   const [exportsList, setExportsList] = useState([]);
@@ -87,7 +94,7 @@ const PrintPanel = ({ view }) => {
     // 1. Clear individual pages (always updated)
     printLayer.removeAll();
 
-    if (!showPrintArea || !view || !template) {
+    if (!showPrintArea || !view || !template || isSelectingBoundary) {
       interactionLayer.removeAll();
       boundaryGraphicRef.current = null;
       if (sketchVMRef.current) sketchVMRef.current.cancel();
@@ -100,12 +107,16 @@ const PrintPanel = ({ view }) => {
     const mapWidth = (t.width / 1000) * scale;
     const mapHeight = (t.height / 1000) * scale;
     
-    let extentToUse = manualExtent;
+    const totalWidth = mapWidth * grid.cols;
+    const totalHeight = mapHeight * grid.rows;
 
-    // Initialize manual extent at center if not exists
-    if (!extentToUse) {
-      const totalWidth = mapWidth * grid.cols;
-      const totalHeight = mapHeight * grid.rows;
+    let extentToUse;
+    
+    // If multi-page and we have a manual selection, use it.
+    // Otherwise, follow the map center as per the general requirement.
+    if (multiPage && manualExtent) {
+      extentToUse = manualExtent;
+    } else {
       extentToUse = {
         xmin: view.center.x - totalWidth / 2,
         ymin: view.center.y - totalHeight / 2,
@@ -113,34 +124,35 @@ const PrintPanel = ({ view }) => {
         ymax: view.center.y + totalHeight / 2,
         spatialReference: view.spatialReference
       };
-      // Important: don't setManualExtent here as it would trigger another effect. 
-      // Just use it for calculation.
     }
 
     const startX = extentToUse.xmin;
     const startY = extentToUse.ymin;
 
     // 2. Add individual pages to printLayer
-    for (let c = 0; c < grid.cols; c++) {
-      for (let r = 0; r < grid.rows; r++) {
-        const xmin = startX + c * mapWidth;
-        const ymin = startY + r * mapHeight;
-        const xmax = xmin + mapWidth;
-        const ymax = ymin + mapHeight;
+    // Only if template and scale are valid
+    if (template && scale) {
+      for (let c = 0; c < grid.cols; c++) {
+        for (let r = 0; r < grid.rows; r++) {
+          const xmin = startX + c * mapWidth;
+          const ymin = startY + r * mapHeight;
+          const xmax = xmin + mapWidth;
+          const ymax = ymin + mapHeight;
 
-        printLayer.add(new Graphic({
-          geometry: {
-            type: "extent",
-            xmin, ymin, xmax, ymax,
-            spatialReference: view.spatialReference
-          },
-          symbol: {
-            type: "simple-fill",
-            color: [223, 38, 28, 0.02],
-            outline: { color: [223, 38, 28, 0.4], width: 1, style: "dash" }
-          },
-          attributes: { page: c * grid.rows + r + 1 }
-        }));
+          printLayer.add(new Graphic({
+            geometry: {
+              type: "extent",
+              xmin, ymin, xmax, ymax,
+              spatialReference: view.spatialReference
+            },
+            symbol: {
+              type: "simple-fill",
+              color: [223, 38, 28, 0.02],
+              outline: { color: [223, 38, 28, 0.4], width: 1, style: "dash" }
+            },
+            attributes: { page: c * grid.rows + r + 1 }
+          }));
+        }
       }
     }
 
@@ -164,7 +176,7 @@ const PrintPanel = ({ view }) => {
         },
         symbol: {
           type: "simple-fill",
-          color: [0, 0, 0, 0],
+          color: [223, 38, 28, 0],
           outline: { color: [223, 38, 28, 1], width: 2 }
         }
       });
@@ -193,6 +205,15 @@ const PrintPanel = ({ view }) => {
           enableRotation: false,
           enableScaling: true,
           preserveAspectRatio: !multiPage
+        }
+      });
+
+      svm.on("create", (event) => {
+        if (event.state === "complete") {
+          const graphic = event.graphic;
+          setManualExtent(graphic.geometry.extent.clone());
+          setIsSelectingBoundary(false);
+          setShowPrintArea(true);
         }
       });
 
@@ -233,9 +254,33 @@ const PrintPanel = ({ view }) => {
     }
   }, [view, view?.spatialReference?.wkid, view?.spatialReference?.latestWkid]);
 
+  // 7. Sync Scale Input (Debounced)
+  useEffect(() => {
+    const num = parseFloat(scaleInput);
+    if (!isNaN(num) && num > 0) {
+      const timer = setTimeout(() => {
+        setScale(num);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [scaleInput]);
+
+  useEffect(() => {
+    if (!view) return;
+    
+    // Watch for extent changes to sync print area - only when stationary to avoid lag
+    const handle = view.watch("stationary", (isStationary) => {
+      if (isStationary && showPrintArea) {
+        updatePrintExtent(calculateGrid());
+      }
+    });
+
+    return () => handle.remove();
+  }, [view, showPrintArea, updatePrintExtent, calculateGrid]);
+
   useEffect(() => {
     updatePrintExtent(pageGrid);
-  }, [showPrintArea, template, scale, multiPage, manualExtent, view?.extent, pageGrid]);
+  }, [showPrintArea, template, scale, multiPage, manualExtent, pageGrid]);
 
   const handleEnableScaleToggle = (e) => {
     const checked = e.target.checked;
@@ -250,6 +295,30 @@ const PrintPanel = ({ view }) => {
     setIsPrinting(true);
 
     try {
+      // Calculate the actual extent to print based on the current preview
+      let printExtent = manualExtent;
+      
+      if (!printExtent && showPrintArea) {
+        const t = TEMPLATES[template];
+        if (t && scale) {
+          const mapWidth = (t.width / 1000) * scale;
+          const mapHeight = (t.height / 1000) * scale;
+          const grid = calculateGrid();
+          const totalWidth = mapWidth * grid.cols;
+          const totalHeight = mapHeight * grid.rows;
+          
+          printExtent = {
+            xmin: view.center.x - totalWidth / 2,
+            ymin: view.center.y - totalHeight / 2,
+            xmax: view.center.x + totalWidth / 2,
+            ymax: view.center.y + totalHeight / 2,
+            spatialReference: view.spatialReference
+          };
+        }
+      }
+
+      const targetExtent = printExtent instanceof Extent ? printExtent : new Extent(printExtent || view.extent);
+
       // 📝 Audit Logging Start
       const auditDetails = {
         title,
@@ -259,10 +328,11 @@ const PrintPanel = ({ view }) => {
         dpi,
         wkid: wkid || view.spatialReference.wkid,
         layers: view.map.layers.filter(l => l.visible).map(l => l.title).toArray(),
-        extent: manualExtent ? manualExtent.toJSON() : view.extent.toJSON(),
+        extent: targetExtent.toJSON(),
         pageCount: multiPage ? (pageGrid.cols * pageGrid.rows) : 1
       };
 
+      // Capture the full viewport including the selection graphics
       const screenshot = await view.takeScreenshot({
         format: format.toLowerCase() === 'jpg' ? 'jpg' : 'png',
         quality: 100
@@ -290,13 +360,39 @@ const PrintPanel = ({ view }) => {
     }
   };
 
-  const handleDownload = (exportItem) => {
-    const link = document.createElement('a');
-    link.href = exportItem.url;
-    link.download = exportItem.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (exportItem) => {
+    try {
+      // If it's a data URL (from takeScreenshot), we can use it directly
+      if (exportItem.url.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = exportItem.url;
+        link.download = exportItem.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // For external URLs (from Print Service), try to fetch as blob to force download
+      const response = await fetch(exportItem.url);
+      if (!response.ok) throw new Error('Network response was not ok');
+      
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = exportItem.name;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.warn("Download failed, falling back to direct link:", err);
+      window.open(exportItem.url, '_blank');
+    }
   };
 
   const handleDelete = (id) => {
@@ -355,27 +451,41 @@ const PrintPanel = ({ view }) => {
               <label className="checkbox-label">
                 <input 
                   type="checkbox" 
-                  checked={showPrintArea}
-                  onChange={(e) => setShowPrintArea(e.target.checked)}
-                />
-                Show print area {showPrintArea && pageGrid.cols * pageGrid.rows > 1 && (
-                  <span className="page-count-tag">
-                    ({pageGrid.cols * pageGrid.rows} Pages - {pageGrid.cols}x{pageGrid.rows})
-                  </span>
-                )}
-              </label>
-            </div>
-
-            <div className="form-checkbox-group">
-              <label className="checkbox-label">
-                <input 
-                  type="checkbox" 
                   checked={multiPage}
-                  onChange={(e) => setMultiPage(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setMultiPage(checked);
+                    if (!checked) {
+                      setManualExtent(null);
+                      setShowPrintArea(false);
+                    }
+                  }}
                 />
                 Enable Multi-Page Print
               </label>
             </div>
+
+            {multiPage && (
+              <div className="selection-workflow-box">
+                <p className="workflow-hint">Define the area on map to split into pages</p>
+                <button 
+                  className={`workflow-btn ${isSelectingBoundary ? 'active' : ''}`}
+                  onClick={() => {
+                    if (isSelectingBoundary) {
+                      sketchVMRef.current.cancel();
+                      setIsSelectingBoundary(false);
+                    } else {
+                      interactionLayer.removeAll();
+                      printLayer.removeAll();
+                      sketchVMRef.current.create("rectangle");
+                      setIsSelectingBoundary(true);
+                    }
+                  }}
+                >
+                  {isSelectingBoundary ? 'Click & Drag on Map...' : 'Define Print Area Boundary'}
+                </button>
+              </div>
+            )}
 
             <div className="form-group">
               <label>File Format</label>
@@ -421,13 +531,23 @@ const PrintPanel = ({ view }) => {
                         <input 
                           type="number" 
                           className="tool-input text-center"
-                          value={scale}
-                          onChange={(e) => setScale(Number(e.target.value))}
+                          value={scaleInput}
+                          onChange={(e) => setScaleInput(e.target.value)}
                         />
-                        <button className="scale-btn" onClick={() => setScale(s => s + 1000)}><Plus size={14} /></button>
+                        <button className="scale-btn" onClick={() => {
+                          const next = Math.round(scale + 1000);
+                          setScale(next);
+                          setScaleInput(next.toString());
+                        }}><Plus size={14} /></button>
                         <button 
                           className="scale-btn refresh-btn"
-                          onClick={() => { if(view) setScale(Math.round(view.scale)); }}
+                          onClick={() => { 
+                            if(view) {
+                              const s = Math.round(view.scale);
+                              setScale(s);
+                              setScaleInput(s.toString());
+                            } 
+                          }}
                           title="Refresh to current map scale"
                         >
                           <RefreshCw size={14} />
@@ -435,6 +555,21 @@ const PrintPanel = ({ view }) => {
                       </div>
                     </div>
                   )}
+
+                  <div className="form-checkbox-group">
+                    <label className="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        checked={showPrintArea}
+                        onChange={(e) => setShowPrintArea(e.target.checked)}
+                      />
+                      Show print area {showPrintArea && pageGrid.cols * pageGrid.rows > 1 && (
+                        <span className="page-count-tag">
+                          ({pageGrid.cols * pageGrid.rows} Pages - {pageGrid.cols}x{pageGrid.rows})
+                        </span>
+                      )}
+                    </label>
+                  </div>
 
                   <div className="form-group">
                     <label>Author</label>

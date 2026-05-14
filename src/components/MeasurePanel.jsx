@@ -80,7 +80,11 @@ const MeasurePanel = ({ view }) => {
     sketchVMRef.current = svm;
 
     return () => {
-      view.map.removeMany([graphicsLayer, labelLayer]);
+      console.log("Cleanup: MeasurePanel");
+      if (svm) svm.destroy();
+      if (view && view.map) {
+        view.map.removeMany([graphicsLayer, labelLayer]);
+      }
     };
   }, [view]);
 
@@ -218,6 +222,7 @@ const MeasurePanel = ({ view }) => {
                     onChange={(e) => setWkid(e.target.value)}
                   >
                     <option value="4326">WKID: 4326 Lat Long</option>
+                    <option value="20439">WKID: 20439 UTM 39N</option>
                     <option value="3857">WKID: 3857 Web Mercator</option>
                     <option value="102100">WKID: 102100 Web Mercator</option>
                   </select>

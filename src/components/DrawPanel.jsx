@@ -156,7 +156,11 @@ const DrawPanel = ({ view }) => {
     sketchVMRef.current = svm;
 
     return () => {
-      view.map.remove(layer);
+      console.log("Cleanup: DrawPanel");
+      if (svm) svm.destroy();
+      if (view && view.map) {
+        view.map.remove(layer);
+      }
     };
   }, [view]); // Removed drawings dependency to prevent layer reset
 

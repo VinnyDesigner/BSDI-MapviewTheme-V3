@@ -24,7 +24,7 @@ export const layersConfig = [
     id: 'heritage-sites',
     title: 'Heritage Sites',
     url: 'https://services.arcgis.com/V6ZHFr6zdgNZuXC0/ArcGIS/rest/services/Heritage_Sites/FeatureServer/0',
-    visible: true
+    visible: false
   },
   {
     id: 'coastal-counties',

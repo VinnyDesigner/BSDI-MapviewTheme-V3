@@ -13,7 +13,9 @@ import {
   Navigation,
   ChevronRight,
   ArrowRight,
-  Search
+  Search,
+  Copy,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
@@ -29,6 +31,10 @@ const NavigationPanel = ({ view }) => {
   const [manualLng, setManualLng] = useState('');
   const [hasCaptured, setHasCaptured] = useState(false);
   const [error, setError] = useState('');
+  const [coordinateSystem, setCoordinateSystem] = useState('WGS84');
+  const [coordinateInput, setCoordinateInput] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   const graphicsLayerRef = useRef(null);
   const clickHandleRef = useRef(null);
@@ -64,8 +70,12 @@ const NavigationPanel = ({ view }) => {
           }
         }
 
-        setManualLat(displayPoint.y.toFixed(6));
-        setManualLng(displayPoint.x.toFixed(6));
+        const lat = displayPoint.y.toFixed(6);
+        const lng = displayPoint.x.toFixed(6);
+        
+        setManualLat(lat);
+        setManualLng(lng);
+        setCoordinateInput(`${lat}, ${lng}`);
         setHasCaptured(true);
         addMarker(mapPoint);
         
@@ -119,6 +129,7 @@ const NavigationPanel = ({ view }) => {
     setScaleValue('');
     setManualLat('');
     setManualLng('');
+    setCoordinateInput('');
     setHasCaptured(false);
     setIsCapturing(false);
     setError('');
@@ -126,6 +137,16 @@ const NavigationPanel = ({ view }) => {
       graphicsLayerRef.current.removeAll();
     }
   };
+
+  const handleCopy = () => {
+    if (!manualLat || !manualLng) return;
+    const text = `Latitude: ${manualLat}\nLongitude: ${manualLng}`;
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const systems = ['WGS84', 'Web Mercator', 'UTM 39N', 'EPSG:20439'];
 
   return (
     <div className="nav-panel-wrapper">
@@ -172,45 +193,92 @@ const NavigationPanel = ({ view }) => {
             <h3 className="section-title">Go to XY</h3>
           </div>
           
-          <p className="instruction-text">Click on the map to grab coordinates</p>
+          <div className="xy-form-container">
+            {/* Top Row: Dropdown + Capture */}
+            <div className="xy-top-row">
+              <div className="custom-dropdown-container">
+                <button 
+                  className="dropdown-trigger"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                >
+                  <span>{coordinateSystem}</span>
+                  <ChevronDown size={14} className={`dropdown-arrow ${isDropdownOpen ? 'open' : ''}`} />
+                </button>
+                
+                <AnimatePresence>
+                  {isDropdownOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      className="dropdown-menu"
+                    >
+                      {systems.map(s => (
+                        <div 
+                          key={s} 
+                          className={`dropdown-item ${coordinateSystem === s ? 'active' : ''}`}
+                          onClick={() => {
+                            setCoordinateSystem(s);
+                            setIsDropdownOpen(false);
+                          }}
+                        >
+                          {s}
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-          <button 
-            className={`capture-btn ${isCapturing ? 'active' : ''}`}
-            onClick={() => setIsCapturing(!isCapturing)}
-          >
-            {isCapturing ? (
-              <><Target size={16} className="animate-pulse" /> Capturing...</>
-            ) : (
-              <><MousePointer2 size={16} /> Capture Coordinates</>
-            )}
-          </button>
-
-          {/* Coordinate Table Result */}
-          <AnimatePresence>
-            {hasCaptured && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="coordinate-table-card"
+              <button 
+                className={`compact-capture-btn ${isCapturing ? 'active' : ''}`}
+                onClick={() => setIsCapturing(!isCapturing)}
+                title="Capture coordinates from map"
               >
-                <div className="table-header">
-                  <span className="table-title">Coordinate System</span>
-                  <span className="table-wkid">WKID: 4326 Lat Long</span>
-                </div>
-                <div className="table-body">
-                  <div className="table-row">
-                    <span className="row-label">Latitude</span>
-                    <span className="row-value">{manualLat}</span>
+                {isCapturing ? (
+                  <Target size={18} className="animate-pulse" />
+                ) : (
+                  <MousePointer2 size={18} />
+                )}
+                <span>Capture</span>
+              </button>
+            </div>
+
+            {/* High-Fidelity Result Table Card */}
+
+            {/* High-Fidelity Result Table Card */}
+            <AnimatePresence>
+              {hasCaptured && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="coordinate-table-card"
+                >
+                  <div className="table-header">
+                    <span className="table-title">Coordinate System</span>
+                    <button 
+                      className={`header-copy-btn ${isCopied ? 'success' : ''}`} 
+                      onClick={handleCopy}
+                      title="Copy coordinates"
+                    >
+                      {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
                   </div>
-                  <div className="table-row">
-                    <span className="row-label">Longitude</span>
-                    <span className="row-value">{manualLng}</span>
+                  <div className="table-body">
+                    <div className="table-row">
+                      <span className="row-label">Latitude</span>
+                      <span className="row-value">{manualLat}</span>
+                    </div>
+                    <div className="table-row">
+                      <span className="row-label">Longitude</span>
+                      <span className="row-value">{manualLng}</span>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

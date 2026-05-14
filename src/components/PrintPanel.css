@@ -61,6 +61,7 @@
 .print-content-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -69,7 +70,7 @@
 .print-layout-form {
   display: flex;
   flex-direction: column;
-  gap: 12px; /* Reduced from 16px */
+  gap: 8px; /* Reduced from 12px */
   padding: 0 4px;
 }
 
@@ -140,7 +141,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   overflow: hidden;
-  margin-top: 8px;
+  margin-top: 0;
   background: white;
 }
 
@@ -161,6 +162,58 @@
 
 .advanced-toggle:hover {
   background: #f1f5f9;
+}
+
+/* Multi-Page Workflow UI */
+.selection-workflow-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+}
+
+.workflow-btn {
+  width: 100%;
+  padding: 10px;
+  background: white;
+  border: 1px solid #df261c;
+  border-radius: 6px;
+  color: #df261c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-btn:hover {
+  background: #fff5f5;
+  box-shadow: 0 2px 8px rgba(223, 38, 28, 0.15);
+}
+
+.workflow-btn.active {
+  background: #df261c;
+  color: white;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(223, 38, 28, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(223, 38, 28, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(223, 38, 28, 0); }
 }
 
 .advanced-content {
@@ -212,11 +265,66 @@
   text-align: center;
 }
 
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.empty-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f1f5f9;
+  margin-top: 0;
+}
+
+.empty-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  background: rgba(30, 60, 114, 0.05);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  color: #1e3c72;
+}
+
+.empty-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a2f4d;
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 240px;
+}
+
 /* Exports Tab */
 .print-exports-list {
   display: flex;
   flex-direction: column;
   gap: 8px; /* Reduced from 12px */
+  width: 100%;
 }
 
 .export-item {
