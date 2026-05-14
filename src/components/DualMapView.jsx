@@ -183,10 +183,10 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
   useEffect(() => {
     if (!leftView || !rightView) return;
     
-    const leftConfig = layersConfig.find(l => l.id === splitLayers.left);
-    const rightConfig = layersConfig.find(l => l.id === splitLayers.right);
+    const leftConfigs = Array.isArray(splitLayers.left) ? splitLayers.left.map(id => layersConfig.find(l => l.id === id)).filter(Boolean) : [];
+    const rightConfigs = Array.isArray(splitLayers.right) ? splitLayers.right.map(id => layersConfig.find(l => l.id === id)).filter(Boolean) : [];
 
-    const updateMapLayers = (map, config, isHistorical) => {
+    const updateMapLayers = (map, configs, isHistorical) => {
       // Remove only operational layers, preserve all core 3D scene environment layers
       const toRemove = map.layers.filter(lyr => 
         lyr.id !== 'esri-3d-buildings' && 
@@ -197,25 +197,27 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
       );
       map.removeMany(toRemove.toArray());
 
-      if (config) {
-        let layer;
-        if (config.type === 'tile') {
-          layer = new TileLayer({ id: config.id, url: config.url, title: config.title });
-        } else if (config.type === 'map-image') {
-          layer = new MapImageLayer({ id: config.id, url: config.url, title: config.title });
-        } else {
-          layer = new FeatureLayer({ id: config.id, url: config.url, title: config.title });
-        }
+      if (configs && configs.length > 0) {
+        configs.forEach((config, idx) => {
+          let layer;
+          if (config.type === 'tile') {
+            layer = new TileLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
+          } else if (config.type === 'map-image') {
+            layer = new MapImageLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
+          } else {
+            layer = new FeatureLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
+          }
 
-        if (isHistorical) layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
-        
-        // Add at index 0 to stay below buildings/mesh
-        map.add(layer, 0);
+          if (isHistorical) layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
+          
+          // Add operational layers at the bottom of the stack (below 3D layers)
+          map.add(layer, idx);
+        });
       }
     };
 
-    updateMapLayers(leftView.map, leftConfig, true);
-    updateMapLayers(rightView.map, rightConfig, false);
+    updateMapLayers(leftView.map, leftConfigs, true);
+    updateMapLayers(rightView.map, rightConfigs, false);
 
   }, [leftView, rightView, splitLayers]);
 
@@ -252,7 +254,13 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
     <div className="split-container" ref={containerRef}>
       <div ref={leftMapDiv} className="map-panel" style={{ width: `${splitPercentage}%` }}>
         <div className="map-label left-label">
-          {splitModes?.left || '2D'} | {layersConfig.find(l => l.id === splitLayers.left)?.title || 'No Layer'}
+          {splitModes?.left || '2D'} | {
+            Array.isArray(splitLayers.left) 
+              ? splitLayers.left.length === 1 
+                ? layersConfig.find(l => l.id === splitLayers.left[0])?.title 
+                : `${splitLayers.left.length} layers`
+              : 'No Layer'
+          }
         </div>
       </div>
       
@@ -269,7 +277,13 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
 
       <div ref={rightMapDiv} className="map-panel" style={{ width: `${100 - splitPercentage}%` }}>
         <div className="map-label right-label">
-          {splitModes?.right || '2D'} | {layersConfig.find(l => l.id === splitLayers.right)?.title || 'No Layer'}
+          {splitModes?.right || '2D'} | {
+            Array.isArray(splitLayers.right) 
+              ? splitLayers.right.length === 1 
+                ? layersConfig.find(l => l.id === splitLayers.right[0])?.title 
+                : `${splitLayers.right.length} layers`
+              : 'No Layer'
+          }
         </div>
       </div>
 

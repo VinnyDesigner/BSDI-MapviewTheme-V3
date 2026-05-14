@@ -55,8 +55,8 @@ function AppInner() {
   )
   
   const [splitLayers, setSplitLayers] = useState({
-    left: layersConfig[0]?.id || '',
-    right: layersConfig[1]?.id || layersConfig[0]?.id || ''
+    left: [layersConfig[0]?.id || ''],
+    right: [layersConfig[1]?.id || layersConfig[0]?.id || '']
   })
   const [splitBasemaps, setSplitBasemaps] = useState({
     left: 'streets-navigation-vector',
@@ -1167,7 +1167,7 @@ function AppInner() {
                       .filter(l => l.timeEnabled)
                       .map(l => ({
                         id: l.id,
-                        title: `${l.title} (${l.startYear}–${l.endYear})`
+                        title: l.title
                       }))
                     }
                     value={timelapseSettings.layerId}
@@ -1391,7 +1391,8 @@ function AppInner() {
                     options={layersConfig}
                     value={splitLayers.left} 
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
-                    placeholder="Select left layer..."
+                    placeholder="Select left layers..."
+                    multi={true}
                   />
                 </div>
                 <button 
@@ -1425,7 +1426,8 @@ function AppInner() {
                     options={layersConfig}
                     value={splitLayers.right} 
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
-                    placeholder="Select right layer..."
+                    placeholder="Select right layers..."
+                    multi={true}
                   />
                 </div>
                 <button 
@@ -1479,7 +1481,8 @@ function AppInner() {
                     options={layersConfig}
                     value={splitLayers.left}
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
-                    placeholder="Select left layer..."
+                    placeholder="Select left layers..."
+                    multi={true}
                   />
                 </div>
                 <button 
@@ -1522,7 +1525,8 @@ function AppInner() {
                     options={layersConfig}
                     value={splitLayers.right}
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
-                    placeholder="Select right layer..."
+                    placeholder="Select right layers..."
+                    multi={true}
                   />
                 </div>
                 <button 

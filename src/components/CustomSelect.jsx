@@ -2,13 +2,34 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, Check } from 'lucide-react';
 import './CustomSelect.css';
 
-const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label }) => {
+const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label, multi = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
-  const selectedOption = options.find(opt => opt.value === value || opt.id === value || opt === value);
-  const displayLabel = selectedOption ? (selectedOption.title || selectedOption.label || selectedOption) : placeholder;
+  const getSelectedOptions = () => {
+    if (multi) {
+      return options.filter(opt => {
+        const val = opt.value || opt.id || opt;
+        return Array.isArray(value) && value.includes(val);
+      });
+    }
+    return options.filter(opt => opt.value === value || opt.id === value || opt === value);
+  };
+
+  const selectedOptions = getSelectedOptions();
+  
+  let displayLabel = placeholder;
+  if (selectedOptions.length > 0) {
+    if (multi) {
+      displayLabel = selectedOptions.length === 1 
+        ? (selectedOptions[0].title || selectedOptions[0].label || selectedOptions[0])
+        : `${selectedOptions.length} layers selected`;
+    } else {
+      const selected = selectedOptions[0];
+      displayLabel = selected.title || selected.label || selected;
+    }
+  }
 
   const filteredOptions = options.filter(opt => {
     const text = (opt.title || opt.label || opt || "").toString().toLowerCase();
@@ -55,20 +76,37 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
               filteredOptions.map((opt, index) => {
                 const val = opt.value || opt.id || opt;
                 const label = opt.title || opt.label || opt;
-                const isSelected = val === value;
+                const isSelected = multi 
+                  ? (Array.isArray(value) && value.includes(val))
+                  : val === value;
                 
                 return (
                   <div 
                     key={index} 
-                    className={`option-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => {
-                      onChange(val);
-                      setIsOpen(false);
-                      setSearchTerm('');
+                    className={`option-item ${isSelected ? 'selected' : ''} ${multi ? 'multi' : ''}`}
+                    onClick={(e) => {
+                      if (multi) {
+                        e.stopPropagation();
+                        const newValue = Array.isArray(value) ? [...value] : [];
+                        if (newValue.includes(val)) {
+                          onChange(newValue.filter(v => v !== val));
+                        } else {
+                          onChange([...newValue, val]);
+                        }
+                      } else {
+                        onChange(val);
+                        setIsOpen(false);
+                        setSearchTerm('');
+                      }
                     }}
                   >
+                    {multi && (
+                      <div className={`select-checkbox ${isSelected ? 'checked' : ''}`}>
+                        {isSelected && <Check size={10} color="white" strokeWidth={4} />}
+                      </div>
+                    )}
                     <span>{label}</span>
-                    {isSelected && <Check size={14} className="check-icon" />}
+                    {!multi && isSelected && <Check size={14} className="check-icon" />}
                   </div>
                 );
               })

@@ -139,6 +139,29 @@
   color: #df261c;
 }
 
+.option-item.multi {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.select-checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  background: white;
+  flex-shrink: 0;
+}
+
+.select-checkbox.checked {
+  background: #df261c;
+  border-color: #df261c;
+}
+
 .no-options {
   padding: 16px;
   text-align: center;
