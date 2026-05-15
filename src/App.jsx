@@ -77,8 +77,8 @@ function AppInner() {
     blendMode: 'multiply'
   });
   const [arcadeSettings, setArcadeSettings] = useState({
-    applyTo: 'Styling',
-    layerId: 'heritage-sites',
+    applyTo: '',
+    layerId: '',
     expression: '',
     template: '',
     status: '',

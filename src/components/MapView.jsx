@@ -483,24 +483,66 @@ const ArcGISMap = ({
   // 5. Manage Arcade Expressions
   useEffect(() => {
     const view = viewRef.current;
+    if (!view || !arcadeSettings?.layerId) return;
+
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    const id = arcadeSettings.layerId;
+
+    if (id.includes('_')) {
+      const [parentId] = id.split('_');
+      const parent = activeLayers[parentId];
+      if (parent) parent.visible = true;
+    } else {
+      const layer = activeLayers[id];
+      if (layer) layer.visible = true;
+    }
+  }, [arcadeSettings?.layerId]);
+
+  useEffect(() => {
+    const view = viewRef.current;
     if (!view || !arcadeSettings?.lastRun) return;
 
     const activeLayers = is3D ? layers3DRef.current : layersRef.current;
-    const layer = activeLayers[arcadeSettings.layerId];
-    if (!layer) return;
+
+    // Helper to find target layer or sublayer
+    const getTargetLayer = () => {
+      const id = arcadeSettings.layerId;
+      if (id.includes('_')) {
+        const [parentId, subId] = id.split('_');
+        const parent = activeLayers[parentId];
+        if (parent && parent.type === 'map-image') {
+          return parent.findSublayerById(parseInt(subId));
+        }
+      }
+      return activeLayers[id];
+    };
+
+    const target = getTargetLayer();
+    if (!target) return;
 
     const { expression, applyTo } = arcadeSettings;
 
     try {
       if (applyTo === 'Styling') {
-        // Apply Arcade to Renderer
-        layer.renderer = {
-          type: "simple",
-          symbol: layer.renderer.symbol || {
+        console.log("Applying Arcade Styling:", expression);
+        // Apply Arcade to Renderer using UniqueValueRenderer for maximum flexibility
+        target.renderer = {
+          type: "unique-value",
+          valueExpression: expression,
+          defaultSymbol: target.renderer?.symbol || target.renderer?.defaultSymbol || {
             type: "simple-fill",
             color: [150, 150, 150, 0.5],
             outline: { color: [255, 255, 255, 0.8], width: 1 }
           },
+          uniqueValueInfos: [
+            // We provide some default colors for common return values (High, Medium, Low, etc.)
+            { value: "High", symbol: { type: "simple-fill", color: "#df261c", outline: { color: "white", width: 1 } } },
+            { value: "Medium", symbol: { type: "simple-fill", color: "#facc15", outline: { color: "white", width: 1 } } },
+            { value: "Low", symbol: { type: "simple-fill", color: "#1e3c72", outline: { color: "white", width: 1 } } },
+            { value: 1, symbol: { type: "simple-fill", color: "#df261c", outline: { color: "white", width: 1 } } },
+            { value: 0, symbol: { type: "simple-fill", color: "#1e3c72", outline: { color: "white", width: 1 } } }
+          ],
+          // Fallback to visual variables if it's a continuous numeric result
           visualVariables: [{
             type: "color",
             valueExpression: expression,
@@ -514,8 +556,8 @@ const ArcGISMap = ({
         };
       } else if (applyTo === 'Labels') {
         // Apply Arcade to Labeling
-        layer.labelingInfo = [{
-          labelPlacement: "above-center",
+        target.labelingInfo = [{
+          labelPlacement: target.type === 'point' ? "above-center" : "always-horizontal",
           labelExpressionInfo: { expression },
           symbol: {
             type: "text",
@@ -525,10 +567,10 @@ const ArcGISMap = ({
             font: { size: 11, weight: "bold", family: "Inter" }
           }
         }];
-        layer.labelsVisible = true;
+        target.labelsVisible = true;
       } else if (applyTo === 'Popup') {
         // Apply Arcade to Popups
-        layer.popupTemplate = {
+        target.popupTemplate = {
           title: "Arcade Result",
           content: [{
             type: "text",
@@ -541,10 +583,10 @@ const ArcGISMap = ({
           }]
         };
       } else if (applyTo === 'Filtering') {
-        // We use visual variables to hide features based on Arcade truthiness
-        layer.renderer = {
+        // Use visual variables for client-side filtering via opacity
+        target.renderer = {
           type: "simple",
-          symbol: layer.renderer.symbol || { type: "simple-fill", color: "#1e3c72" },
+          symbol: target.renderer?.symbol || { type: "simple-fill", color: "#1e3c72" },
           visualVariables: [{
             type: "opacity",
             valueExpression: `if (${expression}) { return 1; } else { return 0; }`,
@@ -556,8 +598,8 @@ const ArcGISMap = ({
         };
       }
       
-      // Refresh layer
-      layer.refresh();
+      // Refresh layer/sublayer
+      if (target.refresh) target.refresh();
     } catch (err) {
       console.error("Arcade Apply Error:", err);
     }
@@ -572,21 +614,49 @@ const ArcGISMap = ({
     }
 
     const activeLayers = is3D ? layers3DRef.current : layersRef.current;
-    const layer = activeLayers[arcadeSettings.layerId];
-    if (!layer) return;
+    
+    const getTargetLayer = () => {
+      const id = arcadeSettings.layerId;
+      if (id.includes('_')) {
+        const [parentId, subId] = id.split('_');
+        const parent = activeLayers[parentId];
+        if (parent && parent.type === 'map-image') {
+          return parent.findSublayerById(parseInt(subId));
+        }
+      }
+      return activeLayers[id];
+    };
+
+    const target = getTargetLayer();
+    if (!target) return;
 
     const evalPreview = async () => {
       try {
-        await layer.when();
-        const results = await layer.queryFeatures({
-          where: "1=1",
-          outFields: ["*"],
-          num: 1,
-          returnGeometry: true
-        });
+        // Wait for layer to load if it hasn't
+        if (target.layer && !target.layer.loaded) await target.layer.when();
+        else if (target.loaded === false) await target.when();
 
-        if (results.features.length > 0) {
-          const feature = results.features[0];
+        // For sublayers, we need to query from the parent MapImageLayer or use a feature layer equivalent
+        // Note: MapImageLayer sublayers don't have queryFeatures directly in the same way as FeatureLayer
+        // We'll try to find a sample feature. If it's a sublayer, we might need to fetch a feature layer for evaluation.
+        
+        let feature = null;
+        if (target.queryFeatures) {
+          const results = await target.queryFeatures({
+            where: "1=1",
+            outFields: ["*"],
+            num: 1,
+            returnGeometry: true
+          });
+          feature = results.features[0];
+        } else if (target.layer && target.layer.type === 'map-image') {
+          // Fallback for MapImageLayer sublayers: try to get a sample feature using a temporary FeatureLayer
+          const tempFL = new FeatureLayer({ url: `${target.layer.url}/${target.id}` });
+          const results = await tempFL.queryFeatures({ where: "1=1", outFields: ["*"], num: 1 });
+          feature = results.features[0];
+        }
+
+        if (feature) {
           const expr = arcadeSettings.expression.trim();
           
           try {

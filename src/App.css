@@ -980,7 +980,7 @@
 
 /* ??? Global Form Spacing Refinement (High Density) */
 .form-group {
-  margin-bottom: 10px !important; /* Increased from 6px */
+  margin-bottom: 0px; 
   display: flex !important;
   flex-direction: column !important;
   gap: 4px !important; /* Increased from 2px */

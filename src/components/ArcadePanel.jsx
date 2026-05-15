@@ -14,7 +14,8 @@ import {
   Variable,
   AlertCircle,
   CheckCircle2,
-  Database
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomSelect from './CustomSelect';
@@ -28,7 +29,109 @@ const ArcadePanel = ({
 }) => {
   const [activeTab, setActiveTab] = useState('editor');
   const [cursorPos, setCursorPos] = useState(0);
+  const [operationalLayers, setOperationalLayers] = useState([]);
+  const [dynamicFields, setDynamicFields] = useState([]);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
   const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (!view) return;
+
+    const extractLayers = () => {
+      const allLayers = [];
+      
+      view.map.layers.forEach(layer => {
+        if (layer.type === 'feature' || layer.type === 'geojson' || layer.type === 'csv' || layer.type === 'graphics') {
+          allLayers.push({
+            id: layer.id,
+            title: layer.title || layer.id,
+            value: layer.id
+          });
+        } 
+        else if (layer.type === 'map-image' && layer.sublayers) {
+          // Add operational sublayers from MapServer
+          layer.sublayers.forEach(sub => {
+            if (sub.sublayers) {
+              // Group layer - traverse deeper
+              sub.sublayers.forEach(inner => {
+                allLayers.push({
+                  id: `${layer.id}_${inner.id}`,
+                  title: `${inner.title}`,
+                  value: `${layer.id}_${inner.id}`
+                });
+              });
+            } else {
+              allLayers.push({
+                id: `${layer.id}_${sub.id}`,
+                title: `${sub.title}`,
+                value: `${layer.id}_${sub.id}`
+              });
+            }
+          });
+        }
+      });
+
+      // If no layers found in map, fallback to layersConfig
+      if (allLayers.length === 0) {
+        return layersConfig.map(l => ({ id: l.id, title: l.title, value: l.id }));
+      }
+
+      return allLayers;
+    };
+
+    setOperationalLayers(extractLayers());
+  }, [view, layersConfig]);
+
+  // Dynamic Field Fetching
+  useEffect(() => {
+    if (!view || !settings.layerId) return;
+
+    const fetchFields = async () => {
+      setIsLoadingFields(true);
+      try {
+        let targetLayer = null;
+        const id = settings.layerId;
+
+        if (id.includes('_')) {
+          const [parentId, subId] = id.split('_');
+          const parent = view.map.layers.find(l => l.id === parentId);
+          if (parent && parent.type === 'map-image') {
+            const sub = parent.findSublayerById(parseInt(subId));
+            if (sub) {
+              // Fetch fields from sublayer metadata
+              const response = await fetch(`${parent.url}/${sub.id}?f=pjson`);
+              const data = await response.json();
+              if (data.fields) {
+                const fields = data.fields.map(f => ({
+                  label: `$feature.${f.name}`,
+                  value: `$feature.${f.name}`
+                }));
+                setDynamicFields(fields);
+              }
+            }
+          }
+        } else {
+          targetLayer = view.map.layers.find(l => l.id === id);
+          if (targetLayer) {
+            await targetLayer.when();
+            const fields = targetLayer.fields.map(f => ({
+              label: `$feature.${f.name}`,
+              value: `$feature.${f.name}`
+            }));
+            setDynamicFields(fields);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching fields:", err);
+        // Fallback to common fields
+        setDynamicFields(commonFields);
+      } finally {
+        setIsLoadingFields(false);
+      }
+    };
+
+    fetchFields();
+  }, [view, settings.layerId]);
 
   const templates = [
     { name: 'Population Density', expression: 'return $feature.population / $feature.area;' },
@@ -104,14 +207,16 @@ const ArcadePanel = ({
               options={['Styling', 'Labels', 'Popup', 'Filtering']}
               value={settings.applyTo}
               onChange={(val) => onSettingsChange({ ...settings, applyTo: val })}
+              placeholder="Select"
             />
           </div>
           <div className="form-group flex-1">
             <label className="input-label">Target Layer</label>
             <CustomSelect 
-              options={layersConfig}
+              options={operationalLayers}
               value={settings.layerId}
               onChange={(val) => onSettingsChange({ ...settings, layerId: val })}
+              placeholder="Select layer"
             />
           </div>
         </div>
@@ -133,15 +238,32 @@ const ArcadePanel = ({
             <span>Field Picker</span>
           </div>
           <div className="field-chips">
-            {commonFields.map(field => (
-              <button 
-                key={field.value}
-                className="field-chip"
-                onClick={() => handleInsertField(field.value)}
-              >
-                {field.label}
-              </button>
-            ))}
+            {isLoadingFields ? (
+              <div className="fields-loading">
+                <RefreshCw size={14} className="animate-spin" />
+                <span>Fetching layer fields...</span>
+              </div>
+            ) : dynamicFields.length > 0 ? (
+              dynamicFields.map(field => (
+                <button 
+                  key={field.value}
+                  className="field-chip"
+                  onClick={() => handleInsertField(field.value)}
+                >
+                  {field.label}
+                </button>
+              ))
+            ) : (
+              commonFields.map(field => (
+                <button 
+                  key={field.value}
+                  className="field-chip"
+                  onClick={() => handleInsertField(field.value)}
+                >
+                  {field.label}
+                </button>
+              ))
+            )}
           </div>
         </div>
 

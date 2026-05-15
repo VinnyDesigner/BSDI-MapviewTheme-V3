@@ -234,7 +234,7 @@ const AddDataPanel = ({ view }) => {
                 value={wkid}
                 onChange={(e) => setWkid(e.target.value)}
               />
-              <span className="form-hint">Default CRS: Ain el Abd / UTM zone 39N (EPSG: 20439)</span>
+              <span className="form-hint">Default CRS: Ain el Abd / UTM zone 39N - EPSG:20439</span>
             </div>
 
             {error && (
