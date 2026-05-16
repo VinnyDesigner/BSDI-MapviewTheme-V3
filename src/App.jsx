@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import ArcGISMap from './components/MapView'
+import { motion } from 'framer-motion'
 import BottomToolbar from './components/BottomToolbar'
 import SidePanel from './components/SidePanel'
 import Header from './components/Header'
@@ -26,7 +27,7 @@ import './App.css'
 import {
   Layers, Search, Navigation, Ruler, Pencil,
   Box, Database, Globe, Printer, Bookmark, Info,
-  Columns2, ChevronRight, ChevronLeft, MousePointer2, Square, Hexagon,
+  Columns2, ChevronRight, ChevronLeft, ChevronDown, MousePointer2, Square, Hexagon,
   Download, Lock, Map, Play, Pause, RotateCcw
 } from 'lucide-react';
 
@@ -101,20 +102,30 @@ function AppInner() {
 
   const [dynamicMapServerData, setDynamicMapServerData] = useState({});
 
+  const [activeActionMenu, setActiveActionMenu] = useState(null); // { id: string, type: 'root'|'sub' }
+  const [labelConfigModal, setLabelConfigModal] = useState(null); // { layerId: string, subId?: number }
+
   // Fetch MapServer data for dynamic layers
   useEffect(() => {
     const fetchMapServerData = async () => {
       const dynamicLayers = layersConfig.filter(l => l.type === 'map-image');
       const dataUpdates = {};
 
+      const getProxyUrl = (url) => {
+        if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+          return url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+        }
+        return url;
+      };
+
       for (const layer of dynamicLayers) {
         try {
           // Fetch main metadata
-          const metaResponse = await fetch(`${layer.url}?f=pjson`);
+          const metaResponse = await fetch(`${getProxyUrl(layer.url)}?f=pjson`);
           const metaData = await metaResponse.json();
           
           // Fetch legend data
-          const legendResponse = await fetch(`${layer.url}/legend?f=pjson`);
+          const legendResponse = await fetch(`${getProxyUrl(layer.url)}/legend?f=pjson`);
           const legendData = await legendResponse.json();
 
           dataUpdates[layer.id] = {
@@ -129,7 +140,7 @@ function AppInner() {
               metaData.layers.forEach(sub => {
                 const subKey = `${layer.id}_sub_${sub.id}`;
                 if (newVis[subKey] === undefined) {
-                  newVis[subKey] = false;
+                  newVis[subKey] = sub.defaultVisibility || false;
                 }
               });
               return newVis;
@@ -151,6 +162,65 @@ function AppInner() {
   const [dragOverId, setDragOverId] = useState(null);
   const dragItem = React.useRef(null);
   const dragOverItem = React.useRef(null);
+
+  const toggleLayer = (id) => {
+    setLayerVisibility(prev => {
+      const newState = { ...prev };
+      const newParentValue = !prev[id];
+      newState[id] = newParentValue;
+
+      // When turning a parent ON, ensure its sublayers are also ON if they were all OFF
+      // This ensures "Parent ON -> Sublayers ON -> Features Render"
+      if (newParentValue) {
+        const sublayerKeys = Object.keys(prev).filter(k => k.startsWith(`${id}_sub_`));
+        const anySublayerVisible = sublayerKeys.some(k => prev[k]);
+        
+        if (!anySublayerVisible) {
+          sublayerKeys.forEach(k => {
+            newState[k] = true;
+          });
+        }
+      }
+      
+      return newState;
+    });
+  };
+
+  const toggleSubLayer = (layerId, subId, visible) => {
+    const view = mapView;
+    setLayerVisibility(prev => {
+      const updates = { [`${layerId}_sub_${subId}`]: visible };
+      
+      const layerData = dynamicMapServerData[layerId];
+      if (layerData && layerData.metadata.layers) {
+        const sub = layerData.metadata.layers.find(l => l.id === subId);
+        if (sub && sub.subLayerIds) {
+          const toggleChildren = (ids) => {
+            ids.forEach(childId => {
+              updates[`${layerId}_sub_${childId}`] = visible;
+              const child = layerData.metadata.layers.find(l => l.id === childId);
+              if (child && child.subLayerIds) toggleChildren(child.subLayerIds);
+            });
+          };
+          toggleChildren(sub.subLayerIds);
+        }
+      }
+
+      // Sync with ArcGIS View
+      if (view) {
+        const layer = view.map.findLayerById(layerId);
+        if (layer && layer.sublayers) {
+          Object.keys(updates).forEach(key => {
+            const sId = parseInt(key.split('_sub_')[1]);
+            const s = layer.sublayers.find(x => x.id === sId);
+            if (s) s.visible = updates[key];
+          });
+        }
+      }
+      
+      return { ...prev, ...updates };
+    });
+  };
 
   // Identify State
   const [identifySettings, setIdentifySettings] = useState({
@@ -199,6 +269,68 @@ function AppInner() {
       setActiveDrawingTool(null);
     }
   }, []);
+
+  const [layerStates, setLayerStates] = useState({}); // { id: { opacity: 1, labels: true, visible: true, renderer: true } }
+
+  const updateLayerState = (id, updates) => {
+    setLayerStates(prev => ({
+      ...prev,
+      [id]: { ...(prev[id] || { opacity: 1, labels: true, visible: true, renderer: true }), ...updates }
+    }));
+  };
+
+  const handleLayerAction = async (action, layerId, subId = null) => {
+    const fullId = subId !== null ? `${layerId}_sub_${subId}` : layerId;
+    const view = mapView;
+    if (!view) return;
+
+    let target;
+    if (subId !== null) {
+      const parent = view.map.findLayerById(layerId);
+      if (parent && parent.sublayers) {
+        target = parent.sublayers.find(s => s.id === subId);
+      }
+    } else {
+      target = view.map.findLayerById(layerId);
+    }
+
+    if (!target) return;
+
+    switch (action) {
+      case 'zoom':
+        const extent = target.fullExtent || (target.layer && target.layer.fullExtent);
+        if (extent) view.goTo(extent);
+        break;
+      case 'zoomVisible':
+        if (target.minScale || target.maxScale) {
+          const targetScale = target.minScale ? target.minScale * 0.8 : target.maxScale * 1.2;
+          view.goTo({ scale: targetScale });
+        }
+        break;
+      case 'toggleLabels':
+        const labelState = !((layerStates[fullId] || {}).labels !== false);
+        updateLayerState(fullId, { labels: labelState });
+        target.labelsVisible = labelState;
+        break;
+      case 'toggleViz':
+        const vizState = !((layerStates[fullId] || {}).renderer !== false);
+        updateLayerState(fullId, { renderer: vizState });
+        target.opacity = vizState ? (layerStates[fullId]?.opacity || 1) : 0;
+        break;
+      case 'customizeLabels':
+        setLabelConfigModal({ layerId, subId });
+        break;
+      case 'remove':
+        if (subId === null) {
+          view.map.remove(target);
+          setLayerOrder(prev => prev.filter(id => id !== layerId));
+        }
+        break;
+      default:
+        break;
+    }
+    setActiveActionMenu(null);
+  };
 
   const handleStartDataRequest = () => {
     setActiveTool('data_request');
@@ -332,7 +464,7 @@ function AppInner() {
   const [timeCompareTab, setTimeCompareTab] = useState('slider'); // 'slider' | 'swipe'
   const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
   const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
-  const [currentBasemap, setCurrentBasemap] = useState('streets-navigation-vector');
+  const [currentBasemap, setCurrentBasemap] = useState('streets');
 
   const basemaps = [
     {
@@ -475,32 +607,6 @@ function AppInner() {
     setActiveTool(toolId);
   }
 
-  const toggleLayer = (id) =>
-    setLayerVisibility(prev => ({ ...prev, [id]: !prev[id] }))
-
-  const toggleSubLayer = (layerId, subId, checked) => {
-    setLayerVisibility(prev => {
-      const updates = { [`${layerId}_sub_${subId}`]: checked };
-      
-      // If we're toggling a group layer, toggle all its children
-      const layerData = dynamicMapServerData[layerId];
-      if (layerData && layerData.metadata.layers) {
-        const sub = layerData.metadata.layers.find(l => l.id === subId);
-        if (sub && sub.subLayerIds) {
-          const toggleChildren = (ids) => {
-            ids.forEach(childId => {
-              updates[`${layerId}_sub_${childId}`] = checked;
-              const child = layerData.metadata.layers.find(l => l.id === childId);
-              if (child && child.subLayerIds) toggleChildren(child.subLayerIds);
-            });
-          };
-          toggleChildren(sub.subLayerIds);
-        }
-      }
-      
-      return { ...prev, ...updates };
-    });
-  }
 
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
@@ -545,9 +651,81 @@ function AppInner() {
         );
         const allVisible = filteredLayers.length > 0 && filteredLayers.every(l => layerVisibility[l.id]);
 
+        const ActionMenu = ({ id, subId = null }) => {
+          const fullId = subId !== null ? `${id}_sub_${subId}` : id;
+          const state = layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true };
+
+          return (
+            <motion.div 
+              className="layer-action-menu"
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="menu-item" onClick={() => handleLayerAction('zoom', id, subId)}>
+                <i className="material-icons">zoom_out_map</i> Zoom to Full Extent
+              </div>
+              <div className="menu-item" onClick={() => handleLayerAction('zoomVisible', id, subId)}>
+                <i className="material-icons">straighten</i> Zoom to Visible Scale
+              </div>
+              <div className="menu-divider" />
+              <div className="menu-section">
+                <div className="section-label">
+                  <i className="material-icons">opacity</i> Transparency
+                </div>
+                <div className="slider-container">
+                  <input 
+                    type="range" min="0" max="1" step="0.01" 
+                    value={state.opacity} 
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      updateLayerState(fullId, { opacity: val });
+                      const view = mapView;
+                      if (view) {
+                        let target;
+                        if (subId !== null) {
+                          const p = view.map.findLayerById(id);
+                          if (p && p.sublayers) target = p.sublayers.find(s => s.id === subId);
+                        } else {
+                          target = view.map.findLayerById(id);
+                        }
+                        if (target) target.opacity = val;
+                      }
+                    }}
+                  />
+                  <span>{Math.round(state.opacity * 100)}%</span>
+                </div>
+              </div>
+              <div className="menu-divider" />
+              <div className="menu-item-toggle">
+                <span><i className="material-icons">visibility</i> Visualization</span>
+                <input 
+                  type="checkbox" className="switch-sm" 
+                  checked={state.renderer !== false}
+                  onChange={() => handleLayerAction('toggleViz', id, subId)}
+                />
+              </div>
+              <div className="menu-item-toggle">
+                <span><i className="material-icons">label</i> Labels</span>
+                <input 
+                  type="checkbox" className="switch-sm" 
+                  checked={state.labels !== false}
+                  onChange={() => handleLayerAction('toggleLabels', id, subId)}
+                />
+              </div>
+              <div className="menu-item" onClick={() => handleLayerAction('customizeLabels', id, subId)}>
+                <i className="material-icons">edit</i> Customize Labels
+              </div>
+              <div className="menu-divider" />
+              <div className="menu-item delete" onClick={() => handleLayerAction('remove', id, subId)}>
+                <i className="material-icons">delete</i> Remove Layer
+              </div>
+            </motion.div>
+          );
+        };
+
         return (
           <div className="tool-content" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Search Box */}
             <div className="layer-search-container">
               <div className="search-container" style={{ position: 'relative' }}>
                 <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -561,7 +739,6 @@ function AppInner() {
               </div>
             </div>
 
-            {/* Select All Row */}
             <div className="layer-select-all-row">
               <label className="layer-card-label">
                 <input 
@@ -589,264 +766,157 @@ function AppInner() {
               </button>
             </div>
 
-            <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '2px 4px 1px 1px' }}>
-              {filteredLayers.map(layer => {
-                if (layer.hasTree && layer.id === 'ewa-wdd') {
-                  const dsState = getDatasetState();
-                  const rootIndeterminate = dsState.indeterminate || (dsState.checked !== layerVisibility[layer.id]);
+                    <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '4px' }} onClick={() => setActiveActionMenu(null)}>
+                      {filteredLayers.map(layer => {
+                        const isMapServer = layer.type === 'map-image';
+                        const isExpanded = treeExpanded[layer.id];
+                        const mapData = dynamicMapServerData[layer.id];
 
-                  return (
-                    <div 
-                      key={layer.id}
-                      className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, layer.id)}
-                      onDragOver={(e) => handleDragOver(e, layer.id)}
-                      onDrop={handleDrop}
-                      onDragEnd={handleDragEnd}
-                    >
-                      {/* Root Layer Row */}
-                      <div 
-                        className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${treeExpanded[layer.id] ? 'tree-active' : ''}`} 
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setTreeExpanded(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
-                      >
-                        <div className="layer-card-label" onClick={(e) => e.stopPropagation()}>
-                          <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
-                            <DragHandle />
-                          </span>
-                          <input 
-                            type="checkbox" 
-                            className={`custom-checkbox ${rootIndeterminate ? 'indeterminate' : ''}`}
-                            checked={layerVisibility[layer.id]}
-                            onChange={(e) => handleToggleRoot(e.target.checked)}
-                          />
-                          <span className="layer-card-name">{layer.title}</span>
-                        </div>
-                        <div className="tree-expand-icon-wrapper">
-                          <ChevronRight size={14} className={`tree-expand-icon ${treeExpanded[layer.id] ? 'expanded' : ''}`} />
-                        </div>
-                      </div>
+                        const LegendSymbol = ({ type, color }) => {
+                          if (type === 'point' || type === 'multipoint') return <div className="symbol-dot" style={{ backgroundColor: color }} />;
+                          if (type === 'polyline') return <div className="symbol-line" style={{ backgroundColor: color }} />;
+                          return <div className="symbol-square" style={{ borderColor: color, backgroundColor: `${color}22` }} />;
+                        };
 
-                      {treeExpanded[layer.id] && (
-                        <div className="tree-children">
-                          {/* Dataset Node (Level 1) */}
-                          <div className="tree-row" onClick={() => setTreeExpanded(prev => ({ ...prev, 'dataset': !prev['dataset'] }))}>
-                            <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
-                            <div className="tree-checkbox-wrapper">
-                              <input 
-                                type="checkbox" 
-                                className={`custom-checkbox ${dsState.indeterminate ? 'indeterminate' : ''}`}
-                                checked={dsState.checked}
-                                onChange={(e) => { e.stopPropagation(); handleToggleDataset(e.target.checked); }}
-                              />
-                            </div>
-                            <span className="tree-label tree-label-category" style={{ color: '#1e3c72' }}>{ewaWddTree.dataset}</span>
-                            <div className="tree-expand-icon-wrapper">
-                              <ChevronRight size={14} className={`tree-expand-icon ${treeExpanded['dataset'] ? 'expanded' : ''}`} />
-                            </div>
-                          </div>
+                        return (
+                          <div 
+                            key={layer.id}
+                            className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, layer.id)}
+                            onDragOver={(e) => handleDragOver(e, layer.id)}
+                            onDrop={handleDrop}
+                            onDragEnd={handleDragEnd}
+                          >
+                            <div className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`}>
+                              <div className="layer-card-main">
+                                <div className="layer-row-content">
+                                  <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()}>
+                                    <DragHandle />
+                                  </span>
+                                  
+                                  <input 
+                                    type="checkbox" 
+                                    className="custom-checkbox"
+                                    checked={layerVisibility[layer.id]}
+                                    onChange={(e) => { e.stopPropagation(); toggleLayer(layer.id); }}
+                                  />
 
-                          {treeExpanded['dataset'] && ewaWddTree.categories.map((cat, catIdx) => {
-                            const isExpanded = treeExpanded[cat.title];
-                            const catState = getCategoryState(cat);
-
-                            return (
-                              <React.Fragment key={cat.title}>
-                                {/* Category Row (Level 2) */}
-                                <div className="tree-row" onClick={() => setTreeExpanded(prev => ({ ...prev, [cat.title]: !prev[cat.title] }))}>
-                                  <div className="tree-line-spacer"><div className="tree-line-v" /></div>
-                                  <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
-                                  <div className="tree-checkbox-wrapper">
-                                    <input 
-                                      type="checkbox" 
-                                      className={`custom-checkbox ${catState.indeterminate ? 'indeterminate' : ''}`}
-                                      checked={catState.checked}
-                                      onChange={(e) => { e.stopPropagation(); handleToggleCategory(cat.title, e.target.checked); }}
-                                    />
-                                  </div>
-                                  <span className="tree-label tree-label-category">{cat.title}</span>
-                                  <div className="tree-expand-icon-wrapper">
-                                    {cat.features.length > 0 && (
-                                      <ChevronRight size={14} className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`} />
-                                    )}
-                                  </div>
+                                  {isMapServer ? (
+                                    <button 
+                                      className={`layer-accordion-btn ${isExpanded ? 'expanded' : ''}`}
+                                      onClick={(e) => { e.stopPropagation(); setTreeExpanded(prev => ({ ...prev, [layer.id]: !prev[layer.id] })); }}
+                                    >
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </button>
+                                  ) : <div style={{ width: 22 }} />}
+                                  
+                                  <span className="layer-card-name tree-label-root" title={layer.title}>{layer.title}</span>
                                 </div>
 
-                                {isExpanded && cat.features.map(feat => (
-                                  /* Leaf Row (Level 3) */
-                                  <div key={feat} className="tree-row">
-                                    <div className="tree-line-spacer"><div className="tree-line-v" /></div>
-                                    <div className="tree-line-spacer"><div className="tree-line-v" /></div>
-                                    <div className="tree-line-spacer"><div className="tree-line-v" /><div className="tree-line-h" /></div>
-                                    <div className="tree-checkbox-wrapper">
-                                      <input 
-                                        type="checkbox" 
-                                        className="custom-checkbox"
-                                        checked={!!treeVisibility[`${cat.title}_${feat}`]}
-                                        onChange={(e) => {
-                                          const checked = e.target.checked;
-                                          updateTreeVisibility({ [`${cat.title}_${feat}`]: checked });
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="tree-symbol-wrapper">
-                                      <div className={`symbol-${cat.geometry === 'point' ? 'dot' : cat.geometry === 'line' ? 'line' : 'square'}`} />
-                                    </div>
-                                    <span className="tree-label tree-label-leaf">{feat}</span>
-                                    <div className="tree-expand-icon-wrapper" />
-                                  </div>
-                                ))}
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (layer.type === 'map-image' && dynamicMapServerData[layer.id]) {
-                  const mapData = dynamicMapServerData[layer.id];
-                  const isExpanded = treeExpanded[layer.id];
-
-                  return (
-                    <div 
-                      key={layer.id}
-                      className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, layer.id)}
-                      onDragOver={(e) => handleDragOver(e, layer.id)}
-                      onDrop={handleDrop}
-                      onDragEnd={handleDragEnd}
-                    >
-                      {/* Root Layer Row */}
-                      <div 
-                        className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} 
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setTreeExpanded(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))}
-                      >
-                        <div className="layer-card-label" onClick={(e) => e.stopPropagation()}>
-                          <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
-                            <DragHandle />
-                          </span>
-                          <input 
-                            type="checkbox" 
-                            className="custom-checkbox"
-                            checked={layerVisibility[layer.id]}
-                            onChange={() => toggleLayer(layer.id)}
-                          />
-                          <span className="layer-card-name">{layer.title}</span>
-                        </div>
-                        <div className="tree-expand-icon-wrapper">
-                          <ChevronRight size={14} className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`} />
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="tree-children">
-                          {mapData.metadata.layers.map(sub => {
-                            // Only render top-level sublayers here; recursion handles children
-                            if (sub.parentLayerId !== -1) return null;
-
-                            const renderSubLayer = (s, depth = 1) => {
-                              const subIsExpanded = treeExpanded[`${layer.id}_sub_${s.id}`];
-                              const hasChildren = s.subLayerIds && s.subLayerIds.length > 0;
-                              const isVisible = layerVisibility[`${layer.id}_sub_${s.id}`];
-                              const legendItem = mapData.legend.layers.find(l => l.layerId === s.id);
-
-                              return (
-                                <React.Fragment key={s.id}>
-                                  <div 
-                                    className="tree-row" 
-                                    style={{ cursor: hasChildren ? 'pointer' : 'default' }}
-                                    onClick={() => hasChildren && setTreeExpanded(prev => ({ ...prev, [`${layer.id}_sub_${s.id}`]: !subIsExpanded }))}
+                                <div className="layer-card-more">
+                                  <button 
+                                    className={`more-btn ${activeActionMenu?.id === layer.id ? 'active' : ''}`}
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setActiveActionMenu(activeActionMenu?.id === layer.id ? null : { id: layer.id, type: 'root' }); 
+                                    }}
                                   >
-                                    {[...Array(depth)].map((_, i) => (
-                                      <div key={i} className="tree-line-spacer">
-                                        <div className="tree-line-v" />
-                                        {i === depth - 1 && <div className="tree-line-h" />}
-                                      </div>
-                                    ))}
-                                    <div className="tree-checkbox-wrapper">
-                                      <input 
-                                        type="checkbox" 
-                                        className="custom-checkbox"
-                                        checked={isVisible}
-                                        onChange={(e) => { e.stopPropagation(); toggleSubLayer(layer.id, s.id, e.target.checked); }}
-                                      />
-                                    </div>
-                                    
-                                    {legendItem && legendItem.legend && legendItem.legend[0] && (
-                                      <div className="tree-symbol-wrapper">
-                                        <img 
-                                          src={`data:${legendItem.legend[0].contentType};base64,${legendItem.legend[0].imageData}`} 
-                                          alt="" 
-                                          style={{ width: '16px', height: '16px', objectFit: 'contain' }}
-                                        />
-                                      </div>
-                                    )}
+                                    <i className="material-icons">more_horiz</i>
+                                  </button>
+                                  {activeActionMenu?.id === layer.id && <ActionMenu id={layer.id} />}
+                                </div>
+                              </div>
+                            </div>
 
-                                    <span className={`tree-label ${hasChildren ? 'tree-label-category' : 'tree-label-leaf'}`}>{s.name}</span>
-                                    
-                                    <div className="tree-expand-icon-wrapper">
-                                      {hasChildren && (
-                                        <ChevronRight size={14} className={`tree-expand-icon ${subIsExpanded ? 'expanded' : ''}`} />
-                                      )}
-                                    </div>
-                                  </div>
+                            {isMapServer && isExpanded && mapData && (
+                              <div className="tree-children">
+                                {mapData.metadata.layers.map(sub => {
+                                  if (sub.parentLayerId !== -1) return null;
 
-                                  {hasChildren && subIsExpanded && s.subLayerIds.map(childId => {
-                                    const child = mapData.metadata.layers.find(l => l.id === childId);
-                                    return child ? renderSubLayer(child, depth + 1) : null;
-                                  })}
-                                </React.Fragment>
-                              );
-                            };
+                                  const renderSub = (s, depth = 1) => {
+                                    const subId = `${layer.id}_sub_${s.id}`;
+                                    const subExpanded = treeExpanded[subId];
+                                    const hasChildren = s.subLayerIds && s.subLayerIds.length > 0;
+                                    const isVisible = layerVisibility[subId];
 
-                            return renderSubLayer(sub);
-                          })}
-                        </div>
-                      )}
+                                    return (
+                                      <React.Fragment key={s.id}>
+                                        <div className={`tree-row ${depth > 1 ? 'nested' : ''}`}>
+                                          <div className="layer-row-content">
+                                            {/* Vertical/Horizontal connectors on the left */}
+                                            {[...Array(depth)].map((_, i) => (
+                                              <div key={i} className="tree-line-spacer">
+                                                <div className="tree-line-v" />
+                                                {i === depth - 1 && <div className="tree-line-h" />}
+                                              </div>
+                                            ))}
+
+                                            {/* Parent checkbox */}
+                                            <input 
+                                              type="checkbox" 
+                                              className="custom-checkbox"
+                                              checked={isVisible}
+                                              onChange={() => toggleSubLayer(layer.id, s.id, !isVisible)}
+                                            />
+
+                                            {/* Accordion toggle (for groups) */}
+                                            {hasChildren ? (
+                                              <button 
+                                                className={`layer-accordion-btn ${subExpanded ? 'expanded' : ''}`}
+                                                onClick={() => setTreeExpanded(prev => ({ ...prev, [subId]: !subExpanded }))}
+                                              >
+                                                {subExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                              </button>
+                                            ) : (
+                                              /* Legend symbol (only for leaf layers) */
+                                              <div className="tree-symbol-wrapper">
+                                                <LegendSymbol 
+                                                  type={s.geometryType === 'esriGeometryPoint' ? 'point' : s.geometryType === 'esriGeometryPolyline' ? 'polyline' : 'polygon'} 
+                                                  color={s.id % 2 === 0 ? '#3b82f6' : '#1e3c72'} 
+                                                />
+                                              </div>
+                                            )}
+
+                                            {/* Layer Name */}
+                                            <span className={`tree-label ${hasChildren ? 'tree-label-category' : 'tree-label-leaf'}`}>
+                                              {s.name}
+                                            </span>
+                                          </div>
+
+                                          <div className="layer-card-more">
+                                            <button 
+                                              className={`more-btn ${activeActionMenu?.id === subId ? 'active' : ''}`}
+                                              onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setActiveActionMenu(activeActionMenu?.id === subId ? null : { id: layer.id, subId: s.id, type: 'sub' }); 
+                                              }}
+                                            >
+                                              <i className="material-icons">more_horiz</i>
+                                            </button>
+                                            {activeActionMenu?.subId === s.id && activeActionMenu?.id === layer.id && <ActionMenu id={layer.id} subId={s.id} />}
+                                          </div>
+                                        </div>
+                                        {hasChildren && subExpanded && s.subLayerIds.map(cid => {
+                                          const child = mapData.metadata.layers.find(l => l.id === cid);
+                                          return child ? renderSub(child, depth + 1) : null;
+                                        })}
+                                      </React.Fragment>
+                                    );
+                                  };
+                                  return renderSub(sub);
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={layer.id}
-                    className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${dragOverId === layer.id ? 'drag-over' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, layer.id)}
-                    onDragOver={(e) => handleDragOver(e, layer.id)}
-                    onDrop={handleDrop}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <label className="layer-card-label">
-                      <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()} title="Drag to reorder">
-                        <DragHandle />
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={layerVisibility[layer.id]}
-                        onChange={() => toggleLayer(layer.id)}
-                      />
-                      <span className="layer-card-name">{layer.title}</span>
-                    </label>
-                    <div className="layer-card-actions" onClick={(e) => e.stopPropagation()}>
-                      <button className="layer-card-arrow" onClick={() => console.log('Details for', layer.id)}>
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              {filteredLayers.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '13px' }}>
-                  No layers found matching "{layerSearch}"
-                </div>
-              )}
-            </div>
+            {filteredLayers.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '13px' }}>
+                No layers found matching "{layerSearch}"
+              </div>
+            )}
           </div>
         );
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import esriConfig from '@arcgis/core/config';
 import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
 import MapView from '@arcgis/core/views/MapView';
@@ -23,6 +24,23 @@ import { layersConfig } from '../layers';
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
+// ─── ArcGIS Request Configuration (Local Development Proxy) ──────────────────
+// Resolves CORS and 504 Gateway Timeout issues by routing requests through 
+// the Vite dev server proxy.
+if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis9.smartgeoapps.com")) {
+  esriConfig.request.interceptors.push({
+    urls: "https://gis9.smartgeoapps.com",
+    before: function(params) {
+      if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        params.url = params.url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+      }
+    }
+  });
+}
+
+esriConfig.request.timeout = 30000;
+esriConfig.request.useIdentity = false;
+
 const ArcGISMap = ({ 
   layerVisibility, onViewReady, isSplitMode, splitLayers, splitBasemaps,
   blendSettings, arcadeSettings, onArcadePreview, 
@@ -36,10 +54,12 @@ const ArcGISMap = ({
   const map3DDiv = useRef(null);
   const view2DRef = useRef(null);
   const view3DRef = useRef(null);
-  const viewRef = useRef(null); // Active view
+  const viewRef = useRef(null); 
   const swipeRef = useRef(null);
   const layersRef = useRef({});
   const layers3DRef = useRef({});
+  const is2DReady = useRef(false);
+  const is3DReady = useRef(false);
   const originalRenderersRef = useRef({});
   const originalLabelingRef = useRef({});
   const originalPopupRef = useRef({});
@@ -48,10 +68,11 @@ const ArcGISMap = ({
   
   // 1. Initialize MapView (2D)
   useEffect(() => {
-    if (!map2DDiv.current || view2DRef.current) return;
+    if (!map2DDiv.current || is2DReady.current) return;
+    is2DReady.current = true;
 
     const map = new Map({
-      basemap: basemap || 'streets-vector' // Reliable fallback
+      basemap: basemap || 'streets'
     });
 
     const view = new MapView({
@@ -65,73 +86,73 @@ const ArcGISMap = ({
     view2DRef.current = view;
     if (!is3D) viewRef.current = view;
 
-    // Load layers into 2D map
-    layersConfig.forEach(config => {
+    const loadPromises = layersConfig.map(config => {
+      // Reuse existing layer instance if already created in this ref
+      if (layersRef.current[config.id]) return layersRef.current[config.id].load();
+
+      const commonProps = {
+        id: config.id,
+        url: config.url,
+        title: config.title,
+        visible: false,
+        refreshInterval: 0
+      };
+
       let layer;
-      if (config.type === 'tile') {
-        layer = new TileLayer({
-          id: config.id,
-          url: config.url,
-          title: config.title,
-          visible: false
-        });
-      } else if (config.type === 'map-image') {
-        layer = new MapImageLayer({
-          id: config.id,
-          url: config.url,
-          title: config.title,
-          visible: false
-        });
-      } else {
-        layer = new FeatureLayer({
-          id: config.id,
-          url: config.url,
-          title: config.title,
-          visible: false,
-          popupTemplate: { title: "{*}", content: "{*}" }
-        });
-      }
+      if (config.type === 'tile') layer = new TileLayer(commonProps);
+      else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
+      else layer = new FeatureLayer({ ...commonProps, popupTemplate: { title: "{*}", content: "{*}" } });
+
       map.add(layer);
       layersRef.current[config.id] = layer;
       
-      // Proactive loading to catch network issues early
-      layer.load().catch(err => {
-        console.warn(`Layer [${config.id}] failed to load:`, err.message);
+      const loadPromise = layer.load().then(() => {
+        // Immediate sync once loaded to ensure default visibility is applied
+        if (layer.type === 'map-image' && layer.allSublayers) {
+          layer.allSublayers.forEach(sub => {
+            const subKey = `${config.id}_sub_${sub.id}`;
+            if (layerVisibility[subKey] !== undefined) {
+              sub.visible = !!layerVisibility[subKey];
+            }
+          });
+        }
+      }).catch(err => {
+        console.error(`[ArcGIS] 2D Layer [${config.id}] load failed:`, err.message);
+        return null;
       });
+
+      return loadPromise;
     });
 
     view.when(() => {
-      if (!is3D) {
-        setIsLoading(false);
-        if (onViewReady) onViewReady(view);
-      }
+      Promise.all(loadPromises).finally(() => {
+        if (!is3D) {
+          setIsLoading(false);
+          if (onViewReady) onViewReady(view);
+        }
+      });
     });
 
     return () => {
-      if (view2DRef.current) {
-        view2DRef.current.destroy();
-        view2DRef.current = null;
-      }
+      // Note: We avoid destroying the view here to prevent aborting requests 
+      // during rapid UI toggles. The view is managed by the component lifecycle.
     };
   }, []);
 
   // 2. Initialize SceneView (3D)
   useEffect(() => {
-    if (!map3DDiv.current || view3DRef.current || !is3D) return;
+    if (!map3DDiv.current || !is3D || is3DReady.current) return;
+    is3DReady.current = true;
 
     const map = new Map({
-      basemap: 'streets-vector', // Robust fallback for 3D
+      basemap: 'streets',
       ground: 'world-elevation'
     });
 
     const view = new SceneView({
       container: map3DDiv.current,
       map: map,
-      camera: {
-        position: { x: 50.55, y: 26.15, z: 5000 },
-        tilt: 65,
-        heading: 0
-      },
+      camera: { position: { x: 50.55, y: 26.15, z: 5000 }, tilt: 65, heading: 0 },
       ui: { components: [] }
     });
 
@@ -140,46 +161,40 @@ const ArcGISMap = ({
 
     const buildingsLayer = new SceneLayer({
       url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
-      title: "3D Buildings",
-      id: "3d-buildings",
-      popupEnabled: false,
-      opacity: 0.8
+      title: "3D Buildings", id: "3d-buildings", opacity: 0.8
     });
     map.add(buildingsLayer);
 
-    layersConfig.forEach(config => {
+    const loadPromises = layersConfig.map(config => {
+      if (layers3DRef.current[config.id]) return layers3DRef.current[config.id].load();
+
+      const commonProps = {
+        id: config.id, url: config.url, title: config.title, visible: false,
+        elevationInfo: { mode: "relative-to-ground" }
+      };
+
       let layer;
-      if (config.type === 'tile') {
-        layer = new TileLayer({ id: config.id, url: config.url, title: config.title, visible: false });
-      } else if (config.type === 'map-image') {
-        layer = new MapImageLayer({ id: config.id, url: config.url, title: config.title, visible: false });
-      } else {
-        layer = new FeatureLayer({ 
-          id: config.id, url: config.url, title: config.title, visible: false,
-          elevationInfo: { mode: "relative-to-ground" }
-        });
-      }
+      if (config.type === 'tile') layer = new TileLayer(commonProps);
+      else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
+      else layer = new FeatureLayer(commonProps);
+
       map.add(layer);
       layers3DRef.current[config.id] = layer;
-
-      layer.load().catch(err => {
-        console.warn(`Layer [${config.id}] failed to load (3D):`, err.message);
+      return layer.load().catch(err => {
+        console.error(`[ArcGIS] 3D Layer [${config.id}] load failed:`, err.message);
+        return null;
       });
     });
 
     view.when(() => {
-      setIsLoading(false);
-      if (onViewReady) onViewReady(view);
-    }).catch(err => {
-      console.error('SceneView failed to load:', err);
-      setIsLoading(false);
+      Promise.all(loadPromises).finally(() => {
+        setIsLoading(false);
+        if (onViewReady) onViewReady(view);
+      });
     });
 
     return () => {
-      if (view3DRef.current) {
-        view3DRef.current.destroy();
-        view3DRef.current = null;
-      }
+      // Keep view alive for persistence
     };
   }, [is3D]);
 
@@ -250,13 +265,70 @@ const ArcGISMap = ({
 
   // 5. Visibility Sync
   useEffect(() => {
+    const currentView = viewRef.current;
     const activeLayers = is3D ? layers3DRef.current : layersRef.current;
-    Object.keys(activeLayers).forEach(id => {
-      const layer = activeLayers[id];
-      if (layer) {
-        layer.visible = !!layerVisibility[id];
-      }
-    });
+    if (!activeLayers || !currentView) return;
+
+    try {
+      Object.keys(activeLayers).forEach(id => {
+        const layer = activeLayers[id];
+        if (!layer) return;
+
+        const isVisible = !!layerVisibility[id];
+        
+        // Update root layer visibility
+        if (layer.visible !== isVisible) {
+          layer.visible = isVisible;
+        }
+
+        // Sync MapImageLayer sublayers
+        if (layer.type === 'map-image') {
+          const syncAll = () => {
+            if (!layer.allSublayers) return;
+            
+            let changed = false;
+            layer.allSublayers.forEach(sub => {
+              const subKey = `${id}_sub_${sub.id}`;
+              const subVisible = !!layerVisibility[subKey];
+              
+              if (sub.visible !== subVisible || sub.minScale !== 0 || sub.maxScale !== 0) {
+                sub.visible = subVisible;
+                sub.minScale = 0; // Disable scale restrictions for better visibility
+                sub.maxScale = 0;
+                sub.opacity = 1;  // Ensure fully opaque
+                sub.definitionExpression = null; // Clear any default filters
+                changed = true;
+              }
+            });
+
+            // Force a full refresh by updating customParameters (cache busting)
+            // and re-assigning sublayers to trigger ArcGIS internal updates.
+            if (changed && isVisible) {
+              // Cache busting ensures the server generates a fresh image
+              layer.customParameters = { v: Date.now() };
+              
+              if (layer.sublayers) {
+                layer.sublayers = layer.sublayers.toArray();
+              }
+
+              // Auto-zoom to layer extent when first turned on
+              if (currentView && layer.fullExtent && !layer._zoomed) {
+                currentView.goTo(layer.fullExtent).catch(() => {});
+                layer._zoomed = true;
+              }
+            }
+          };
+
+          if (layer.loaded) {
+            syncAll();
+          } else {
+            layer.load().then(syncAll).catch(() => {});
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Visibility sync error:', err);
+    }
   }, [layerVisibility, is3D]);
 
   // ============================================================
@@ -408,8 +480,6 @@ const ArcGISMap = ({
         } else if (applyTo === 'Popup') {
           await applyArcadePopup(view, parentId, subIdStr, serviceUrl, expression);
         }
-
-        view.requestRender();
       } catch (err) {
         console.error('Arcade Engine Error:', err);
       }
@@ -426,9 +496,11 @@ const ArcGISMap = ({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (view && view.map) {
-      if (!view.map.findLayerById('identify-highlights')) view.map.add(identifyGraphicsLayer.current);
-      if (!view.map.findLayerById('identify-sketch-layer')) view.map.add(sketchLayer.current);
+    if (view) {
+      view.when(() => {
+        if (!view.map.findLayerById('identify-highlights')) view.map.add(identifyGraphicsLayer.current);
+        if (!view.map.findLayerById('identify-sketch-layer')) view.map.add(sketchLayer.current);
+      });
     }
   }, [is3D]);
 
@@ -478,9 +550,11 @@ const ArcGISMap = ({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (view && view.map) {
-      if (!view.map.findLayerById('data-request-aoi-layer')) view.map.add(dataRequestLayer.current);
-      if (!view.map.findLayerById('data-request-final-layer')) view.map.add(dataRequestFinalLayer.current);
+    if (view) {
+      view.when(() => {
+        if (!view.map.findLayerById('data-request-aoi-layer')) view.map.add(dataRequestLayer.current);
+        if (!view.map.findLayerById('data-request-final-layer')) view.map.add(dataRequestFinalLayer.current);
+      });
     }
   }, [is3D]);
 
