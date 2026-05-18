@@ -129,28 +129,34 @@ const Analysis3DPanel = ({ view, is3D }) => {
 
         const svmHandle = svm.on(["create", "update", "undo", "redo"], updateAnalysis);
 
-        // Watch for volume results reactively
-        const watchHandle = watch(
-          () => [analysis.cutVolume, analysis.fillVolume, analysis.netVolume, analysis.mode],
-          ([cut, fill, net, mode]) => {
-            setMeasureData({
-              cutVolume: cut,
-              fillVolume: fill,
-              netVolume: net,
-              mode: mode
-            });
-          }
-        );
+        let isDestroyed = false;
+        let watchHandle = null;
+
+        view.whenAnalysisView(analysis).then((analysisView) => {
+          if (isDestroyed) return;
+          watchHandle = watch(
+            () => analysisView.result,
+            (result) => {
+              setMeasureData(prev => ({
+                ...prev,
+                cutVolume: result?.cutVolume?.value ?? 0,
+                fillVolume: result?.fillVolume?.value ?? 0,
+                netVolume: result?.netVolume?.value ?? 0
+              }));
+            }
+          );
+        });
 
         widgetRef.current = { 
           viewModel: analysis, 
           isAnalysis: true,
           destroy: () => { 
-            svmHandle.remove();
-            watchHandle.remove();
-            svm.destroy();
-            view.map.remove(layer);
-            view.analyses.remove(analysis);
+            isDestroyed = true;
+            if (svmHandle) svmHandle.remove();
+            if (watchHandle) watchHandle.remove();
+            try { svm.destroy(); } catch(e) {}
+            try { view.map.remove(layer); } catch(e) {}
+            try { view.analyses.remove(analysis); } catch(e) {}
             setMeasureData(null);
           } 
         };
@@ -196,7 +202,7 @@ const Analysis3DPanel = ({ view, is3D }) => {
                 <select 
                   className="measure-select"
                   value={measureData?.mode || 'all'}
-                  onChange={(e) => { vm.mode = e.target.value; }}
+                  onChange={(e) => { setMeasureData(prev => ({...prev, mode: e.target.value})); }}
                 >
                   <option value="all">Cut & Fill</option>
                   <option value="cut">Cut Only</option>

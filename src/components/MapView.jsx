@@ -32,13 +32,22 @@ if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis9.smartgeo
     urls: "https://gis9.smartgeoapps.com",
     before: function(params) {
       if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        const originalUrl = params.url;
         params.url = params.url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+        // Ensure no credentials are sent to bypass potential CORS preflight issues
+        params.requestOptions = { ...params.requestOptions, withCredentials: false };
+        console.log(`[ArcGIS Request] ${originalUrl} -> ${params.url}`);
+      }
+    },
+    error: function(error) {
+      if (error.name === "TimeoutError") {
+        console.warn("[ArcGIS] Request timed out. Service might be slow.");
       }
     }
   });
 }
 
-esriConfig.request.timeout = 30000;
+esriConfig.request.timeout = 60000; // Increased to 60s for slow enterprise servers
 esriConfig.request.useIdentity = false;
 
 const ArcGISMap = ({ 
@@ -69,6 +78,10 @@ const ArcGISMap = ({
   // 1. Initialize MapView (2D)
   useEffect(() => {
     if (!map2DDiv.current || is2DReady.current) return;
+    
+    // Load projection engine
+    projection.load().catch(err => console.error("[ArcGIS] Projection engine failed to load:", err));
+    
     is2DReady.current = true;
 
     const map = new Map({
@@ -101,12 +114,22 @@ const ArcGISMap = ({
       let layer;
       if (config.type === 'tile') layer = new TileLayer(commonProps);
       else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
-      else layer = new FeatureLayer({ ...commonProps, popupTemplate: { title: "{*}", content: "{*}" } });
+      else {
+        layer = new FeatureLayer({ 
+          ...commonProps, 
+          popupTemplate: { title: "{*}", content: "{*}" },
+          renderer: {
+            type: "simple",
+            symbol: { type: "simple-marker", color: "red", outline: { color: "white", width: 1 } }
+          }
+        });
+      }
 
       map.add(layer);
       layersRef.current[config.id] = layer;
       
       const loadPromise = layer.load().then(() => {
+        console.log(`[ArcGIS] Layer [${config.id}] loaded. SR:`, layer.spatialReference?.wkid);
         // Immediate sync once loaded to ensure default visibility is applied
         if (layer.type === 'map-image' && layer.allSublayers) {
           layer.allSublayers.forEach(sub => {
@@ -125,12 +148,10 @@ const ArcGISMap = ({
     });
 
     view.when(() => {
-      Promise.all(loadPromises).finally(() => {
-        if (!is3D) {
-          setIsLoading(false);
-          if (onViewReady) onViewReady(view);
-        }
-      });
+      if (!is3D) {
+        setIsLoading(false);
+        if (onViewReady) onViewReady(view);
+      }
     });
 
     return () => {
@@ -160,7 +181,7 @@ const ArcGISMap = ({
     if (is3D) viewRef.current = view;
 
     const buildingsLayer = new SceneLayer({
-      url: "https://basemaps3d.arcgis.com/arcgis/rest/services/OpenStreetMap3D_Buildings/SceneServer",
+      url: "https://basemaps3d.arcgis.com/arcgis/rest/services/Esri3D_Buildings_v1/SceneServer",
       title: "3D Buildings", id: "3d-buildings", opacity: 0.8
     });
     map.add(buildingsLayer);
@@ -187,10 +208,8 @@ const ArcGISMap = ({
     });
 
     view.when(() => {
-      Promise.all(loadPromises).finally(() => {
-        setIsLoading(false);
-        if (onViewReady) onViewReady(view);
-      });
+      setIsLoading(false);
+      if (onViewReady) onViewReady(view);
     });
 
     return () => {
@@ -263,6 +282,110 @@ const ArcGISMap = ({
     }
   }, [isSplitMode, splitLayers, swipeMode, is3D]);
 
+  // ============================================================
+  // BLEND TOOL FUNCTIONALITY (IMAGERY COMPARED TO BASEMAP)
+  // ============================================================
+  const overlayBasemapRef = useRef(null);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || activeTool !== 'blend') {
+      if (overlayBasemapRef.current) {
+        view.map.removeMany(overlayBasemapRef.current);
+        overlayBasemapRef.current = null;
+      }
+      return;
+    }
+
+    const { overlayLayerId, blendMode, opacity } = blendSettings;
+
+    const applyBlend = async () => {
+      // 1. Clean up previous overlay
+      if (overlayBasemapRef.current) {
+        view.map.removeMany(overlayBasemapRef.current);
+        overlayBasemapRef.current = null;
+      }
+
+      // 2. Add new overlay
+      if (overlayLayerId) {
+        try {
+          const tempBasemap = new Basemap({ portalItem: { id: overlayLayerId } });
+          // If it's a standard ID, Basemap.fromId might be better, but we'll try direct id first
+          // or use the standard IDs from layersConfig/basemaps
+          const bm = Basemap.fromId(overlayLayerId) || new Basemap({ portalItem: { id: overlayLayerId } });
+          
+          await bm.load();
+          const layers = bm.baseLayers.toArray();
+          
+          layers.forEach(layer => {
+            layer.blendMode = blendMode || 'normal';
+            layer.opacity = opacity !== undefined ? opacity : 1;
+            view.map.add(layer);
+          });
+
+          overlayBasemapRef.current = layers;
+          if (view.requestRender) view.requestRender();
+          console.log(`[Blend] Applied overlay basemap ${overlayLayerId}: ${blendMode} | ${opacity}`);
+        } catch (err) {
+          console.error(`[Blend] Failed to load overlay basemap ${overlayLayerId}:`, err);
+        }
+      }
+    };
+
+    applyBlend();
+  }, [blendSettings, activeTool]);
+
+  // ============================================================
+  // TEMPORAL FILTER ENGINE (definitionExpression)
+  // ============================================================
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    if (!timelapseSettings || !timelapseSettings.layerId) {
+      // Clear temporal filters if tool is inactive
+      const temporalLayers = ['sample-data-1', 'service-2', 'service-3']; // From layers.js
+      temporalLayers.forEach(id => {
+        const targetLayer = view.map.findLayerById(id);
+        if (targetLayer) {
+          if (targetLayer.type === 'feature') {
+            targetLayer.definitionExpression = null;
+          } else if (targetLayer.type === 'map-image' && targetLayer.allSublayers) {
+            targetLayer.allSublayers.forEach(sub => {
+              sub.definitionExpression = null;
+            });
+          }
+        }
+      });
+      return;
+    }
+
+    const applyTemporalFilter = () => {
+      const { layerId, fromYear, toYear, timeField } = timelapseSettings;
+      const targetLayer = view.map.findLayerById(layerId);
+      
+      if (targetLayer) {
+        const field = timeField || 'SURVEY_YEAR';
+        const expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
+        
+        if (targetLayer.type === 'feature') {
+          targetLayer.definitionExpression = expression;
+        } else if (targetLayer.type === 'map-image') {
+          if (targetLayer.allSublayers) {
+            // Check if sublayer actually supports the field before blindly applying
+            // For now, we apply to all as per original logic
+            targetLayer.allSublayers.forEach(sub => {
+              sub.definitionExpression = expression;
+            });
+          }
+        }
+        console.log(`[Temporal Filter] Applied to ${layerId}: ${expression}`);
+      }
+    };
+
+    applyTemporalFilter();
+  }, [timelapseSettings, is3D]);
+
   // 5. Visibility Sync
   useEffect(() => {
     const currentView = viewRef.current;
@@ -291,31 +414,51 @@ const ArcGISMap = ({
               const subKey = `${id}_sub_${sub.id}`;
               const subVisible = !!layerVisibility[subKey];
               
-              if (sub.visible !== subVisible || sub.minScale !== 0 || sub.maxScale !== 0) {
+              if (sub.visible !== subVisible) {
                 sub.visible = subVisible;
-                sub.minScale = 0; // Disable scale restrictions for better visibility
-                sub.maxScale = 0;
-                sub.opacity = 1;  // Ensure fully opaque
-                sub.definitionExpression = null; // Clear any default filters
                 changed = true;
               }
+              // Force visibility properties to overcome any service defaults
+              sub.minScale = 0;
+              sub.maxScale = 0;
             });
 
-            // Force a full refresh by updating customParameters (cache busting)
-            // and re-assigning sublayers to trigger ArcGIS internal updates.
-            if (changed && isVisible) {
-              // Cache busting ensures the server generates a fresh image
-              layer.customParameters = { v: Date.now() };
-              
-              if (layer.sublayers) {
-                layer.sublayers = layer.sublayers.toArray();
-              }
+            // Handle standard child layers (for GroupLayer support)
+            if (layer.layers) {
+              layer.layers.forEach(child => {
+                if (child.visible !== isVisible) {
+                  child.visible = isVisible;
+                  changed = true;
+                }
+              });
+            }
 
-              // Auto-zoom to layer extent when first turned on
-              if (currentView && layer.fullExtent && !layer._zoomed) {
-                currentView.goTo(layer.fullExtent).catch(() => {});
-                layer._zoomed = true;
-              }
+            if (changed && isVisible) {
+              // Ensure layer is fully loaded before navigation or diagnostics
+              layer.load().then(() => {
+                // Diagnostic check for scale visibility
+                if (layer.visibleAtCurrentScale === false) {
+                  console.warn(`[ArcGIS] Layer ${id} is not visible at current scale. Resetting restrictions.`);
+                  layer.minScale = 0;
+                  layer.maxScale = 0;
+                }
+
+                // Force redraw
+                if (typeof layer.refresh === 'function') layer.refresh();
+                
+                // Re-assign sublayers to trigger ArcGIS change tracking
+                if (layer.sublayers) {
+                  layer.sublayers = layer.sublayers.toArray();
+                }
+
+                // Re-assign sublayers to trigger ArcGIS change tracking
+                if (layer.sublayers) {
+                  layer.sublayers = layer.sublayers.toArray();
+                }
+
+                // Removed auto-zoom to prevent unwanted "zoom out" behavior
+                // The map will now stay at its current position when layers are toggled.
+              }).catch(err => console.error(`[ArcGIS] Layer ${id} sync load failed:`, err));
             }
           };
 
@@ -506,42 +649,120 @@ const ArcGISMap = ({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || activeTool !== 'identify') return;
+    if (!view || activeTool !== 'identify') {
+      if (sketchVM.current) sketchVM.current.cancel();
+      return;
+    }
     
     view.cursor = 'crosshair';
+
+    if (!sketchVM.current) {
+      sketchVM.current = new SketchViewModel({
+        view: view,
+        layer: sketchLayer.current,
+        pointSymbol: { type: "simple-marker", style: "cross", size: 12, outline: { color: "#df261c", width: 2 } },
+        rectangleSymbol: { type: "simple-fill", color: [223, 38, 28, 0.1], outline: { color: "#df261c", width: 2 } },
+        polygonSymbol: { type: "simple-fill", color: [223, 38, 28, 0.1], outline: { color: "#df261c", width: 2 } }
+      });
+
+      sketchVM.current.on(['create', 'update'], (event) => {
+        if (event.state === 'complete') {
+          const geometry = event.graphic ? event.graphic.geometry : event.graphics[0].geometry;
+          performQuery(geometry);
+          sketchLayer.current.removeAll();
+          // Keep tool active
+          if (identifySettings.mode === 'rectangle') sketchVM.current.create('rectangle');
+          if (identifySettings.mode === 'polygon') sketchVM.current.create('polygon');
+        }
+      });
+    }
+
     const performQuery = async (geometry) => {
       onIdentifyQueryStart();
-      const queryLayers = identifySettings.selectedLayerId === 'all'
-        ? layersConfig.filter(l => layerVisibility[l.id])
-        : [layersConfig.find(l => l.id === identifySettings.selectedLayerId)];
-
       const results = { total: 0, grouped: {} };
       identifyGraphicsLayer.current.removeAll();
 
-      for (const config of queryLayers) {
+      // Determine which layers to query
+      const layersToQuery = [];
+      layersConfig.forEach(config => {
         const layer = layersRef.current[config.id];
-        if (!layer || layer.type !== 'feature') continue;
-        const response = await layer.queryFeatures({ geometry, spatialRelationship: 'intersects', outFields: ['*'], returnGeometry: true });
-        if (response.features.length > 0) {
-          results.total += response.features.length;
-          results.grouped[config.title] = response.features.map(f => ({ attributes: f.attributes }));
-          response.features.forEach(f => {
-            identifyGraphicsLayer.current.add(new Graphic({
-              geometry: f.geometry,
-              symbol: { type: "simple-fill", color: [255, 255, 0, 0.4], outline: { color: "yellow", width: 2 } }
-            }));
-          });
+        if (!layer) return;
+
+        if (identifySettings.selectedLayerId === 'all') {
+          if (layer.type === 'feature' && layerVisibility[config.id]) {
+            layersToQuery.push({ layer, title: config.title, config });
+          } else if (layer.type === 'map-image') {
+            layer.allSublayers.forEach(sub => {
+              if (sub.visible && layerVisibility[`${config.id}_sub_${sub.id}`]) {
+                layersToQuery.push({ layer: sub, title: sub.title, config, parentId: config.id });
+              }
+            });
+          }
+        } else {
+          // Specific layer selected
+          if (identifySettings.selectedLayerId === config.id && layer.type === 'feature') {
+            layersToQuery.push({ layer, title: config.title, config });
+          } else if (layer.type === 'map-image') {
+            const subIdMatch = identifySettings.selectedLayerId.match(/_sub_(\d+)$/);
+            if (subIdMatch) {
+              const subId = parseInt(subIdMatch[1]);
+              const sub = layer.allSublayers.find(s => s.id === subId);
+              if (sub) layersToQuery.push({ layer: sub, title: sub.title, config, parentId: config.id });
+            }
+          }
         }
-      }
+      });
+
+      await Promise.all(layersToQuery.map(async (item) => {
+        try {
+          const response = await item.layer.queryFeatures({ 
+            geometry, 
+            spatialRelationship: 'intersects', 
+            outFields: ['*'], 
+            returnGeometry: true 
+          });
+
+          if (response.features.length > 0) {
+            results.total += response.features.length;
+            results.grouped[item.title] = response.features.map(f => ({ 
+              attributes: f.attributes,
+              geometry: f.geometry,
+              layerId: item.config.id,
+              layerTitle: item.title,
+              displayField: item.layer.displayField || 'OBJECTID'
+            }));
+
+            response.features.forEach(f => {
+              const highlightSymbol = f.geometry.type === 'point' 
+                ? { type: "simple-marker", style: "circle", color: [0, 255, 255, 0.4], outline: { color: "cyan", width: 2 } }
+                : { type: "simple-fill", color: [0, 255, 255, 0.1], outline: { color: "cyan", width: 2 } };
+
+              identifyGraphicsLayer.current.add(new Graphic({
+                geometry: f.geometry,
+                symbol: highlightSymbol
+              }));
+            });
+          }
+        } catch (err) {
+          console.warn(`Query failed for layer ${item.title}:`, err);
+        }
+      }));
       onIdentifyResults(results);
     };
 
-    const clickHandler = view.on('click', (e) => performQuery(e.mapPoint));
+    let clickHandler;
+    if (identifySettings.mode === 'point') {
+      clickHandler = view.on('click', (e) => performQuery(e.mapPoint));
+    } else {
+      sketchVM.current.create(identifySettings.mode);
+    }
+
     return () => {
-      clickHandler.remove();
+      if (clickHandler) clickHandler.remove();
+      if (sketchVM.current) sketchVM.current.cancel();
       view.cursor = 'default';
     };
-  }, [activeTool, identifySettings.mode, identifySettings.selectedLayerId, is3D]);
+  }, [activeTool, identifySettings.mode, identifySettings.selectedLayerId, layerVisibility]);
 
   // Data Request
   const dataRequestLayer = useRef(new GraphicsLayer({ id: 'data-request-aoi-layer' }));

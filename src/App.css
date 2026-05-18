@@ -716,6 +716,71 @@
 }
 
 /* Identify Tool Styles */
+.identify-modes-grid {
+  margin-top: 8px;
+}
+
+.identify-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 8px;
+}
+
+.identify-mode-card:hover {
+  border-color: #1e3c72;
+  background: #f8fafc;
+  transform: translateY(-2px);
+}
+
+.identify-mode-card.active {
+  background: #1e3c72;
+  border-color: #1e3c72;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(30, 60, 114, 0.2);
+}
+
+.identify-mode-card .mode-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.identify-mode-card .mode-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.identify-result-card {
+  transition: all 0.2s ease;
+}
+
+.identify-result-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner-small {
+  border-radius: 50%;
+  border: 2px solid #df261c;
+  border-top-color: transparent;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
 .identify-results {
   display: flex;
   flex-direction: column;
@@ -1115,7 +1180,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   ⏳ Time & Compare — Final Refined GIS Workflow Styles
+   ⏳ Temporal Filter — ArcGIS Standard Temporal Workflow
    ───────────────────────────────────────────────────────────────────────────── */
 
 .workflow-section {
@@ -1858,6 +1923,201 @@
 
 .menu-item-toggle span i { font-size: 15px; color: #64748b; }
 
+.layer-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a2f4d;
+  user-select: none;
+}
+
+.layer-tree-container {
+  margin-bottom: 8px;
+}
+
+.layer-card.tree-active {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: 0 !important;
+  box-shadow: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.02);
+}
+
+.tree-children {
+  background: #ffffff;
+  margin-bottom: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+  padding-bottom: 8px;
+}
+
+
+
+.apply-btn-gradient {
+  height: 38px;
+  padding: 0 20px;
+  background: linear-gradient(135deg, #df261c, #002d5d);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(223, 38, 28, 0.15);
+}
+
+.apply-btn-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(223, 38, 28, 0.25);
+  filter: brightness(1.1);
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
+}
+
+
+
+
+
+
+
+.layer-accordion-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.layer-accordion-btn.expanded {
+  transform: rotate(90deg);
+  color: #1e3c72;
+}
+
+.layer-card-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.more-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.more-btn:hover, .more-btn.active {
+  background: rgba(30, 60, 114, 0.08);
+  color: #1e3c72;
+}
+
+.layer-action-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 210px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: #1a2f4d;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.menu-item i { font-size: 15px; color: #64748b; }
+.menu-item:hover { background: rgba(30, 60, 114, 0.05); }
+.menu-item.delete { color: #df261c; }
+.menu-item.delete i { color: #df261c; }
+.menu-item.delete:hover { background: #fef2f2; }
+
+.menu-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.05);
+  margin: 4px 0;
+}
+
+.menu-section { padding: 4px 10px; }
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.section-label i { font-size: 14px; }
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-container input[type="range"] {
+  flex: 1;
+  height: 3px;
+  accent-color: #1e3c72;
+  cursor: pointer;
+}
+
+.slider-container span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3c72;
+  min-width: 28px;
+}
+
+.menu-item-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+
+.menu-item-toggle span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #1a2f4d;
+}
+
+.menu-item-toggle span i { font-size: 15px; color: #64748b; }
+
 .switch-sm {
   appearance: none;
   width: 28px;
@@ -2004,4 +2264,82 @@
 .tree-row { position: relative !important; padding-right: 40px !important; overflow: visible !important; } .tree-row .layer-card-more { position: absolute !important; right: 10px !important; top: 50% !important; transform: translateY(-50%) !important; display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 100 !important; } .tree-row .more-btn { display: flex !important; visibility: visible !important; opacity: 1 !important; }
 .tree-label { max-width: 160px !important; display: inline-block !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
 .layer-row-content { padding-right: 10px !important; }
-.layer-card-main, .tree-row { position: relative !important; padding-right: 32px !important; overflow: visible !important; width: 100% !important; } .layer-row-content { flex: 1 !important; min-width: 0 !important; padding-right: 8px !important; } .tree-label { max-width: calc(100% - 10px) !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; } .layer-card-more { position: absolute !important; right: 4px !important; top: 50% !important; transform: translateY(-50%) !important; width: 24px !important; height: 24px !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 50 !important; visibility: visible !important; opacity: 1 !important; } .more-btn { display: flex !important; align-items: center !important; justify-content: center !important; width: 100% !important; height: 100% !important; visibility: visible !important; opacity: 1 !important; background: none !important; border: none !important; padding: 0 !important; cursor: pointer !important; } .more-btn i { font-size: 16px !important; color: #94a3b8 !important; visibility: visible !important; display: block !important; }
+/* 🌲 High-Fidelity TOC Alignment Standard */
+.layer-card-main, .tree-row { 
+  position: relative !important; 
+  display: flex !important; 
+  align-items: center !important; 
+  justify-content: space-between !important; 
+  width: 100% !important; 
+  height: 32px !important; 
+  padding: 0 8px !important; 
+  padding-right: 36px !important; /* Space for action menu */
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+.layer-row-content { 
+  display: flex !important; 
+  align-items: center !important; 
+  gap: 6px !important; 
+  flex: 1 !important; 
+  min-width: 0 !important; 
+  height: 100% !important;
+}
+
+.tree-label { 
+  font-size: 11.5px !important; 
+  color: #1e293b !important; 
+  white-space: nowrap !important; 
+  overflow: hidden !important; 
+  text-overflow: ellipsis !important; 
+  flex: 1 !important;
+}
+
+.layer-card-more { 
+  position: absolute !important; 
+  right: 6px !important; 
+  top: 50% !important; 
+  transform: translateY(-50%) !important; 
+  width: 24px !important; 
+  height: 24px !important; 
+  display: flex !important; 
+  align-items: center !important; 
+  justify-content: center !important; 
+  z-index: 100 !important; 
+}
+
+.more-btn { 
+  width: 24px !important; 
+  height: 24px !important; 
+  display: flex !important; 
+  align-items: center !important; 
+  justify-content: center !important; 
+  background: transparent !important; 
+  border: none !important; 
+  border-radius: 4px !important; 
+  padding: 0 !important; 
+  cursor: pointer !important; 
+  transition: background 0.2s !important;
+}
+
+.more-btn:hover { 
+  background: rgba(30, 60, 114, 0.08) !important; 
+}
+
+.more-btn i { 
+  font-size: 16px !important; 
+  color: #64748b !important; 
+  display: block !important; 
+  line-height: 1 !important;
+}
+
+/* Utility to hide scrollbars but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

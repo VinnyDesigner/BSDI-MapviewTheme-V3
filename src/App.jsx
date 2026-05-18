@@ -18,6 +18,7 @@ import CustomSelect from './components/CustomSelect'
 import ArcadePanel from './components/ArcadePanel'
 import DownloadRestrictedModal from './components/DownloadRestrictedModal'
 import Analysis3DPanel from './components/Analysis3DPanel'
+import TemporalFilterPanel from './components/TemporalFilterPanel'
 import { layersConfig } from './layers'
 import { ewaWddTree } from './ewa_wdd_config'
 import { LanguageProvider, useLanguage } from './context/LanguageContext'
@@ -27,7 +28,7 @@ import './App.css'
 import {
   Layers, Search, Navigation, Ruler, Pencil,
   Box, Database, Globe, Printer, Bookmark, Info,
-  Columns2, ChevronRight, ChevronLeft, ChevronDown, MousePointer2, Square, Hexagon,
+  Columns2, ChevronRight, ChevronLeft, ChevronDown, MousePointer2, Square, Hexagon, Maximize2,
   Download, Lock, Map, Play, Pause, RotateCcw
 } from 'lucide-react';
 
@@ -102,7 +103,7 @@ function AppInner() {
 
   const [dynamicMapServerData, setDynamicMapServerData] = useState({});
 
-  const [activeActionMenu, setActiveActionMenu] = useState(null); // { id: string, type: 'root'|'sub' }
+  const [activeLayerMenu, setActiveLayerMenu] = useState(null); // { id: string, type: 'root'|'sub' }
   const [labelConfigModal, setLabelConfigModal] = useState(null); // { layerId: string, subId?: number }
 
   // Fetch MapServer data for dynamic layers
@@ -166,21 +167,24 @@ function AppInner() {
   const toggleLayer = (id) => {
     setLayerVisibility(prev => {
       const newState = { ...prev };
-      const newParentValue = !prev[id];
-      newState[id] = newParentValue;
+      const isChecked = !prev[id];
+      newState[id] = isChecked;
 
-      // When turning a parent ON, ensure its sublayers are also ON if they were all OFF
-      // This ensures "Parent ON -> Sublayers ON -> Features Render"
-      if (newParentValue) {
-        const sublayerKeys = Object.keys(prev).filter(k => k.startsWith(`${id}_sub_`));
-        const anySublayerVisible = sublayerKeys.some(k => prev[k]);
-        
-        if (!anySublayerVisible) {
-          sublayerKeys.forEach(k => {
-            newState[k] = true;
-          });
-        }
+      // Use metadata to find all possible sublayers for this service
+      const mapData = dynamicMapServerData[id];
+      if (mapData && mapData.metadata.layers) {
+        mapData.metadata.layers.forEach(sub => {
+          const subKey = `${id}_sub_${sub.id}`;
+          newState[subKey] = isChecked;
+        });
       }
+
+      // Also handle any existing state keys that might not be in metadata yet
+      Object.keys(prev).forEach(key => {
+        if (key.startsWith(`${id}_sub_`)) {
+          newState[key] = isChecked;
+        }
+      });
       
       return newState;
     });
@@ -229,6 +233,8 @@ function AppInner() {
     results: null, // { total: number, grouped: { [layerName]: features[] } }
     isQuerying: false
   });
+  const [expandedIdentifyLayers, setExpandedIdentifyLayers] = useState([]);
+  const [selectedIdentifyFeature, setSelectedIdentifyFeature] = useState(null); // { layerName, index }
   
   // Data Request State
   const [dataRequests, setDataRequests] = useState([]);
@@ -271,6 +277,8 @@ function AppInner() {
   }, []);
 
   const [layerStates, setLayerStates] = useState({}); // { id: { opacity: 1, labels: true, visible: true, renderer: true } }
+  const [layerPanelMode, setLayerPanelMode] = useState("layers");
+  const [activeLayerEdit, setActiveLayerEdit] = useState(null);
 
   const updateLayerState = (id, updates) => {
     setLayerStates(prev => ({
@@ -288,7 +296,7 @@ function AppInner() {
     if (subId !== null) {
       const parent = view.map.findLayerById(layerId);
       if (parent && parent.sublayers) {
-        target = parent.sublayers.find(s => s.id === subId);
+        target = parent.sublayers.find(s => s.id === subId || s.id === parseInt(subId));
       }
     } else {
       target = view.map.findLayerById(layerId);
@@ -302,34 +310,43 @@ function AppInner() {
         if (extent) view.goTo(extent);
         break;
       case 'zoomVisible':
-        if (target.minScale || target.maxScale) {
-          const targetScale = target.minScale ? target.minScale * 0.8 : target.maxScale * 1.2;
+        const targetScale = target.maxScale || target.minScale;
+        if (targetScale > 0) {
           view.goTo({ scale: targetScale });
         }
         break;
       case 'toggleLabels':
         const labelState = !((layerStates[fullId] || {}).labels !== false);
         updateLayerState(fullId, { labels: labelState });
-        target.labelsVisible = labelState;
+        if ('labelsVisible' in target) {
+          target.labelsVisible = labelState;
+        }
         break;
       case 'toggleViz':
         const vizState = !((layerStates[fullId] || {}).renderer !== false);
         updateLayerState(fullId, { renderer: vizState });
-        target.opacity = vizState ? (layerStates[fullId]?.opacity || 1) : 0;
+        target.visible = vizState;
         break;
-      case 'customizeLabels':
-        setLabelConfigModal({ layerId, subId });
+      case 'customizeLayer':
+        setActiveLayerEdit({ layerId, subId, target });
+        setLayerPanelMode('customize-layer');
         break;
       case 'remove':
         if (subId === null) {
           view.map.remove(target);
           setLayerOrder(prev => prev.filter(id => id !== layerId));
+          setLayerVisibility(prev => {
+            const next = { ...prev };
+            delete next[layerId];
+            Object.keys(next).forEach(k => { if (k.startsWith(`${layerId}_sub_`)) delete next[k]; });
+            return next;
+          });
         }
         break;
       default:
         break;
     }
-    setActiveActionMenu(null);
+    setActiveLayerMenu(null);
   };
 
   const handleStartDataRequest = () => {
@@ -645,13 +662,206 @@ function AppInner() {
           </div>
         );
       case 'layers':
+        if (layerPanelMode === 'customize-layer') {
+          const target = activeLayerEdit?.target;
+          const fullId = activeLayerEdit ? (activeLayerEdit.subId !== null ? `${activeLayerEdit.layerId}_sub_${activeLayerEdit.subId}` : activeLayerEdit.layerId) : null;
+          const state = fullId ? (layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true }) : { opacity: 1, labels: true, visible: true, renderer: true };
+
+          return (
+            <div className="tool-content-full">
+              <div className="tool-fixed-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button 
+                  onClick={() => setLayerPanelMode('layers')}
+                  style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: '#64748b', padding: 0, cursor: 'pointer' }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h3 style={{ margin: 0, color: '#1a2f4d', fontSize: '14px', fontWeight: 'bold' }}>Customize Layer</h3>
+              </div>
+              <div className="tool-scroll-body" style={{ padding: '0 16px' }}>
+                <form id="customizeForm" onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!target) return;
+                  const formData = new FormData(e.target);
+                  
+                  // Apply Symbology
+                  const symbologyType = formData.get('symbologyType');
+                  try {
+                    if (symbologyType === 'simple') {
+                      let symbol;
+                      const geometryType = target.geometryType;
+                      const color = formData.get('fillColor');
+                      const outlineColor = formData.get('outlineColor');
+                      const width = parseInt(formData.get('lineWidth')) || 1;
+                      const transparency = parseInt(formData.get('transparency')) || 0;
+                      const alpha = 1 - (transparency / 100);
+                      
+                      const hexToRgba = (hex, a) => {
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        return `rgba(${r},${g},${b},${a})`;
+                      };
+
+                      if (geometryType === 'polygon' || geometryType === 'esriGeometryPolygon') {
+                        symbol = {
+                          type: "simple-fill",
+                          color: hexToRgba(color, alpha),
+                          style: formData.get('fillStyle') || 'solid',
+                          outline: { color: outlineColor, width: width, style: formData.get('lineStyle') || 'solid' }
+                        };
+                      } else if (geometryType === 'polyline' || geometryType === 'esriGeometryPolyline') {
+                        symbol = {
+                          type: "simple-line",
+                          color: hexToRgba(outlineColor, alpha),
+                          width: width,
+                          style: formData.get('lineStyle') || 'solid'
+                        };
+                      } else {
+                        symbol = {
+                          type: "simple-marker",
+                          color: hexToRgba(color, alpha),
+                          size: width * 4,
+                          outline: { color: outlineColor, width: 1 }
+                        };
+                      }
+                      target.renderer = { type: "simple", symbol: symbol };
+                    } else if (symbologyType === 'attribute') {
+                      const field = formData.get('attributeField');
+                      target.renderer = {
+                        type: "unique-value",
+                        field: field,
+                        defaultSymbol: {
+                          type: "simple-fill",
+                          color: "gray",
+                          outline: { width: 0.5, color: "white" }
+                        },
+                        uniqueValueInfos: []
+                      };
+                    }
+                  } catch (err) {
+                    console.error('Error applying renderer:', err);
+                  }
+
+                  // Apply Opacity (Removed from form, kept untouched to avoid overwriting quick action)
+                  
+                  setLayerPanelMode('layers');
+                }}>
+
+                  {/* SYMBOLOGY SECTION */}
+                  {/* SYMBOLOGY SECTION */}
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Symbology Type</label>
+                    <select name="symbologyType" defaultValue="simple" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }} onChange={(e) => {
+                      document.getElementById('simpleOptions').style.display = e.target.value === 'simple' ? 'block' : 'none';
+                      document.getElementById('attributeOptions').style.display = e.target.value === 'attribute' ? 'block' : 'none';
+                    }}>
+                      <option value="simple">Simple</option>
+                      <option value="attribute">Attribute</option>
+                    </select>
+                  </div>
+
+                  <div id="simpleOptions" style={{ paddingBottom: '16px' }}>
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Color</label>
+                        <input name="fillColor" type="color" defaultValue="#8b5cf6" className="tool-input" style={{ width: '100%', height: '36px', padding: '0', cursor: 'pointer', boxSizing: 'border-box' }} />
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Outline Color</label>
+                        <input name="outlineColor" type="color" defaultValue="#bef264" className="tool-input" style={{ width: '100%', height: '36px', padding: '0', cursor: 'pointer', boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+                    
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Line Width</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input name="lineWidth" type="range" min="0" max="10" step="1" defaultValue={2} style={{ flex: 1, cursor: 'pointer' }} onChange={(e) => document.getElementById('lineWidthVal').value = e.target.value} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input id="lineWidthVal" type="number" defaultValue={2} min="0" max="10" className="tool-input" style={{ width: '68px', textAlign: 'center', padding: '0 8px' }} onChange={(e) => document.querySelector('input[name="lineWidth"]').value = e.target.value} />
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>px</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Line Style</label>
+                        <select name="lineStyle" defaultValue="solid" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
+                          <option value="solid">Solid</option>
+                          <option value="dash">Dash</option>
+                          <option value="dot">Dot</option>
+                          <option value="dash-dot">Dash Dot</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Fill Style</label>
+                        <select name="fillStyle" defaultValue="solid" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
+                          <option value="solid">Solid</option>
+                          <option value="cross">Cross</option>
+                          <option value="diagonal-cross">Diagonal Cross</option>
+                          <option value="forward-diagonal">Forward Diagonal</option>
+                          <option value="backward-diagonal">Backward Diagonal</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="attributeOptions" style={{ display: 'none', paddingBottom: '16px' }}>
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Pick an attribute to symbolize</label>
+                      <select name="attributeField" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
+                        <option value="PROJECT_CODE">PROJECT_CODE</option>
+                        <option value="STATUS">STATUS</option>
+                        <option value="TYPE">TYPE</option>
+                      </select>
+                    </div>
+                    
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Transparency</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input name="transparency" type="range" min="0" max="100" step="1" defaultValue={10} style={{ flex: 1, cursor: 'pointer' }} onChange={(e) => document.getElementById('transVal').value = e.target.value} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input id="transVal" type="number" defaultValue={10} min="0" max="100" className="tool-input" style={{ width: '68px', textAlign: 'center', padding: '0 8px' }} onChange={(e) => document.querySelector('input[name="transparency"]').value = e.target.value} />
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Line Width</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input name="attrLineWidth" type="range" min="0" max="10" step="1" defaultValue={2} style={{ flex: 1, cursor: 'pointer' }} onChange={(e) => document.getElementById('attrLineWidthVal').value = e.target.value} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input id="attrLineWidthVal" type="number" defaultValue={2} min="0" max="10" className="tool-input" style={{ width: '68px', textAlign: 'center', padding: '0 8px' }} onChange={(e) => document.querySelector('input[name="attrLineWidth"]').value = e.target.value} />
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>px</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+
+
+                </form>
+              </div>
+              <div className="tool-fixed-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'transparent' }}>
+                <button type="button" onClick={() => setLayerPanelMode('layers')} className="secondary-btn" style={{ padding: '8px 24px', background: 'transparent', border: '1px solid #cbd5e1' }}>Cancel</button>
+                <button type="submit" form="customizeForm" className="primary-btn" style={{ padding: '8px 24px' }}>Apply</button>
+              </div>
+            </div>
+          );
+        }
+
         const orderedLayers = layerOrder.map(id => layersConfig.find(l => l.id === id)).filter(Boolean);
         const filteredLayers = orderedLayers.filter(l =>
           l.title.toLowerCase().includes(layerSearch.toLowerCase())
         );
         const allVisible = filteredLayers.length > 0 && filteredLayers.every(l => layerVisibility[l.id]);
 
-        const ActionMenu = ({ id, subId = null }) => {
+        const renderActionMenu = (id, subId = null) => {
           const fullId = subId !== null ? `${id}_sub_${subId}` : id;
           const state = layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true };
 
@@ -675,17 +885,19 @@ function AppInner() {
                 </div>
                 <div className="slider-container">
                   <input 
-                    type="range" min="0" max="1" step="0.01" 
-                    value={state.opacity} 
+                    type="range" min="0" max="100" step="1" 
+                    value={Math.round(state.opacity * 100)} 
                     onChange={(e) => {
-                      const val = parseFloat(e.target.value);
+                      const val = parseInt(e.target.value, 10) / 100;
                       updateLayerState(fullId, { opacity: val });
                       const view = mapView;
                       if (view) {
                         let target;
                         if (subId !== null) {
                           const p = view.map.findLayerById(id);
-                          if (p && p.sublayers) target = p.sublayers.find(s => s.id === subId);
+                          if (p && p.sublayers) {
+                            target = p.sublayers.find(s => s.id === subId || s.id === parseInt(subId, 10));
+                          }
                         } else {
                           target = view.map.findLayerById(id);
                         }
@@ -698,7 +910,7 @@ function AppInner() {
               </div>
               <div className="menu-divider" />
               <div className="menu-item-toggle">
-                <span><i className="material-icons">visibility</i> Visualization</span>
+                <span><i className="material-icons">visibility</i> Visibility</span>
                 <input 
                   type="checkbox" className="switch-sm" 
                   checked={state.renderer !== false}
@@ -713,8 +925,8 @@ function AppInner() {
                   onChange={() => handleLayerAction('toggleLabels', id, subId)}
                 />
               </div>
-              <div className="menu-item" onClick={() => handleLayerAction('customizeLabels', id, subId)}>
-                <i className="material-icons">edit</i> Customize Labels
+              <div className="menu-item" onClick={() => handleLayerAction('customizeLayer', id, subId)}>
+                <i className="material-icons">tune</i> Customize Layer
               </div>
               <div className="menu-divider" />
               <div className="menu-item delete" onClick={() => handleLayerAction('remove', id, subId)}>
@@ -766,8 +978,8 @@ function AppInner() {
               </button>
             </div>
 
-                    <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '4px' }} onClick={() => setActiveActionMenu(null)}>
-                      {filteredLayers.map(layer => {
+            <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '4px' }} onClick={() => setActiveLayerMenu(null)} onScroll={() => setActiveLayerMenu(null)}>
+              {filteredLayers.map(layer => {
                         const isMapServer = layer.type === 'map-image';
                         const isExpanded = treeExpanded[layer.id];
                         const mapData = dynamicMapServerData[layer.id];
@@ -788,8 +1000,8 @@ function AppInner() {
                             onDrop={handleDrop}
                             onDragEnd={handleDragEnd}
                           >
-                            <div className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`}>
-                              <div className="layer-card-main">
+                            <div className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
+                              <div className="layer-card-main" style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                                 <div className="layer-row-content">
                                   <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()}>
                                     <DragHandle />
@@ -814,17 +1026,17 @@ function AppInner() {
                                   <span className="layer-card-name tree-label-root" title={layer.title}>{layer.title}</span>
                                 </div>
 
-                                <div className="layer-card-more">
+                                <div className="layer-card-more" style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                                   <button 
-                                    className={`more-btn ${activeActionMenu?.id === layer.id ? 'active' : ''}`}
+                                    className={`more-btn ${activeLayerMenu === layer.id ? 'active' : ''}`}
                                     onClick={(e) => { 
                                       e.stopPropagation(); 
-                                      setActiveActionMenu(activeActionMenu?.id === layer.id ? null : { id: layer.id, type: 'root' }); 
+                                      setActiveLayerMenu(activeLayerMenu === layer.id ? null : layer.id); 
                                     }}
                                   >
                                     <i className="material-icons">more_horiz</i>
                                   </button>
-                                  {activeActionMenu?.id === layer.id && <ActionMenu id={layer.id} />}
+                                  {activeLayerMenu === layer.id && renderActionMenu(layer.id)}
                                 </div>
                               </div>
                             </div>
@@ -842,7 +1054,7 @@ function AppInner() {
 
                                     return (
                                       <React.Fragment key={s.id}>
-                                        <div className={`tree-row ${depth > 1 ? 'nested' : ''}`}>
+                                        <div className={`tree-row ${depth > 1 ? 'nested' : ''}`} style={{ zIndex: activeLayerMenu === subId ? 9999 : undefined }}>
                                           <div className="layer-row-content">
                                             {/* Vertical/Horizontal connectors on the left */}
                                             {[...Array(depth)].map((_, i) => (
@@ -884,17 +1096,17 @@ function AppInner() {
                                             </span>
                                           </div>
 
-                                          <div className="layer-card-more">
+                                          <div className="layer-card-more" style={{ zIndex: activeLayerMenu === subId ? 9999 : undefined }}>
                                             <button 
-                                              className={`more-btn ${activeActionMenu?.id === subId ? 'active' : ''}`}
+                                              className={`more-btn ${activeLayerMenu === subId ? 'active' : ''}`}
                                               onClick={(e) => { 
                                                 e.stopPropagation(); 
-                                                setActiveActionMenu(activeActionMenu?.id === subId ? null : { id: layer.id, subId: s.id, type: 'sub' }); 
+                                                setActiveLayerMenu(activeLayerMenu === subId ? null : subId); 
                                               }}
                                             >
                                               <i className="material-icons">more_horiz</i>
                                             </button>
-                                            {activeActionMenu?.subId === s.id && activeActionMenu?.id === layer.id && <ActionMenu id={layer.id} subId={s.id} />}
+                                            {activeLayerMenu === subId && renderActionMenu(layer.id, s.id)}
                                           </div>
                                         </div>
                                         {hasChildren && subExpanded && s.subLayerIds.map(cid => {
@@ -921,7 +1133,23 @@ function AppInner() {
         );
 
       case 'identify':
-        const visibleLayers = layersConfig.filter(l => layerVisibility[l.id]);
+        const visibleIdentifyLayers = [];
+        layersConfig.forEach(l => {
+          if (l.type === 'feature' && layerVisibility[l.id]) {
+            visibleIdentifyLayers.push({ id: l.id, title: l.title });
+          } else if (l.type === 'map-image' && dynamicMapServerData[l.id]) {
+            const mapData = dynamicMapServerData[l.id];
+            if (mapData.metadata.layers) {
+              mapData.metadata.layers.forEach(sub => {
+                const subKey = `${l.id}_sub_${sub.id}`;
+                if (layerVisibility[subKey]) {
+                  visibleIdentifyLayers.push({ id: subKey, title: sub.name || sub.title });
+                }
+              });
+            }
+          }
+        });
+
         return (
           <div className="tool-content">
             {!identifySettings.results ? (
@@ -936,7 +1164,7 @@ function AppInner() {
                     onChange={(e) => setIdentifySettings(prev => ({ ...prev, selectedLayerId: e.target.value }))}
                   >
                     <option value="all">All Visible Layers</option>
-                    {visibleLayers.map(l => (
+                    {visibleIdentifyLayers.map(l => (
                       <option key={l.id} value={l.id}>{l.title}</option>
                     ))}
                   </select>
@@ -964,98 +1192,189 @@ function AppInner() {
                   </div>
                 </div>
 
-                <div className="identify-instruction" style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
-                  Click on the map to identify features
+                <div className="identify-instruction" style={{ textAlign: 'center', padding: '16px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
+                  <div style={{ marginBottom: '4px', fontWeight: '600', color: '#1e3c72' }}>
+                    {identifySettings.mode === 'point' ? 'Map Click Active' : 'Drawing Active'}
+                  </div>
+                  {identifySettings.mode === 'point' 
+                    ? 'Click on the map to identify features' 
+                    : `Draw a ${identifySettings.mode} on the map`}
                 </div>
 
                 {identifySettings.isQuerying && (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#df261c', fontSize: '13px', fontWeight: '600' }}>
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#df261c', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div className="spinner-small" style={{ width: '16px', height: '16px', border: '2px solid #df261c', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                     Querying layers...
                   </div>
                 )}
               </>
             ) : (
-              <div className="identify-results">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h4 style={{ margin: 0, fontSize: '14px', color: '#1a2f4d' }}>
-                    Identify Results ({identifySettings.results.total} Found)
-                  </h4>
+              <div className="identify-results-panel" style={{ 
+                position: 'absolute', top: 16, left: 16, right: 16, bottom: 16, 
+                display: 'flex', flexDirection: 'column', overflow: 'hidden' 
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9', marginBottom: '4px', flexShrink: 0 }}>
                   <button 
-                    className="layer-clear-btn"
-                    onClick={() => setIdentifySettings(prev => ({ ...prev, results: null }))}
+                    onClick={() => {
+                      setIdentifySettings(prev => ({ ...prev, results: null }));
+                      setExpandedIdentifyLayers([]);
+                      setSelectedIdentifyFeature(null);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   >
-                    Clear
+                    <ChevronLeft size={18} />
+                  </button>
+                  <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '700', color: '#1e3c72' }}>Results ({identifySettings.results.total})</h3>
+                </div>
+                
+                <div className="results-accordion no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 4px 16px 0', minHeight: 0 }}>
+                  {identifySettings.results.total === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
+                      No features found
+                    </div>
+                  ) : (
+                    Object.entries(identifySettings.results.grouped).map(([layerName, features]) => {
+                      const isExpanded = expandedIdentifyLayers.includes(layerName);
+                      return (
+                        <div key={layerName} className="layer-result-group" style={{ 
+                          marginBottom: '10px', 
+                          border: '1px solid #e2e8f0', 
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: isExpanded ? '#f8fafc' : '#ffffff',
+                          boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.03)' : 'none',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          <button 
+                            onClick={() => setExpandedIdentifyLayers(prev => 
+                              isExpanded ? prev.filter(l => l !== layerName) : [...prev, layerName]
+                            )}
+                            style={{ 
+                              width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                              padding: '12px 14px', background: isExpanded ? '#f1f5f9' : 'transparent', 
+                              fontWeight: 'bold', fontSize: '12px', 
+                              color: '#1e3c72', border: 'none', cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              outline: 'none',
+                              borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              <span>{layerName}</span>
+                            </div>
+                            <span style={{ 
+                              background: isExpanded ? '#cbd5e1' : '#f1f5f9', 
+                              padding: '2px 8px', borderRadius: '10px', fontSize: '10px',
+                              color: '#1e3c72'
+                            }}>
+                              {features.length}
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="feature-list no-scrollbar" style={{ 
+                              padding: '12px', 
+                              maxHeight: '400px', overflowY: 'auto'
+                            }}>
+                              {features.map((f, i) => (
+                                <div key={i} className="identify-result-card" style={{ 
+                                  background: 'white', border: '1px solid #edf2f7', 
+                                  borderRadius: '8px', marginBottom: '12px', padding: '12px', 
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                                  transition: 'all 0.2s ease'
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f7fafc', paddingBottom: '8px' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#1e3c72', fontSize: '13px' }}>
+                                      {f.attributes[f.displayField] || 'Feature ' + (i + 1)}
+                                    </span>
+                                    <button 
+                                      className="action-icon-btn" 
+                                      title="Zoom To"
+                                      onClick={() => mapView.goTo({ target: f.geometry, zoom: 15 })}
+                                      style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#1e3c72', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
+                                    >
+                                      <Maximize2 size={12} /> Zoom
+                                    </button>
+                                  </div>
+                                  <div className="attributes-grid" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {Object.entries(f.attributes).map(([key, val]) => (
+                                      <div key={key} style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '2px 0' }}>
+                                        <span style={{ color: '#94a3b8', width: '45%', flexShrink: 0 }}>{key}</span>
+                                        <span style={{ color: '#1a2f4d', fontWeight: '500', wordBreak: 'break-all' }}>{String(val)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div style={{ 
+                  display: 'flex', justifyContent: 'flex-end', 
+                  padding: '12px 0 0 0', 
+                  borderTop: '1px solid #f1f5f9',
+                  marginTop: 'auto',
+                  background: 'transparent',
+                  flexShrink: 0,
+                  zIndex: 100
+                }}>
+                  <button 
+                    className="secondary-btn"
+                    style={{ fontSize: '12px', padding: '8px 16px', fontWeight: '700', color: '#1e3c72', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                    onClick={() => {
+                      setIdentifySettings(prev => ({ ...prev, results: null }));
+                      setExpandedIdentifyLayers([]);
+                      setSelectedIdentifyFeature(null);
+                    }}
+                  >
+                    Clear Results
                   </button>
                 </div>
-
-                <div className="results-list" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
-                  {Object.entries(identifySettings.results.grouped).map(([layerName, features]) => (
-                    <div key={layerName} style={{ marginBottom: '16px' }}>
-                      <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '4px', fontWeight: '600', fontSize: '12px', color: '#1e3c72', marginBottom: '8px' }}>
-                        {layerName}
-                      </div>
-                      {features.map((f, i) => (
-                        <div key={i} className="feature-item" style={{ padding: '8px', border: '1px solid #f1f5f9', borderRadius: '6px', marginBottom: '8px', fontSize: '12px' }}>
-                          {Object.entries(f.attributes).map(([key, val]) => (
-                            <div key={key} style={{ display: 'flex', marginBottom: '2px' }}>
-                              <span style={{ color: '#94a3b8', width: '40%', flexShrink: 0 }}>{key}:</span>
-                              <span style={{ color: '#1a2f4d', fontWeight: '500' }}>{String(val)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-
-                <button 
-                  className="tool-btn" 
-                  style={{ width: '100%', marginTop: '16px', background: '#1e3c72', color: 'white', padding: '10px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
-                  onClick={() => {
-                    const data = JSON.stringify(identifySettings.results, null, 2);
-                    const blob = new Blob([data], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'identify_results.json';
-                    link.click();
-                  }}
-                >
-                  Export as JSON
-                </button>
               </div>
             )}
           </div>
         );
 
       case 'blend':
+        const basemapOptions = basemaps.map(bm => ({ id: bm.id, title: bm.title }));
+        const isOverlaySelected = !!blendSettings.overlayLayerId;
+
         return (
           <div className="tool-content">
             <div className="form-group" style={{ marginBottom: '12px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-                Base Layer
+                Base Layer (Background)
               </label>
               <CustomSelect 
-                options={[...basemaps, ...layersConfig]}
+                options={basemapOptions}
                 value={blendSettings.baseLayerId}
-                onChange={(val) => setBlendSettings(prev => ({ ...prev, baseLayerId: val }))}
-                placeholder="Select base layer..."
+                onChange={(val) => {
+                  setBlendSettings(prev => ({ ...prev, baseLayerId: val }));
+                  setCurrentBasemap(val); 
+                }}
+                placeholder="Select background imagery..."
               />
             </div>
 
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-                Overlay Layer
+                Overlay Layer (Imagery)
               </label>
               <CustomSelect 
-                options={layersConfig}
+                options={basemapOptions.filter(bm => bm.id !== blendSettings.baseLayerId)}
                 value={blendSettings.overlayLayerId}
                 onChange={(val) => setBlendSettings(prev => ({ ...prev, overlayLayerId: val }))}
-                placeholder="Select overlay layer..."
+                placeholder="Select overlay imagery..."
               />
             </div>
 
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <label style={{ fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Opacity</label>
                 <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
@@ -1066,30 +1385,35 @@ function AppInner() {
                 max="1" 
                 step="0.01"
                 value={blendSettings.opacity}
+                disabled={!isOverlaySelected}
                 onChange={(e) => setBlendSettings(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
                 style={{ 
                   width: '100%', 
                   accentColor: '#DF261C',
-                  cursor: 'pointer'
+                  cursor: isOverlaySelected ? 'pointer' : 'default'
                 }}
               />
             </div>
 
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
                 Blend Mode
               </label>
               <CustomSelect 
                 options={[
-                  { id: 'normal', title: 'Normal' },
-                  { id: 'multiply', title: 'Multiply' },
-                  { id: 'overlay', title: 'Overlay' },
-                  { id: 'screen', title: 'Screen' },
-                  { id: 'color-burn', title: 'Color Burn' },
-                  { id: 'destination-over', title: 'Destination Over' },
-                  { id: 'lighter', title: 'Lighter' }
+                  { id: 'normal', title: 'normal' },
+                  { id: 'multiply', title: 'multiply' },
+                  { id: 'screen', title: 'screen' },
+                  { id: 'overlay', title: 'overlay' },
+                  { id: 'darken', title: 'darken' },
+                  { id: 'lighten', title: 'lighten' },
+                  { id: 'soft-light', title: 'soft-light' },
+                  { id: 'hard-light', title: 'hard-light' },
+                  { id: 'color-burn', title: 'color-burn' },
+                  { id: 'color-dodge', title: 'color-dodge' }
                 ]}
                 value={blendSettings.blendMode}
+                disabled={!isOverlaySelected}
                 onChange={(val) => setBlendSettings(prev => ({ ...prev, blendMode: val }))}
                 placeholder="Select blend mode..."
               />
@@ -1226,191 +1550,11 @@ function AppInner() {
 
       case 'time_compare':
         return (
-          <div className="tool-content-full">
-            <div className="tool-scroll-body" style={{ padding: '0' }}>
-              {/* SECTION 1: LAYER SELECTION */}
-              <div className="workflow-section" style={{ padding: '0' }}>
-                <div className="form-group-alt">
-                  <label className="input-label-mini">Select Temporal Dataset</label>
-                  <CustomSelect 
-                    options={layersConfig
-                      .filter(l => l.timeEnabled)
-                      .map(l => ({
-                        id: l.id,
-                        title: l.title
-                      }))
-                    }
-                    value={timelapseSettings.layerId}
-                    onChange={(val) => {
-                      const layer = layersConfig.find(l => l.id === val);
-                      if (!layer) return;
-                      setTimelapseSettings({
-                        ...timelapseSettings, 
-                        layerId: val,
-                        startYear: layer.startYear,
-                        endYear: layer.endYear,
-                        fromYear: layer.startYear,
-                        toYear: layer.endYear,
-                        isPlaying: false
-                      });
-                    }}
-                    placeholder="Select Dataset..."
-                  />
-                </div>
-
-                {(() => {
-                  const activeLayer = layersConfig.find(l => l.id === timelapseSettings.layerId);
-                  if (!activeLayer) return null;
-                  return (
-                    <div className="metadata-card-refined">
-                      <div className="metadata-row">
-                        <span className="meta-label">LAYER</span>
-                        <span className="meta-value">{activeLayer.title}</span>
-                      </div>
-                      <div className="metadata-row">
-                        <span className="meta-label">DATE / TIME FIELD</span>
-                        <span className="meta-value">{activeLayer.timeField || 'SURVEY_YEAR'}</span>
-                      </div>
-                      <div className="metadata-row">
-                        <span className="meta-label">FILTER METHOD</span>
-                        <span className="meta-value">{activeLayer.filterMethod || 'definitionExpression'}</span>
-                      </div>
-                      <div className="metadata-row">
-                        <span className="meta-label">AVAILABLE RANGE</span>
-                        <span className="meta-value">{activeLayer.startYear} → {activeLayer.endYear}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* SECTION 2: TIME RANGE CONFIG */}
-              <div className="workflow-section-boxed">
-                <div className="section-header-clean">
-                  <span className="section-title-alt">SET TIME RANGE</span>
-                </div>
-
-                <div className="timeline-cards-flex">
-                  <div className="timeline-card-refined">
-                    <div className="card-tag-alt">FROM</div>
-                    <div className="card-year-alt">{timelapseSettings.fromYear}</div>
-                    <div className="card-date-alt">Jan 1, {timelapseSettings.fromYear}</div>
-                  </div>
-                  <div className="timeline-card-refined">
-                    <div className="card-tag-alt">TO</div>
-                    <div className="card-year-alt">{timelapseSettings.toYear}</div>
-                    <div className="card-date-alt">Dec 31, {timelapseSettings.toYear}</div>
-                  </div>
-                </div>
-
-                <div className="range-inputs-boxed">
-                  <div className="range-inputs-flex">
-                    <div className="form-group-compact">
-                      <label className="input-label-mini">From</label>
-                      <select 
-                        className="tool-select-mini" 
-                        value={timelapseSettings.fromYear}
-                        onChange={(e) => setTimelapseSettings({...timelapseSettings, fromYear: Number(e.target.value)})}
-                      >
-                        {Array.from({ length: timelapseSettings.endYear - timelapseSettings.startYear + 1 }, (_, i) => timelapseSettings.startYear + i).map(year => (
-                          <option key={year} value={year}>{year}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group-compact">
-                      <label className="input-label-mini">To</label>
-                      <select 
-                        className="tool-select-mini" 
-                        value={timelapseSettings.toYear}
-                        onChange={(e) => setTimelapseSettings({...timelapseSettings, toYear: Number(e.target.value)})}
-                      >
-                        {Array.from({ length: timelapseSettings.endYear - timelapseSettings.startYear + 1 }, (_, i) => timelapseSettings.startYear + i).map(year => (
-                          <option key={year} value={year}>{year}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group-alt" style={{ marginTop: '12px' }}>
-                    <label className="input-label-mini">Playback Interval</label>
-                    <CustomSelect 
-                      options={["Yearly", "Monthly", "Quarterly"]}
-                      value={timelapseSettings.playbackInterval}
-                      onChange={(val) => setTimelapseSettings({...timelapseSettings, playbackInterval: val})}
-                    />
-                  </div>
-                </div>
-
-                <div className="info-notification-refined" style={{ marginTop: '12px' }}>
-                  <Info size={14} />
-                  <span>Map updates dynamically as you progress.</span>
-                </div>
-              </div>
-
-              {/* SECTION 3: PLAYBACK & ACTIONS */}
-              <div className="workflow-section" style={{ padding: '0 1px 1px 1px' }}>
-                <div className="playback-segmented-controls">
-                  <button 
-                    className="segmented-btn-side"
-                    title="Previous"
-                    onClick={() => setTimelapseSettings(prev => ({ 
-                      ...prev, 
-                      toYear: Math.max(prev.startYear, prev.toYear - 1), 
-                      isPlaying: false 
-                    }))}
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  
-                  <button 
-                    className={`segmented-btn-primary ${timelapseSettings.isPlaying ? 'active' : ''}`}
-                    onClick={() => setTimelapseSettings(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
-                  >
-                    {timelapseSettings.isPlaying ? (
-                      <Pause size={22} fill="currentColor" />
-                    ) : (
-                      <Play size={22} fill="currentColor" />
-                    )}
-                  </button>
-
-                  <button 
-                    className="segmented-btn-side"
-                    title="Next"
-                    onClick={() => setTimelapseSettings(prev => ({ 
-                      ...prev, 
-                      toYear: Math.min(prev.endYear, prev.toYear + 1), 
-                      isPlaying: false 
-                    }))}
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-
-              </div>
-            </div>
-
-            <div className="time-panel-actions-clean">
-              <button className="reset-btn-secondary" onClick={() => {
-                const layer = layersConfig.find(l => l.id === timelapseSettings.layerId);
-                setTimelapseSettings({
-                  ...timelapseSettings,
-                  fromYear: layer?.startYear || 2018,
-                  toYear: layer?.endYear || 2024,
-                  isPlaying: false
-                });
-              }}>
-                Reset
-              </button>
-              <button 
-                className="apply-btn-gradient"
-                onClick={() => {
-                  setTimelapseSettings(prev => ({ ...prev, lastApply: Date.now() }));
-                }}
-              >
-                Apply Time Filter
-              </button>
-            </div>
-          </div>
+          <TemporalFilterPanel 
+            layersConfig={layersConfig}
+            timelapseSettings={timelapseSettings}
+            setTimelapseSettings={setTimelapseSettings}
+          />
         );
 
       case 'identify':
@@ -1421,7 +1565,26 @@ function AppInner() {
           </div>
         );
         
-      case 'split':
+      case 'split': {
+        const allIdentifyLayers = [];
+        layersConfig.forEach(l => {
+          if (l.type === 'feature') {
+            allIdentifyLayers.push({ id: l.id, title: l.title });
+          } else if (l.type === 'map-image' && dynamicMapServerData[l.id]) {
+            const mapData = dynamicMapServerData[l.id];
+            if (mapData.metadata.layers) {
+              mapData.metadata.layers.forEach(sub => {
+                allIdentifyLayers.push({ id: `${l.id}_sub_${sub.id}`, title: sub.name || sub.title });
+              });
+            }
+          }
+        });
+
+        const splitOptionsList = [
+          { id: 'all-visible', title: 'All Visible Layers' },
+          ...allIdentifyLayers
+        ];
+
         return (
           <div className="tool-content">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
@@ -1446,7 +1609,19 @@ function AppInner() {
                   <button
                     key={id}
                     onClick={() => setSwipeMode(id)}
-                    style={{ flex: 1, padding: '7px 0', borderRadius: '6px', border: '1.5px solid', borderColor: swipeMode === id ? '#1e3c72' : '#e2e8f0', background: swipeMode === id ? 'linear-gradient(135deg, #1e3c72, #2a5298)' : 'white', color: swipeMode === id ? 'white' : '#1a2f4d', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}
+                    style={{ 
+                      flex: 1, 
+                      padding: '7px 0', 
+                      borderRadius: '6px', 
+                      border: '1.5px solid', 
+                      borderColor: swipeMode === id ? '#3b82f6' : '#e2e8f0', 
+                      background: swipeMode === id ? 'linear-gradient(135deg, #f0f7ff, #e0efff)' : 'white', 
+                      color: swipeMode === id ? '#1e3c72' : '#64748b', 
+                      fontWeight: '700', 
+                      fontSize: '11px', 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
                   >
                     {label}
                   </button>
@@ -1458,7 +1633,7 @@ function AppInner() {
               <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <CustomSelect 
-                    options={layersConfig}
+                    options={splitOptionsList}
                     value={splitLayers.left} 
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
                     placeholder="Select left layers..."
@@ -1493,7 +1668,7 @@ function AppInner() {
               <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <CustomSelect 
-                    options={layersConfig}
+                    options={splitOptionsList}
                     value={splitLayers.right} 
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
                     placeholder="Select right layers..."
@@ -1525,8 +1700,28 @@ function AppInner() {
             </div>
           </div>
         );
+      }
 
-      case 'split_view':
+      case 'split_view': {
+        const allIdentifyLayersView = [];
+        layersConfig.forEach(l => {
+          if (l.type === 'feature') {
+            allIdentifyLayersView.push({ id: l.id, title: l.title });
+          } else if (l.type === 'map-image' && dynamicMapServerData[l.id]) {
+            const mapData = dynamicMapServerData[l.id];
+            if (mapData.metadata.layers) {
+              mapData.metadata.layers.forEach(sub => {
+                allIdentifyLayersView.push({ id: `${l.id}_sub_${sub.id}`, title: sub.name || sub.title });
+              });
+            }
+          }
+        });
+
+        const splitViewOptionsList = [
+          { id: 'all-visible', title: 'All Visible Layers' },
+          ...allIdentifyLayersView
+        ];
+
         return (
           <div className="tool-content">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
@@ -1548,7 +1743,7 @@ function AppInner() {
               <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <CustomSelect
-                    options={layersConfig}
+                    options={splitViewOptionsList}
                     value={splitLayers.left}
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
                     placeholder="Select left layers..."
@@ -1592,7 +1787,7 @@ function AppInner() {
               <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <CustomSelect
-                    options={layersConfig}
+                    options={splitViewOptionsList}
                     value={splitLayers.right}
                     onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
                     placeholder="Select right layers..."
@@ -1645,6 +1840,7 @@ function AppInner() {
             </div>
           </div>
         );
+      }
 
       case 'navigation':
         return <NavigationPanel view={mapView} />;
