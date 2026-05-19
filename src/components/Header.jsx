@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 import './Header.css';
 
-const Header = () => {
+const Header = ({ onMenuClick }) => {
   const { t, toggleLanguage, lang } = useLanguage();
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
@@ -60,6 +60,15 @@ const Header = () => {
         <div className="header-avatar" aria-label="User Profile">
           AK
         </div>
+
+        {/* Hamburger Menu Button for Mobile */}
+        <button 
+          className="header-action-btn hamburger-menu-btn"
+          onClick={onMenuClick}
+          aria-label="Open Menu"
+        >
+          <Menu size={22} />
+        </button>
       </div>
     </header>
   );

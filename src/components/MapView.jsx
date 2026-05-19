@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import esriConfig from '@arcgis/core/config';
 import Map from '@arcgis/core/Map';
 import WebMap from '@arcgis/core/WebMap';
@@ -19,6 +19,8 @@ import HeatmapRenderer from '@arcgis/core/renderers/HeatmapRenderer';
 import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
 import Query from '@arcgis/core/rest/support/Query';
 import Basemap from '@arcgis/core/Basemap';
+import TimeExtent from '@arcgis/core/time/TimeExtent';
+import FeatureFilter from '@arcgis/core/layers/support/FeatureFilter';
 import { layersConfig } from '../layers';
 
 // Import ArcGIS CSS
@@ -57,7 +59,8 @@ const ArcGISMap = ({
   timelapseSettings, onTimelapseYearChange, 
   basemap, is3D, swipeMode = 'vertical', onSwipePositionChange,
   activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart,
-  onRequestData, onDataRequestAOIChange, dataRequestDrawingTool
+  onRequestData, onDataRequestAOIChange, dataRequestDrawingTool,
+  isSplitView
 }) => {
   const map2DDiv = useRef(null);
   const map3DDiv = useRef(null);
@@ -67,6 +70,7 @@ const ArcGISMap = ({
   const swipeRef = useRef(null);
   const layersRef = useRef({});
   const layers3DRef = useRef({});
+  const compareCloneRef = useRef(null);
   const is2DReady = useRef(false);
   const is3DReady = useRef(false);
   const originalRenderersRef = useRef({});
@@ -255,22 +259,49 @@ const ArcGISMap = ({
           }
         });
         
-        view.when(async () => {
+        view.when(() => {
           if (view.destroyed || !isSplitMode) return;
           if (swipeRef.current) {
             view.ui.remove(swipeRef.current);
             swipeRef.current.destroy();
             swipeRef.current = null;
           }
-          const swipe = new Swipe({
-            view: view,
-            leadingLayers: [leftLayer],
-            trailingLayers: [rightLayer],
-            direction: swipeMode,
-            position: 50
-          });
-          view.ui.add(swipe);
-          swipeRef.current = swipe;
+          
+          // Delay initialization on mobile so panel animations finish and dimensions are correct
+          const delay = window.innerWidth <= 768 ? 400 : 0;
+          setTimeout(() => {
+            if (view.destroyed || !isSplitMode) return;
+            const swipe = new Swipe({
+              view: view,
+              leadingLayers: [leftLayer],
+              trailingLayers: [rightLayer],
+              direction: swipeMode,
+              position: 50
+            });
+            view.ui.add(swipe);
+            swipeRef.current = swipe;
+            
+            swipe.watch("position", (val) => {
+              if (onSwipePositionChange) {
+                onSwipePositionChange({
+                  position: val,
+                  viewWidth: view.width,
+                  viewHeight: view.height
+                });
+              }
+            });
+
+            if (onSwipePositionChange) {
+              onSwipePositionChange({
+                position: 50,
+                viewWidth: view.width,
+                viewHeight: view.height
+              });
+            }
+
+            // Force map to recalculate its bounds
+            view.resize();
+          }, delay);
         });
       }
     } else {
@@ -281,6 +312,205 @@ const ArcGISMap = ({
       }
     }
   }, [isSplitMode, splitLayers, swipeMode, is3D]);
+
+  // 4b. Time Compare Swipe
+  useEffect(() => {
+    const view = viewRef.current;
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    if (!view || !activeLayers) return;
+
+    const layerId = timelapseSettings?.layerId;
+    if (!layerId) return;
+
+    const originalLayer = activeLayers[layerId] || view.map.findLayerById(layerId);
+
+    if (isSplitView) {
+      if (!originalLayer) {
+        console.warn(`[Temporal Swipe] Original layer not found: "${layerId}"`);
+        return;
+      }
+
+      // Hide other operational layers to make Swipe clean
+      Object.keys(activeLayers).forEach(id => {
+        if (id !== layerId) {
+          try { activeLayers[id].visible = false; } catch (_) {}
+        }
+      });
+
+      originalLayer.visible = true;
+
+      // 1. Create/Get Clone Layer
+      const cloneId = `${layerId}-compare-clone`;
+      let cloned = view.map.findLayerById(cloneId);
+      if (!cloned) {
+        if (originalLayer.type === 'map-image') {
+          cloned = new MapImageLayer({
+            id: cloneId,
+            url: originalLayer.url,
+            title: `${originalLayer.title} (Compare Clone)`,
+            visible: true
+          });
+        } else if (originalLayer.type === 'feature') {
+          cloned = new FeatureLayer({
+            id: cloneId,
+            url: originalLayer.url,
+            title: `${originalLayer.title} (Compare Clone)`,
+            visible: true
+          });
+        }
+        if (cloned) {
+          view.map.add(cloned);
+          compareCloneRef.current = cloned;
+        }
+      } else {
+        cloned.visible = true;
+      }
+
+      if (!cloned) return;
+
+      const field = timelapseSettings.timeField || 'SURVEY_YEAR';
+      const fromYear = timelapseSettings.fromYear;
+      const toYear = timelapseSettings.toYear;
+
+      // Left expression & Right expression
+      const leftExpr = `${field} = ${fromYear}`;
+      const rightExpr = `${field} = ${toYear}`;
+
+      console.log(`[Temporal Swipe] Applying Left: "${leftExpr}" & Right: "${rightExpr}"`);
+
+      // Apply leftExpr to original layer
+      if (originalLayer.type === 'map-image') {
+        const leftDefs = {};
+        const applyLeft = () => {
+          if (originalLayer.allSublayers && originalLayer.allSublayers.length > 0) {
+            originalLayer.allSublayers.forEach(sub => {
+              const isGroup = sub.sublayers && sub.sublayers.length > 0;
+              if (!isGroup) {
+                sub.visible = true;
+                sub.definitionExpression = leftExpr;
+                leftDefs[sub.id] = leftExpr;
+              }
+            });
+          } else {
+            leftDefs[0] = leftExpr;
+          }
+          originalLayer.customParameters = {
+            ...(originalLayer.customParameters || {}),
+            layerDefs: JSON.stringify(leftDefs)
+          };
+          if (originalLayer.sublayers) {
+            try { originalLayer.sublayers = originalLayer.sublayers.toArray(); } catch (_) {}
+          }
+          if (typeof originalLayer.refresh === 'function') originalLayer.refresh();
+        };
+
+        if (originalLayer.loaded) applyLeft();
+        else originalLayer.load().then(applyLeft).catch(() => {});
+
+      } else if (originalLayer.type === 'feature') {
+        originalLayer.definitionExpression = leftExpr;
+      }
+
+      // Apply rightExpr to cloned layer
+      if (cloned.type === 'map-image') {
+        const rightDefs = {};
+        const applyRight = () => {
+          if (cloned.allSublayers && cloned.allSublayers.length > 0) {
+            cloned.allSublayers.forEach(sub => {
+              const isGroup = sub.sublayers && sub.sublayers.length > 0;
+              if (!isGroup) {
+                sub.visible = true;
+                sub.definitionExpression = rightExpr;
+                rightDefs[sub.id] = rightExpr;
+              }
+            });
+          } else {
+            rightDefs[0] = rightExpr;
+          }
+          cloned.customParameters = {
+            ...(cloned.customParameters || {}),
+            layerDefs: JSON.stringify(rightDefs)
+          };
+          if (cloned.sublayers) {
+            try { cloned.sublayers = cloned.sublayers.toArray(); } catch (_) {}
+          }
+          if (typeof cloned.refresh === 'function') cloned.refresh();
+        };
+
+        if (cloned.loaded) applyRight();
+        else cloned.load().then(applyRight).catch(() => {});
+
+      } else if (cloned.type === 'feature') {
+        cloned.definitionExpression = rightExpr;
+      }
+
+      // Recreate Swipe widget
+        view.when(() => {
+          if (view.destroyed || !isSplitView) return;
+          if (swipeRef.current) {
+            view.ui.remove(swipeRef.current);
+            try { swipeRef.current.destroy(); } catch (_) {}
+            swipeRef.current = null;
+          }
+
+          const delay = window.innerWidth <= 768 ? 400 : 0;
+          setTimeout(() => {
+            if (view.destroyed || !isSplitView) return;
+            const swipe = new Swipe({
+              view: view,
+              leadingLayers: [originalLayer],
+              trailingLayers: [cloned],
+              direction: swipeMode,
+              position: 50
+            });
+            view.ui.add(swipe);
+            swipeRef.current = swipe;
+
+            swipe.watch("position", (val) => {
+              if (onSwipePositionChange) {
+                onSwipePositionChange({
+                  position: val,
+                  viewWidth: view.width,
+                  viewHeight: view.height
+                });
+              }
+            });
+
+            if (onSwipePositionChange) {
+              onSwipePositionChange({
+                position: 50,
+                viewWidth: view.width,
+                viewHeight: view.height
+              });
+            }
+            view.resize();
+          }, delay);
+        });
+
+    } else {
+      // Clean up Swipe and comparison clones
+      if (swipeRef.current && !isSplitMode) {
+        view.ui.remove(swipeRef.current);
+        try { swipeRef.current.destroy(); } catch (_) {}
+        swipeRef.current = null;
+      }
+
+      if (compareCloneRef.current) {
+        view.map.remove(compareCloneRef.current);
+        try { compareCloneRef.current.destroy(); } catch (_) {}
+        compareCloneRef.current = null;
+      }
+
+      // Restore layers based on normal temporal filter settings
+      if (originalLayer) {
+        if (timelapseSettings?.lastApply > 0) {
+          applyTemporalFilterNow(timelapseSettings, view, activeLayers);
+        } else {
+          clearAllTemporalFilters(activeLayers, view);
+        }
+      }
+    }
+  }, [isSplitView, timelapseSettings?.fromYear, timelapseSettings?.toYear, timelapseSettings?.layerId, timelapseSettings?.timeField, swipeMode, is3D]);
 
   // ============================================================
   // BLEND TOOL FUNCTIONALITY (IMAGERY COMPARED TO BASEMAP)
@@ -336,55 +566,175 @@ const ArcGISMap = ({
   }, [blendSettings, activeTool]);
 
   // ============================================================
-  // TEMPORAL FILTER ENGINE (definitionExpression)
+  // TEMPORAL FILTER ENGINE — True ArcGIS Time-Slider Behavior
+  //
+  // Strategy order for MapImageLayer (server-rendered):
+  //   1. customParameters.layerDefs  → URL-level, bypasses all cache
+  //   2. sublayer.definitionExpression → ArcGIS client tracking
+  //   3. layer.refresh()              → forces a new server request
+  //   4. view.timeExtent              → for time-aware services
+  //
+  // Strategy for FeatureLayer (client-rendered):
+  //   1. layer.definitionExpression   → hides non-matching features
+  //   2. LayerView.filter             → instant client-side removal
   // ============================================================
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
+  const layerViewCacheRef = useRef({});
 
-    if (!timelapseSettings || !timelapseSettings.layerId) {
-      // Clear temporal filters if tool is inactive
-      const temporalLayers = ['sample-data-1', 'service-2', 'service-3']; // From layers.js
-      temporalLayers.forEach(id => {
-        const targetLayer = view.map.findLayerById(id);
-        if (targetLayer) {
-          if (targetLayer.type === 'feature') {
-            targetLayer.definitionExpression = null;
-          } else if (targetLayer.type === 'map-image' && targetLayer.allSublayers) {
-            targetLayer.allSublayers.forEach(sub => {
-              sub.definitionExpression = null;
-            });
-          }
-        }
-      });
+  const applyTemporalFilterNow = useCallback(async (settings, viewInstance, activeLayers) => {
+    if (!settings?.layerId || !viewInstance) return;
+
+    const { layerId, fromYear, toYear, timeField } = settings;
+    const field = timeField || 'SURVEY_YEAR';
+    const expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
+
+    const targetLayer = activeLayers[layerId] || viewInstance.map.findLayerById(layerId);
+    if (!targetLayer) {
+      console.warn(`[Temporal] Layer not found: "${layerId}"`);
       return;
     }
 
-    const applyTemporalFilter = () => {
-      const { layerId, fromYear, toYear, timeField } = timelapseSettings;
-      const targetLayer = view.map.findLayerById(layerId);
-      
-      if (targetLayer) {
-        const field = timeField || 'SURVEY_YEAR';
-        const expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
-        
-        if (targetLayer.type === 'feature') {
-          targetLayer.definitionExpression = expression;
-        } else if (targetLayer.type === 'map-image') {
-          if (targetLayer.allSublayers) {
-            // Check if sublayer actually supports the field before blindly applying
-            // For now, we apply to all as per original logic
-            targetLayer.allSublayers.forEach(sub => {
-              sub.definitionExpression = expression;
-            });
-          }
-        }
-        console.log(`[Temporal Filter] Applied to ${layerId}: ${expression}`);
-      }
-    };
+    // ── 1. Make layer visible ─────────────────────────────────────────────
+    targetLayer.visible = true;
 
-    applyTemporalFilter();
-  }, [timelapseSettings, is3D]);
+    // ── 2. Set view.timeExtent for time-aware services ────────────────────
+    // (works for services that have timeInfo configured server-side)
+    try {
+      viewInstance.timeExtent = new TimeExtent({
+        start: new Date(`${fromYear}-01-01T00:00:00.000Z`),
+        end:   new Date(`${toYear}-12-31T23:59:59.000Z`)
+      });
+      if (targetLayer.useViewTime !== undefined) {
+        targetLayer.useViewTime = true;
+      }
+      console.log(`[Temporal] ⏱ view.timeExtent: ${fromYear}-01-01 → ${toYear}-12-31`);
+    } catch (e) {
+      console.warn('[Temporal] view.timeExtent unavailable:', e.message);
+    }
+
+    // ── 3. MapImageLayer — server-side rendering ──────────────────────────
+    if (targetLayer.type === 'map-image') {
+      const doApply = () => {
+        const layerDefs = {};
+
+        // Collect all leaf sublayers (non-group)
+        if (targetLayer.allSublayers && targetLayer.allSublayers.length > 0) {
+          targetLayer.allSublayers.forEach(sub => {
+            const isGroup = sub.sublayers && sub.sublayers.length > 0;
+            if (!isGroup) {
+              sub.visible = true;
+              sub.definitionExpression = expression; // ArcGIS client tracking
+              layerDefs[sub.id] = expression;        // URL-level parameter
+            }
+          });
+        } else {
+          // Fallback: no sublayer info yet — apply to sublayer 0 as default
+          layerDefs[0] = expression;
+        }
+
+        // PRIMARY: customParameters.layerDefs — sent as a URL query param to MapServer
+        // This is guaranteed to reach the server even if sublayer API isn't available.
+        targetLayer.customParameters = {
+          ...(targetLayer.customParameters || {}),
+          layerDefs: JSON.stringify(layerDefs)
+        };
+
+        // SECONDARY: re-assign sublayers array to trigger ArcGIS change detection
+        if (targetLayer.sublayers) {
+          try { targetLayer.sublayers = targetLayer.sublayers.toArray(); } catch (_) {}
+        }
+
+        // FORCE: refresh() sends a new image request to the server
+        if (typeof targetLayer.refresh === 'function') {
+          targetLayer.refresh();
+        }
+
+        console.log(`[Temporal] ✅ MapImageLayer "${layerId}" | layerDefs: ${JSON.stringify(layerDefs)}`);
+      };
+
+      if (targetLayer.loaded) {
+        doApply();
+      } else {
+        targetLayer.load().then(doApply).catch(err =>
+          console.error(`[Temporal] Layer load failed: ${err.message}`)
+        );
+      }
+
+    // ── 4. FeatureLayer — client-side rendering ───────────────────────────
+    } else if (targetLayer.type === 'feature') {
+      targetLayer.definitionExpression = expression;
+
+      try {
+        const cacheKey = `${layerId}_lv`;
+        if (!layerViewCacheRef.current[cacheKey]) {
+          layerViewCacheRef.current[cacheKey] = await viewInstance.whenLayerView(targetLayer);
+        }
+        const lv = layerViewCacheRef.current[cacheKey];
+        if (lv) {
+          lv.filter = new FeatureFilter({ where: expression });
+          if (typeof lv.refresh === 'function') lv.refresh();
+          console.log(`[Temporal] ✅ FeatureLayer "${layerId}" | LayerView.filter: ${expression}`);
+        }
+      } catch (e) {
+        console.warn('[Temporal] LayerView filter failed (definitionExpression still active):', e.message);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Clear all temporal filters ──────────────────────────────────────────
+  const clearAllTemporalFilters = useCallback((activeLayers, viewInstance) => {
+    const temporalLayerIds = ['sample-data-1', 'service-2', 'service-3'];
+
+    // Clear view.timeExtent
+    if (viewInstance) {
+      try { viewInstance.timeExtent = null; } catch (_) {}
+    }
+
+    temporalLayerIds.forEach(id => {
+      const layer = activeLayers[id] || (viewInstance && viewInstance.map.findLayerById(id));
+      if (!layer) return;
+
+      if (layer.type === 'feature') {
+        layer.definitionExpression = null;
+        const lv = layerViewCacheRef.current[`${id}_lv`];
+        if (lv) { try { lv.filter = null; } catch (_) {} }
+
+      } else if (layer.type === 'map-image') {
+        // Clear customParameters.layerDefs
+        if (layer.customParameters && layer.customParameters.layerDefs) {
+          const params = { ...layer.customParameters };
+          delete params.layerDefs;
+          layer.customParameters = Object.keys(params).length ? params : undefined;
+        }
+        // Clear sublayer definitionExpressions
+        if (layer.allSublayers) {
+          layer.allSublayers.forEach(sub => { sub.definitionExpression = null; });
+        }
+        if (layer.sublayers) { try { layer.sublayers = layer.sublayers.toArray(); } catch (_) {} }
+        if (layer.useViewTime !== undefined) layer.useViewTime = false;
+        if (typeof layer.refresh === 'function') layer.refresh();
+      }
+    });
+    console.log('[Temporal] 🧹 All temporal filters cleared');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Main Effect: fires on lastApply change (Apply button OR playback tick)
+  useEffect(() => {
+    if (isSplitView) return; // Prevent conflicts during Swipe Compare
+    const view = viewRef.current;
+    const activeLayers = is3D ? layers3DRef.current : layersRef.current;
+    if (!view || !activeLayers) return;
+
+    if (!timelapseSettings?.layerId || !timelapseSettings?.lastApply) {
+      clearAllTemporalFilters(activeLayers, view);
+      return;
+    }
+
+    applyTemporalFilterNow(timelapseSettings, view, activeLayers);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelapseSettings?.lastApply, timelapseSettings?.layerId, is3D, isSplitView]);
+
 
   // 5. Visibility Sync
   useEffect(() => {

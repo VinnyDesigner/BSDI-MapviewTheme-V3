@@ -54,3 +54,21 @@
     color: #e63946;
   }
 }
+
+@media (max-width: 768px) {
+  .right-toolbar-container {
+    top: 64px !important;
+    right: 12px !important;
+    gap: 6px !important;
+  }
+  
+  [dir="rtl"] .right-toolbar-container {
+    right: auto !important;
+    left: 12px !important;
+  }
+  
+  .pinned-tool-button {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}

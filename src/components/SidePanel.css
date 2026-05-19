@@ -210,3 +210,11 @@
     background: rgba(255, 255, 255, 0.1);
   }
 }
+
+/* Tablet Optimization */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .side-panel {
+    height: 660px !important; /* Increased from 540px to 660px */
+  }
+}
+

@@ -171,3 +171,59 @@
     background: rgba(255, 255, 255, 0.1);
   }
 }
+
+@media (max-width: 768px) {
+  .bottom-toolbar-container {
+    display: none !important;
+  }
+}
+
+/* Tablet Optimization */
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --icon-size: 38px;
+    --icon-inner: 18px;
+    --group-spacing: 5px;
+    --btn-spacing: 5px;
+  }
+
+  .bottom-toolbar-container {
+    bottom: 30px !important;
+    width: 71vw !important;
+    max-width: 71vw !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .toolbar-wrapper {
+    gap: var(--group-spacing) !important;
+    padding: 5px 8px !important;
+    width: 100% !important;
+    justify-content: center !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .tool-button.active {
+    transform: translateY(-22px) scale(1.05) !important;
+  }
+
+  .toolbar-wrapper.has-active-tool::before {
+    -webkit-mask: radial-gradient(circle 24px at var(--notch-x, 50%) 4px, transparent 98%, black 100%) !important;
+    mask: radial-gradient(circle 24px at var(--notch-x, 50%) 4px, transparent 98%, black 100%) !important;
+  }
+
+  .toolbar-divider {
+    height: 18px !important;
+    margin: 0 1px !important;
+  }
+
+  .tool-button svg {
+    width: var(--icon-inner) !important;
+    height: var(--icon-inner) !important;
+  }
+
+  .tool-button i.material-icons {
+    font-size: var(--icon-inner) !important;
+  }
+}
+

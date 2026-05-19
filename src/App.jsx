@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import ArcGISMap from './components/MapView'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import BottomToolbar from './components/BottomToolbar'
 import SidePanel from './components/SidePanel'
 import Header from './components/Header'
@@ -46,7 +46,52 @@ import RightToolbar from './components/RightToolbar'
 
 // ─── Inner app — has access to LanguageContext ────────────────────────────────
 function AppInner() {
-  const { t, lang } = useLanguage();
+  const { t, lang, toggleLanguage } = useLanguage();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const drawerTools = [
+    { id: 'layers', icon: Layers, label: translations[lang].tools.layers ?? 'Layers' },
+    { id: 'time_compare', icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+        <path d="M16 12h-4V8" opacity="0.3"/>
+        <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
+      </svg>
+    ), label: translations[lang].tools.time_compare ?? 'Temporal Filter' },
+    { id: 'split', icon: Columns2, label: translations[lang].tools.split ?? 'Swipe' },
+    { id: 'split_view', icon: () => <i className="material-icons" style={{ fontSize: '20px' }}>splitscreen</i>, label: translations[lang].tools.split_view ?? 'Split View' },
+    { id: 'blend', icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="8" cy="12" r="7" />
+        <circle cx="16" cy="12" r="7" />
+      </svg>
+    ), label: translations[lang].tools.blend ?? 'Blend' },
+    { id: 'arcade', icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
+      </svg>
+    ), label: translations[lang].tools.arcade ?? 'Arcade' },
+    { id: 'spatial_analysis', icon: () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+      </svg>
+    ), label: translations[lang].tools.spatial_analysis ?? 'Spatial Analysis' },
+    { id: 'navigation', icon: Navigation, label: translations[lang].tools.navigation ?? 'Navigation' },
+    { id: 'measure', icon: Ruler, label: translations[lang].tools.measure ?? 'Measure' },
+    { id: 'draw', icon: Pencil, label: translations[lang].tools.draw ?? 'Draw' },
+    { id: 'data_request', icon: Database, label: translations[lang].tools.data_request ?? 'Data Request' },
+    { id: 'add_data', icon: Globe, label: translations[lang].tools.add_data ?? 'Add Data' },
+    { id: 'print', icon: Printer, label: translations[lang].tools.print ?? 'Print' },
+    { id: 'bookmark', icon: Bookmark, label: translations[lang].tools.bookmark ?? 'Bookmark' },
+    { id: 'basemap', icon: Map, label: translations[lang].tools.basemap ?? 'Basemaps' }
+  ];
+
+  const handleMobileToolSelect = (toolId) => {
+    handleToolSelect(toolId);
+    setIsMobileMenuOpen(false);
+  };
 
   const [activeTool, setActiveTool] = useState(null)
   const [pinnedTools, setPinnedTools] = useState([])
@@ -465,7 +510,8 @@ function AppInner() {
   const is3DDisabled = isSplitModePersistent || isSplitView;
 
   const [timelapseSettings, setTimelapseSettings] = useState({
-    layerId: 'blocks-layer',
+    layerId: 'sample-data-1',
+    timeField: 'SURVEY_YEAR',
     currentYear: 2024,
     fromYear: 2018,
     toYear: 2024,
@@ -474,7 +520,7 @@ function AppInner() {
     isPlaying: false,
     speed: 'Medium',
     loop: true,
-    mode: 'range', // 'single' | 'range'
+    mode: 'range',
     playbackInterval: 'Yearly',
     lastApply: 0
   });
@@ -1554,6 +1600,8 @@ function AppInner() {
             layersConfig={layersConfig}
             timelapseSettings={timelapseSettings}
             setTimelapseSettings={setTimelapseSettings}
+            timeCompareTab={timeCompareTab}
+            setTimeCompareTab={setTimeCompareTab}
           />
         );
 
@@ -1909,7 +1957,7 @@ function AppInner() {
 
   return (
     <div className="app-container" data-swipe-mode={swipeMode}>
-      <Header />
+      <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
       <div style={{ display: isSplitView ? 'none' : 'block', width: '100%', height: '100%' }}>
         <ArcGISMap 
           layerVisibility={layerVisibility} 
@@ -1994,7 +2042,7 @@ function AppInner() {
       />
 
       {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
-      {isSplitModePersistent && (() => {
+      {(isSplitModePersistent || (activeTool === 'time_compare' && timeCompareTab === 'swipe')) && (() => {
         const isVertical = swipeMode === 'vertical';
         const pos = swipeInfo.position ?? 50;
 
@@ -2018,20 +2066,109 @@ function AppInner() {
           ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` } // Right
           : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
 
-        const labelAText = isVisualVertical ? 'Left' : 'Top';
-        const labelBText = isVisualVertical ? 'Right' : 'Bottom';
+        let labelAText = '';
+        let labelBText = '';
+
+        const isTemporalSwipe = activeTool === 'time_compare' && timeCompareTab === 'swipe';
+
+        if (isTemporalSwipe) {
+          const sideA = isVisualVertical ? 'Left' : 'Top';
+          const sideB = isVisualVertical ? 'Right' : 'Bottom';
+          labelAText = `${sideA}: ${timelapseSettings.fromYear}`;
+          labelBText = `${sideB}: ${timelapseSettings.toYear}`;
+        } else {
+          const sideA = isVisualVertical ? 'Left' : 'Top';
+          const sideB = isVisualVertical ? 'Right' : 'Bottom';
+          labelAText = `${sideA}: ${layersConfig.find(l => l.id === splitLayers.left)?.title || 'Left Layer'}`;
+          labelBText = `${sideB}: ${layersConfig.find(l => l.id === splitLayers.right)?.title || 'Right Layer'}`;
+        }
 
         return (
-          <div style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
+          <div className="swipe-labels-container" style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
             <div className="swipe-label" style={labelA}>
-              {labelAText}: {layersConfig.find(l => l.id === splitLayers.left)?.title}
+              {labelAText}
             </div>
             <div className="swipe-label" style={labelB}>
-              {labelBText}: {layersConfig.find(l => l.id === splitLayers.right)?.title}
+              {labelBText}
             </div>
           </div>
         );
       })()}
+
+      {/* Mobile Tool Drawer / Bottom Sheet */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop Overlay */}
+            <motion.div
+              className="mobile-drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+
+            {/* Bottom Sheet Drawer */}
+            <motion.div
+              className="mobile-drawer-container"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+            >
+              {/* Drag Handle Indicator */}
+              <div className="mobile-drawer-handle" />
+
+              {/* Drawer Header */}
+              <div className="mobile-drawer-header">
+                <h3>{lang === 'AR' ? 'عارض الخرائط الذكي BSDI' : 'BSDI Smart Map Viewer'}</h3>
+                
+                <div className="mobile-drawer-header-actions">
+                  {/* Language Toggle */}
+                  <button 
+                    className="mobile-drawer-lang-toggle" 
+                    onClick={toggleLanguage}
+                  >
+                    {t('langToggle')}
+                  </button>
+                  
+                  {/* Close button */}
+                  <button 
+                    className="mobile-drawer-close-btn"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <i className="material-icons">close</i>
+                  </button>
+                </div>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="mobile-drawer-content no-scrollbar">
+                <div className="mobile-tools-grid">
+                  {drawerTools.map(tool => {
+                    const Icon = tool.icon;
+                    const isActive = activeTool === tool.id || 
+                                   (tool.id === 'split_view' && isSplitView) ||
+                                   (tool.id === 'split' && isSplitModePersistent);
+                    return (
+                      <button
+                        key={tool.id}
+                        onClick={() => handleMobileToolSelect(tool.id)}
+                        className={`mobile-tool-card ${isActive ? 'active' : ''}`}
+                      >
+                        <div className="mobile-tool-icon-wrapper">
+                          <Icon />
+                        </div>
+                        <span className="mobile-tool-label">{tool.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <DownloadRestrictedModal 
         isOpen={isRestrictedModalOpen}

@@ -116,3 +116,36 @@
   background: rgba(0, 0, 0, 0.05);
   margin: 0 6px;
 }
+
+@media (max-width: 768px) {
+  .map-controls-container {
+    top: 64px !important;
+    left: 12px !important;
+    gap: 4px !important;
+  }
+  
+  [dir="rtl"] .map-controls-container {
+    left: auto !important;
+    right: 12px !important;
+  }
+  
+  .map-control-btn {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 6px !important;
+  }
+  
+  .map-control-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  
+  .map-control-group-square {
+    border-radius: 6px !important;
+  }
+  
+  .map-control-group-square .sub-btn {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
