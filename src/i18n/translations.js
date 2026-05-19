@@ -94,7 +94,8 @@ export const translations = {
     // ── Map Info Widget ──────────────────────────────────
     coordX:     'X:',
     coordY:     'Y:',
-    scale:      'Scale 1:',
+    scale:      'Scale',
+    coordinates: 'Coordinates',
     unitKm:     'km',
     unitM:      'm',
 
@@ -201,7 +202,8 @@ export const translations = {
     // ── Map Info Widget ──────────────────────────────────
     coordX:     ':X',
     coordY:     ':Y',
-    scale:      'المقياس 1:',
+    scale:      'المقياس',
+    coordinates: 'الإحداثيات',
     unitKm:     'كم',
     unitM:      'م',
 

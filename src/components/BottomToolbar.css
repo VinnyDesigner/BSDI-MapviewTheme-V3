@@ -183,21 +183,24 @@
   :root {
     --icon-size: 38px;
     --icon-inner: 18px;
-    --group-spacing: 5px;
-    --btn-spacing: 5px;
+    --group-spacing: 6px;
+    --btn-spacing: 6px;
+    --toolbar-bg: rgba(255, 255, 255, 0.78);
+    --toolbar-border: rgba(255, 255, 255, 0.5);
+    --toolbar-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
 
   .bottom-toolbar-container {
     bottom: 30px !important;
-    width: 71vw !important;
-    max-width: 71vw !important;
+    width: 82vw !important;
+    max-width: 82vw !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
   }
 
   .toolbar-wrapper {
     gap: var(--group-spacing) !important;
-    padding: 5px 8px !important;
+    padding: 8px 16px !important;
     width: 100% !important;
     justify-content: center !important;
     flex-wrap: nowrap !important;
