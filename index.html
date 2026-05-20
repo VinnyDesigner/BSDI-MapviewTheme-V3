@@ -1,6 +1,51 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function() {
+        function sendLog(type, args) {
+          const message = Array.from(args).map(arg => {
+            if (arg && arg.message) return arg.message + '\n' + (arg.stack || '');
+            if (typeof arg === 'object') {
+              try { return JSON.stringify(arg); } catch (_) { return String(arg); }
+            }
+            return String(arg);
+          }).join(' ');
+
+          fetch('http://localhost:9999/log', {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, message })
+          }).catch(() => {});
+        }
+
+        const orgLog = console.log;
+        const orgWarn = console.warn;
+        const orgErr = console.error;
+
+        console.log = function() {
+          orgLog.apply(console, arguments);
+          sendLog('log', arguments);
+        };
+        console.warn = function() {
+          orgWarn.apply(console, arguments);
+          sendLog('warn', arguments);
+        };
+        console.error = function() {
+          orgErr.apply(console, arguments);
+          sendLog('error', arguments);
+        };
+
+        window.addEventListener('error', function(e) {
+          sendLog('error_window', [e.message, e.filename, e.lineno, e.colno, e.error]);
+        });
+
+        window.addEventListener('unhandledrejection', function(e) {
+          sendLog('unhandledrejection', [e.reason]);
+        });
+      })();
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -49,6 +49,8 @@ if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis9.smartgeo
   });
 }
 
+
+
 esriConfig.request.timeout = 60000; // Increased to 60s for slow enterprise servers
 esriConfig.request.useIdentity = false;
 
@@ -119,14 +121,19 @@ const ArcGISMap = ({
       if (config.type === 'tile') layer = new TileLayer(commonProps);
       else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
       else {
-        layer = new FeatureLayer({ 
+        let layerUrl = config.url;
+        if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
+          layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
+        }
+        const layerProps = { 
           ...commonProps, 
-          popupTemplate: { title: "{*}", content: "{*}" },
-          renderer: {
-            type: "simple",
-            symbol: { type: "simple-marker", color: "red", outline: { color: "white", width: 1 } }
-          }
-        });
+          url: layerUrl,
+          popupTemplate: { title: "{*}", content: "{*}" }
+        };
+        if (config.renderer) {
+          layerProps.renderer = config.renderer;
+        }
+        layer = new FeatureLayer(layerProps);
       }
 
       map.add(layer);
@@ -201,7 +208,16 @@ const ArcGISMap = ({
       let layer;
       if (config.type === 'tile') layer = new TileLayer(commonProps);
       else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
-      else layer = new FeatureLayer(commonProps);
+      else {
+        let layerUrl = config.url;
+        if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
+          layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
+        }
+        layer = new FeatureLayer({
+          ...commonProps,
+          url: layerUrl
+        });
+      }
 
       map.add(layer);
       layers3DRef.current[config.id] = layer;
@@ -583,99 +599,81 @@ const ArcGISMap = ({
   const applyTemporalFilterNow = useCallback(async (settings, viewInstance, activeLayers) => {
     if (!settings?.layerId || !viewInstance) return;
 
-    const { layerId, fromYear, toYear, timeField } = settings;
+    const { layerId, fromYear, toYear, timeField, timeType } = settings;
     const field = timeField || 'SURVEY_YEAR';
-    const expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
-
-    const targetLayer = activeLayers[layerId] || viewInstance.map.findLayerById(layerId);
-    if (!targetLayer) {
-      console.warn(`[Temporal] Layer not found: "${layerId}"`);
-      return;
+    
+    // Construct filter expression based on type
+    let expression = "";
+    if (timeType === 'date') {
+      const fromStr = new Date(fromYear).toISOString().split('T')[0];
+      const toStr = new Date(toYear).toISOString().split('T')[0];
+      expression = `${field} >= DATE '${fromStr}' AND ${field} <= DATE '${toStr}'`;
+    } else if (timeType === 'string-date') {
+      const fromStr = new Date(fromYear).toISOString().split('T')[0];
+      const toStr = new Date(toYear).toISOString().split('T')[0];
+      expression = `${field} >= '${fromStr}' AND ${field} <= '${toStr}'`;
+    } else {
+      expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
     }
 
-    // ── 1. Make layer visible ─────────────────────────────────────────────
-    targetLayer.visible = true;
+    console.log(`[Temporal Filter] Applying expression: "${expression}" on "${layerId}"`);
 
-    // ── 2. Set view.timeExtent for time-aware services ────────────────────
-    // (works for services that have timeInfo configured server-side)
+    // 1. Set view.timeExtent for time-aware services if applicable
     try {
-      viewInstance.timeExtent = new TimeExtent({
-        start: new Date(`${fromYear}-01-01T00:00:00.000Z`),
-        end:   new Date(`${toYear}-12-31T23:59:59.000Z`)
-      });
-      if (targetLayer.useViewTime !== undefined) {
-        targetLayer.useViewTime = true;
-      }
-      console.log(`[Temporal] ⏱ view.timeExtent: ${fromYear}-01-01 → ${toYear}-12-31`);
+      const startDate = timeType === 'numeric' ? new Date(`${fromYear}-01-01T00:00:00Z`) : new Date(fromYear);
+      const endDate = timeType === 'numeric' ? new Date(`${toYear}-12-31T23:59:59Z`) : new Date(toYear);
+      viewInstance.timeExtent = new TimeExtent({ start: startDate, end: endDate });
     } catch (e) {
-      console.warn('[Temporal] view.timeExtent unavailable:', e.message);
+      console.warn('[Temporal] view.timeExtent assignment bypassed:', e.message);
     }
 
-    // ── 3. MapImageLayer — server-side rendering ──────────────────────────
-    if (targetLayer.type === 'map-image') {
-      const doApply = () => {
-        const layerDefs = {};
+    // 2. Apply definition expression / filter
+    if (layerId.includes('_sub_')) {
+      const [parentId, subId] = layerId.split('_sub_');
+      const parentLayer = activeLayers[parentId] || viewInstance.map.findLayerById(parentId);
+      if (parentLayer && parentLayer.type === 'map-image') {
+        parentLayer.visible = true;
+        const doApply = () => {
+          const sublayer = parentLayer.findSublayerById(Number(subId));
+          if (sublayer) {
+            sublayer.visible = true;
+            sublayer.definitionExpression = expression;
+          }
+          
+          const layerDefs = {};
+          layerDefs[subId] = expression;
+          parentLayer.customParameters = {
+            ...(parentLayer.customParameters || {}),
+            layerDefs: JSON.stringify(layerDefs)
+          };
 
-        // Collect all leaf sublayers (non-group)
-        if (targetLayer.allSublayers && targetLayer.allSublayers.length > 0) {
-          targetLayer.allSublayers.forEach(sub => {
-            const isGroup = sub.sublayers && sub.sublayers.length > 0;
-            if (!isGroup) {
-              sub.visible = true;
-              sub.definitionExpression = expression; // ArcGIS client tracking
-              layerDefs[sub.id] = expression;        // URL-level parameter
-            }
-          });
-        } else {
-          // Fallback: no sublayer info yet — apply to sublayer 0 as default
-          layerDefs[0] = expression;
-        }
-
-        // PRIMARY: customParameters.layerDefs — sent as a URL query param to MapServer
-        // This is guaranteed to reach the server even if sublayer API isn't available.
-        targetLayer.customParameters = {
-          ...(targetLayer.customParameters || {}),
-          layerDefs: JSON.stringify(layerDefs)
+          if (parentLayer.sublayers) {
+            try { parentLayer.sublayers = parentLayer.sublayers.toArray(); } catch (_) {}
+          }
+          if (typeof parentLayer.refresh === 'function') parentLayer.refresh();
         };
 
-        // SECONDARY: re-assign sublayers array to trigger ArcGIS change detection
-        if (targetLayer.sublayers) {
-          try { targetLayer.sublayers = targetLayer.sublayers.toArray(); } catch (_) {}
-        }
-
-        // FORCE: refresh() sends a new image request to the server
-        if (typeof targetLayer.refresh === 'function') {
-          targetLayer.refresh();
-        }
-
-        console.log(`[Temporal] ✅ MapImageLayer "${layerId}" | layerDefs: ${JSON.stringify(layerDefs)}`);
-      };
-
-      if (targetLayer.loaded) {
-        doApply();
-      } else {
-        targetLayer.load().then(doApply).catch(err =>
-          console.error(`[Temporal] Layer load failed: ${err.message}`)
-        );
+        if (parentLayer.loaded) doApply();
+        else parentLayer.load().then(doApply).catch(() => {});
       }
-
-    // ── 4. FeatureLayer — client-side rendering ───────────────────────────
-    } else if (targetLayer.type === 'feature') {
+    } else {
+      // FeatureLayer, GeoJSONLayer, CSVLayer
+      const targetLayer = activeLayers[layerId] || viewInstance.map.findLayerById(layerId);
+      if (!targetLayer) {
+        console.warn(`[Temporal] Layer not found: "${layerId}"`);
+        return;
+      }
+      targetLayer.visible = true;
       targetLayer.definitionExpression = expression;
 
       try {
-        const cacheKey = `${layerId}_lv`;
-        if (!layerViewCacheRef.current[cacheKey]) {
-          layerViewCacheRef.current[cacheKey] = await viewInstance.whenLayerView(targetLayer);
-        }
-        const lv = layerViewCacheRef.current[cacheKey];
+        const lv = await viewInstance.whenLayerView(targetLayer);
         if (lv) {
           lv.filter = new FeatureFilter({ where: expression });
           if (typeof lv.refresh === 'function') lv.refresh();
-          console.log(`[Temporal] ✅ FeatureLayer "${layerId}" | LayerView.filter: ${expression}`);
         }
       } catch (e) {
-        console.warn('[Temporal] LayerView filter failed (definitionExpression still active):', e.message);
+        console.warn('[Temporal] LayerView filter failed (fallback to definitionExpression):', e.message);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -683,38 +681,32 @@ const ArcGISMap = ({
 
   // ── Clear all temporal filters ──────────────────────────────────────────
   const clearAllTemporalFilters = useCallback((activeLayers, viewInstance) => {
-    const temporalLayerIds = ['sample-data-1', 'service-2', 'service-3'];
+    if (!viewInstance) return;
 
     // Clear view.timeExtent
-    if (viewInstance) {
-      try { viewInstance.timeExtent = null; } catch (_) {}
-    }
+    try { viewInstance.timeExtent = null; } catch (_) {}
 
-    temporalLayerIds.forEach(id => {
-      const layer = activeLayers[id] || (viewInstance && viewInstance.map.findLayerById(id));
-      if (!layer) return;
-
-      if (layer.type === 'feature') {
+    // Clear all potential definitionExpressions and filter criteria
+    viewInstance.map.allLayers.forEach(layer => {
+      if (layer.type === 'feature' || layer.type === 'geojson' || layer.type === 'csv') {
         layer.definitionExpression = null;
-        const lv = layerViewCacheRef.current[`${id}_lv`];
-        if (lv) { try { lv.filter = null; } catch (_) {} }
-
+        viewInstance.whenLayerView(layer).then(lv => {
+          if (lv) lv.filter = null;
+        }).catch(() => {});
       } else if (layer.type === 'map-image') {
-        // Clear customParameters.layerDefs
         if (layer.customParameters && layer.customParameters.layerDefs) {
           const params = { ...layer.customParameters };
           delete params.layerDefs;
           layer.customParameters = Object.keys(params).length ? params : undefined;
         }
-        // Clear sublayer definitionExpressions
         if (layer.allSublayers) {
           layer.allSublayers.forEach(sub => { sub.definitionExpression = null; });
         }
         if (layer.sublayers) { try { layer.sublayers = layer.sublayers.toArray(); } catch (_) {} }
-        if (layer.useViewTime !== undefined) layer.useViewTime = false;
         if (typeof layer.refresh === 'function') layer.refresh();
       }
     });
+
     console.log('[Temporal] 🧹 All temporal filters cleared');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -986,16 +978,12 @@ const ArcGISMap = ({
   const identifyGraphicsLayer = useRef(new GraphicsLayer({ id: 'identify-highlights' }));
   const sketchLayer = useRef(new GraphicsLayer({ id: 'identify-sketch-layer' }));
   const sketchVM = useRef(null);
+  const latestIdentifySettings = useRef(identifySettings);
+  const performQueryRef = useRef(null);
 
   useEffect(() => {
-    const view = viewRef.current;
-    if (view) {
-      view.when(() => {
-        if (!view.map.findLayerById('identify-highlights')) view.map.add(identifyGraphicsLayer.current);
-        if (!view.map.findLayerById('identify-sketch-layer')) view.map.add(sketchLayer.current);
-      });
-    }
-  }, [is3D]);
+    latestIdentifySettings.current = identifySettings;
+  }, [identifySettings]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -1005,6 +993,14 @@ const ArcGISMap = ({
     }
     
     view.cursor = 'crosshair';
+
+    // Ensure graphics layers are added to the map
+    if (!view.map.findLayerById('identify-highlights')) {
+      view.map.add(identifyGraphicsLayer.current);
+    }
+    if (!view.map.findLayerById('identify-sketch-layer')) {
+      view.map.add(sketchLayer.current);
+    }
 
     if (!sketchVM.current) {
       sketchVM.current = new SketchViewModel({
@@ -1018,13 +1014,18 @@ const ArcGISMap = ({
       sketchVM.current.on(['create', 'update'], (event) => {
         if (event.state === 'complete') {
           const geometry = event.graphic ? event.graphic.geometry : event.graphics[0].geometry;
-          performQuery(geometry);
+          if (performQueryRef.current) {
+            performQueryRef.current(geometry);
+          }
           sketchLayer.current.removeAll();
           // Keep tool active
-          if (identifySettings.mode === 'rectangle') sketchVM.current.create('rectangle');
-          if (identifySettings.mode === 'polygon') sketchVM.current.create('polygon');
+          const currentSettings = latestIdentifySettings.current;
+          if (currentSettings.mode === 'rectangle') sketchVM.current.create('rectangle');
+          if (currentSettings.mode === 'polygon') sketchVM.current.create('polygon');
         }
       });
+    } else {
+      sketchVM.current.view = view;
     }
 
     const performQuery = async (geometry) => {
@@ -1052,7 +1053,7 @@ const ArcGISMap = ({
           // Specific layer selected
           if (identifySettings.selectedLayerId === config.id && layer.type === 'feature') {
             layersToQuery.push({ layer, title: config.title, config });
-          } else if (layer.type === 'map-image') {
+          } else if (layer.type === 'map-image' && identifySettings.selectedLayerId.startsWith(config.id)) {
             const subIdMatch = identifySettings.selectedLayerId.match(/_sub_(\d+)$/);
             if (subIdMatch) {
               const subId = parseInt(subIdMatch[1]);
@@ -1065,12 +1066,39 @@ const ArcGISMap = ({
 
       await Promise.all(layersToQuery.map(async (item) => {
         try {
-          const response = await item.layer.queryFeatures({ 
-            geometry, 
-            spatialRelationship: 'intersects', 
-            outFields: ['*'], 
-            returnGeometry: true 
-          });
+          let response;
+          let fieldsInfo = [];
+          
+          if (!item.layer.queryFeatures) {
+            // It is a Sublayer (from MapImageLayer). Query via a temporary FeatureLayer.
+            const url = `${item.config.url}/${item.layer.id}`;
+            const tempLayer = new FeatureLayer({ url });
+            await tempLayer.load();
+            response = await tempLayer.queryFeatures({ 
+              geometry, 
+              spatialRelationship: 'intersects', 
+              outFields: ['*'], 
+              returnGeometry: true 
+            });
+            fieldsInfo = tempLayer.fields ? tempLayer.fields.map(field => ({
+              name: field.name,
+              alias: field.alias || field.name,
+              type: field.type
+            })) : [];
+          } else {
+            // Standard FeatureLayer
+            response = await item.layer.queryFeatures({ 
+              geometry, 
+              spatialRelationship: 'intersects', 
+              outFields: ['*'], 
+              returnGeometry: true 
+            });
+            fieldsInfo = item.layer.fields ? item.layer.fields.map(field => ({
+              name: field.name,
+              alias: field.alias || field.name,
+              type: field.type
+            })) : [];
+          }
 
           if (response.features.length > 0) {
             results.total += response.features.length;
@@ -1079,7 +1107,8 @@ const ArcGISMap = ({
               geometry: f.geometry,
               layerId: item.config.id,
               layerTitle: item.title,
-              displayField: item.layer.displayField || 'OBJECTID'
+              displayField: item.layer.displayField || 'OBJECTID',
+              fields: fieldsInfo
             }));
 
             response.features.forEach(f => {
@@ -1099,6 +1128,8 @@ const ArcGISMap = ({
       }));
       onIdentifyResults(results);
     };
+
+    performQueryRef.current = performQuery;
 
     let clickHandler;
     if (identifySettings.mode === 'point') {
@@ -1121,17 +1152,18 @@ const ArcGISMap = ({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (view) {
-      view.when(() => {
-        if (!view.map.findLayerById('data-request-aoi-layer')) view.map.add(dataRequestLayer.current);
-        if (!view.map.findLayerById('data-request-final-layer')) view.map.add(dataRequestFinalLayer.current);
-      });
+    if (!view || activeTool !== 'data_request') {
+      if (dataRequestSketchVM.current) dataRequestSketchVM.current.cancel();
+      return;
     }
-  }, [is3D]);
 
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view || activeTool !== 'data_request') return;
+    // Ensure graphics layers are added to the map
+    if (!view.map.findLayerById('data-request-aoi-layer')) {
+      view.map.add(dataRequestLayer.current);
+    }
+    if (!view.map.findLayerById('data-request-final-layer')) {
+      view.map.add(dataRequestFinalLayer.current);
+    }
 
     if (!dataRequestSketchVM.current) {
       dataRequestSketchVM.current = new SketchViewModel({
@@ -1147,8 +1179,14 @@ const ArcGISMap = ({
           dataRequestLayer.current.removeAll();
         }
       });
+    } else {
+      dataRequestSketchVM.current.view = view;
     }
     dataRequestSketchVM.current.create(dataRequestDrawingTool || 'polygon');
+
+    return () => {
+      if (dataRequestSketchVM.current) dataRequestSketchVM.current.cancel();
+    };
   }, [activeTool, dataRequestDrawingTool]);
 
   return (

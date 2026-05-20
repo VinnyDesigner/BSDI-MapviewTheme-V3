@@ -58,7 +58,7 @@ function AppInner() {
         <path d="M16 12h-4V8" opacity="0.3"/>
         <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
       </svg>
-    ), label: translations[lang].tools.time_compare ?? 'Temporal Filter' },
+    ), label: translations[lang].tools.time_compare ?? 'Timelapse' },
     { id: 'split', icon: Columns2, label: translations[lang].tools.split ?? 'Swipe' },
     { id: 'split_view', icon: () => <i className="material-icons" style={{ fontSize: '20px' }}>splitscreen</i>, label: translations[lang].tools.split_view ?? 'Split View' },
     { id: 'blend', icon: () => (
@@ -159,7 +159,10 @@ function AppInner() {
 
       const getProxyUrl = (url) => {
         if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-          return url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+          if (url.includes("https://gis9.smartgeoapps.com")) {
+            return url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+          }
+
         }
         return url;
       };
@@ -324,6 +327,7 @@ function AppInner() {
   const [layerStates, setLayerStates] = useState({}); // { id: { opacity: 1, labels: true, visible: true, renderer: true } }
   const [layerPanelMode, setLayerPanelMode] = useState("layers");
   const [activeLayerEdit, setActiveLayerEdit] = useState(null);
+  const [initialEffectsBackup, setInitialEffectsBackup] = useState(null);
 
   const updateLayerState = (id, updates) => {
     setLayerStates(prev => ({
@@ -376,6 +380,13 @@ function AppInner() {
         setActiveLayerEdit({ layerId, subId, target });
         setLayerPanelMode('customize-layer');
         break;
+      case 'effectsLayer': {
+        setActiveLayerEdit({ layerId, subId, target });
+        const currentEffects = layerStates[fullId] || {};
+        setInitialEffectsBackup({ ...currentEffects });
+        setLayerPanelMode('effects-layer');
+        break;
+      }
       case 'remove':
         if (subId === null) {
           view.map.remove(target);
@@ -708,6 +719,226 @@ function AppInner() {
           </div>
         );
       case 'layers':
+        if (layerPanelMode === 'effects-layer') {
+          const target = activeLayerEdit?.target;
+          const fullId = activeLayerEdit ? (activeLayerEdit.subId !== null ? `${activeLayerEdit.layerId}_sub_${activeLayerEdit.subId}` : activeLayerEdit.layerId) : null;
+          const state = fullId ? (layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true, activeEffect: null }) : { opacity: 1, labels: true, visible: true, renderer: true, activeEffect: null };
+          
+          const layerTitle = target?.title || layersConfig.find(l => l.id === activeLayerEdit?.layerId)?.title || 'Layer';
+
+          const EFFECTS_CONFIG = [
+            {
+              id: 'bloom',
+              title: 'Bloom',
+              description: 'Create soft, glowing highlights on bright areas',
+              icon: 'auto_awesome',
+              effectString: 'bloom(1.5, 0.5px, 0.1)'
+            },
+            {
+              id: 'shadow',
+              title: 'Drop Shadow',
+              description: 'Add elegant depth with a soft dark shadow',
+              icon: 'layers',
+              effectString: 'drop-shadow(3px 3px 5px rgba(0,0,0,0.5))'
+            },
+            {
+              id: 'blur',
+              title: 'Blur',
+              description: 'Soften and defocus layer features smoothly',
+              icon: 'blur_on',
+              effectString: 'blur(4px)'
+            },
+            {
+              id: 'brightness-contrast',
+              title: 'Brightness & Contrast',
+              description: 'Boost highlight luminosity and dynamic range',
+              icon: 'brightness_6',
+              effectString: 'brightness(120%) contrast(110%)'
+            },
+            {
+              id: 'grayscale',
+              title: 'Grayscale',
+              description: 'Convert all layer colors to classic monochrome',
+              icon: 'filter_b_and_w',
+              effectString: 'grayscale(100%)'
+            },
+            {
+              id: 'hue-rotate',
+              title: 'Hue Rotate',
+              description: 'Shift all layer hues by 90 degrees',
+              icon: 'filter_tilt_shift',
+              effectString: 'hue-rotate(90deg)'
+            },
+            {
+              id: 'saturate',
+              title: 'Saturate',
+              description: 'Intensify layer colors for a vibrant view',
+              icon: 'color_lens',
+              effectString: 'saturate(200%)'
+            },
+            {
+              id: 'invert',
+              title: 'Invert',
+              description: 'Invert all colors to create a negative effect',
+              icon: 'invert_colors',
+              effectString: 'invert(100%)'
+            },
+            {
+              id: 'sepia',
+              title: 'Sepia',
+              description: 'Apply a nostalgic warm sepia tone overlay',
+              icon: 'photo_filter',
+              effectString: 'sepia(80%)'
+            }
+          ];
+
+          const applyEffects = (activeEffectId) => {
+            if (!target) return;
+            try {
+              if (!activeEffectId) {
+                target.effect = null;
+              } else {
+                const config = EFFECTS_CONFIG.find(e => e.id === activeEffectId);
+                if (config) {
+                  target.effect = config.effectString;
+                } else {
+                  target.effect = null;
+                }
+              }
+            } catch (err) {
+              console.error('Failed to apply ArcGIS layer effect:', err);
+            }
+          };
+
+          const handleToggleEffect = (effectId, isChecked) => {
+            const nextEffect = isChecked ? effectId : null;
+            updateLayerState(fullId, { activeEffect: nextEffect });
+            applyEffects(nextEffect);
+          };
+
+          const handleReset = () => {
+            updateLayerState(fullId, { activeEffect: null });
+            applyEffects(null);
+          };
+
+          const handleCancel = () => {
+            const previousEffect = initialEffectsBackup?.activeEffect || null;
+            updateLayerState(fullId, { activeEffect: previousEffect });
+            applyEffects(previousEffect);
+            setLayerPanelMode('layers');
+          };
+
+          return (
+            <div className="tool-content-full" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div className="tool-fixed-header" style={{ borderBottom: 'none', paddingBottom: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button 
+                  onClick={handleCancel}
+                  style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: '#64748b', padding: 0, cursor: 'pointer' }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, color: '#1a2f4d', fontSize: '14px', fontWeight: 'bold' }}>Effects</h3>
+                </div>
+                <button 
+                  onClick={handleReset}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '6px', borderRadius: '50%', transition: 'all 0.2s ease' }}
+                  title="Reset All"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.color = '#e63946';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#64748b';
+                  }}
+                >
+                  <i className="material-icons" style={{ fontSize: '18px' }}>refresh</i>
+                </button>
+              </div>
+
+              <div className="tool-scroll-body" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {EFFECTS_CONFIG.map((effect) => {
+                    const isActive = state.activeEffect === effect.id;
+                    return (
+                      <div 
+                        key={effect.id}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          padding: '8px 12px', 
+                          borderRadius: '8px', 
+                          border: isActive ? '1px solid #bfdbfe' : '1px solid #f1f5f9', 
+                          backgroundColor: isActive ? '#eff6ff' : '#ffffff',
+                          transition: 'all 0.2s ease',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleToggleEffect(effect.id, !isActive)}
+                        onMouseEnter={(e) => {
+                          if (!isActive) e.currentTarget.style.backgroundColor = '#f8fafc';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) e.currentTarget.style.backgroundColor = '#ffffff';
+                        }}
+                      >
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            width: '30px', 
+                            height: '30px', 
+                            borderRadius: '6px', 
+                            backgroundColor: isActive ? '#3b82f6' : '#f1f5f9',
+                            color: isActive ? '#ffffff' : '#64748b',
+                            marginRight: '10px',
+                            transition: 'all 0.2s ease',
+                            flexShrink: 0
+                          }}
+                        >
+                          <i className="material-icons" style={{ fontSize: '16px' }}>{effect.icon}</i>
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, paddingRight: '8px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: isActive ? '#1e40af' : '#1a2f4d' }}>{effect.title}</span>
+                          <span style={{ fontSize: '10.5px', color: isActive ? '#2563eb' : '#64748b', marginTop: '1px', lineHeight: '1.2' }}>{effect.description}</span>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            className="switch-sm" 
+                            checked={isActive}
+                            onChange={(e) => handleToggleEffect(effect.id, e.target.checked)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="tool-fixed-footer" style={{ borderTop: 'none', padding: '16px 0 0 0', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'transparent' }}>
+                <button 
+                  type="button" 
+                  onClick={handleCancel} 
+                  className="secondary-btn" 
+                  style={{ padding: '8px 24px', background: 'transparent', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setLayerPanelMode('layers')} 
+                  className="primary-btn" 
+                  style={{ padding: '8px 24px', cursor: 'pointer' }}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         if (layerPanelMode === 'customize-layer') {
           const target = activeLayerEdit?.target;
           const fullId = activeLayerEdit ? (activeLayerEdit.subId !== null ? `${activeLayerEdit.layerId}_sub_${activeLayerEdit.subId}` : activeLayerEdit.layerId) : null;
@@ -973,6 +1204,9 @@ function AppInner() {
               </div>
               <div className="menu-item" onClick={() => handleLayerAction('customizeLayer', id, subId)}>
                 <i className="material-icons">tune</i> Customize Layer
+              </div>
+              <div className="menu-item" onClick={() => handleLayerAction('effectsLayer', id, subId)}>
+                <i className="material-icons">palette</i> Effects
               </div>
               <div className="menu-divider" />
               <div className="menu-item delete" onClick={() => handleLayerAction('remove', id, subId)}>
@@ -1344,12 +1578,37 @@ function AppInner() {
                                     </button>
                                   </div>
                                   <div className="attributes-grid" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {Object.entries(f.attributes).map(([key, val]) => (
-                                      <div key={key} style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '2px 0' }}>
-                                        <span style={{ color: '#94a3b8', width: '45%', flexShrink: 0 }}>{key}</span>
-                                        <span style={{ color: '#1a2f4d', fontWeight: '500', wordBreak: 'break-all' }}>{String(val)}</span>
-                                      </div>
-                                    ))}
+                                    {f.fields && f.fields.length > 0 ? (
+                                      f.fields.map(field => {
+                                        const val = f.attributes[field.name];
+                                        if (val === undefined || val === null) return null;
+                                        
+                                        // Format the value
+                                        let displayVal = String(val);
+                                        if (field.type === 'date' || field.type === 'esriFieldTypeDate') {
+                                          try {
+                                            const date = new Date(val);
+                                            displayVal = !isNaN(date.getTime()) ? date.toLocaleDateString() : String(val);
+                                          } catch (e) {
+                                            displayVal = String(val);
+                                          }
+                                        }
+                                        
+                                        return (
+                                          <div key={field.name} style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center' }}>
+                                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500' }}>{field.alias}</span>
+                                            <span style={{ color: '#1e293b', fontWeight: '600', wordBreak: 'break-all' }}>{displayVal}</span>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      Object.entries(f.attributes).map(([key, val]) => (
+                                        <div key={key} style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center' }}>
+                                          <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500' }}>{key}</span>
+                                          <span style={{ color: '#1e293b', fontWeight: '600', wordBreak: 'break-all' }}>{String(val)}</span>
+                                        </div>
+                                      ))
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -1602,6 +1861,7 @@ function AppInner() {
             setTimelapseSettings={setTimelapseSettings}
             timeCompareTab={timeCompareTab}
             setTimeCompareTab={setTimeCompareTab}
+            mapView={mapView}
           />
         );
 
@@ -2006,94 +2266,96 @@ function AppInner() {
         syncMode={syncMode}
         onExit={() => setIsSplitView(false)}
       />
-      <Analysis3DPanel view={mapView} is3D={is3D} />
-      <MapControls 
-        view={mapView} 
-        activeTool={activeTool} 
-        onToolSelect={setActiveTool} 
-        is3D={is3D} 
-        onToggle3D={() => setIs3D(!is3D)} 
-        is3DDisabled={is3DDisabled}
-        isSplitView={isSplitView}
-        isSwipeMode={isSplitModePersistent}
-      />
+      <div className="map-overlay-container">
+        <Analysis3DPanel view={mapView} is3D={is3D} />
+        <MapControls 
+          view={mapView} 
+          activeTool={activeTool} 
+          onToolSelect={setActiveTool} 
+          is3D={is3D} 
+          onToggle3D={() => setIs3D(!is3D)} 
+          is3DDisabled={is3DDisabled}
+          isSplitView={isSplitView}
+          isSwipeMode={isSplitModePersistent}
+        />
 
-      {mapView && <MapInfoWidget view={mapView} />}
+        {mapView && <MapInfoWidget view={mapView} />}
 
-      <SidePanel
-        isOpen={!!activeTool}
-        title={getPanelTitle(activeTool)}
-        onClose={() => setActiveTool(null)}
-        onMinimize={handleMinimize}
-      >
-        {getPanelContent(activeTool)}
-      </SidePanel>
+        <SidePanel
+          isOpen={!!activeTool}
+          title={getPanelTitle(activeTool)}
+          onClose={() => setActiveTool(null)}
+          onMinimize={handleMinimize}
+        >
+          {getPanelContent(activeTool)}
+        </SidePanel>
 
-      {!activeTool && (
-        <RightToolbar pinnedTools={pinnedTools} getToolIcon={getToolIcon} onRestore={handleRestore} />
-      )}
+        {!activeTool && (
+          <RightToolbar pinnedTools={pinnedTools} getToolIcon={getToolIcon} onRestore={handleRestore} />
+        )}
 
-      <BottomToolbar 
-        activeTool={activeTool} 
-        onToolSelect={handleToolSelect} 
-        swipeMode={swipeMode} 
-        isSplitView={isSplitView}
-        isSplitModePersistent={isSplitModePersistent}
-      />
+        <BottomToolbar 
+          activeTool={activeTool} 
+          onToolSelect={handleToolSelect} 
+          swipeMode={swipeMode} 
+          isSplitView={isSplitView}
+          isSplitModePersistent={isSplitModePersistent}
+        />
 
-      {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
-      {(isSplitModePersistent || (activeTool === 'time_compare' && timeCompareTab === 'swipe')) && (() => {
-        const isVertical = swipeMode === 'vertical';
-        const pos = swipeInfo.position ?? 50;
+        {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
+        {(isSplitModePersistent || (activeTool === 'time_compare' && timeCompareTab === 'swipe')) && (() => {
+          const isVertical = swipeMode === 'vertical';
+          const pos = swipeInfo.position ?? 50;
 
-        const labelBase = {
-          // Base styles are now in .swipe-label class in App.css
-        };
+          const labelBase = {
+            // Base styles are now in .swipe-label class in App.css
+          };
 
 
-        // Visual Vertical Line (L/R) corresponds to swipeMode="horizontal"
-        // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
-        const isVisualVertical = swipeMode === 'horizontal';
+          // Visual Vertical Line (L/R) corresponds to swipeMode="horizontal"
+          // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
+          const isVisualVertical = swipeMode === 'horizontal';
 
-        // Perfection: Use exactly 20px clearance for vertical, and 60px for horizontal to clear the circular handle
-        const clearance = isVisualVertical ? '20px' : '60px';
+          // Perfection: Use exactly 20px clearance for vertical, and 60px for horizontal to clear the circular handle
+          const clearance = isVisualVertical ? '20px' : '60px';
 
-        const labelA = isVisualVertical
-          ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` } // Left
-          : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
+          const labelA = isVisualVertical
+            ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` } // Left
+            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
 
-        const labelB = isVisualVertical
-          ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` } // Right
-          : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
+          const labelB = isVisualVertical
+            ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` } // Right
+            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
 
-        let labelAText = '';
-        let labelBText = '';
+          let labelAText = '';
+          let labelBText = '';
 
-        const isTemporalSwipe = activeTool === 'time_compare' && timeCompareTab === 'swipe';
+          const isTemporalSwipe = activeTool === 'time_compare' && timeCompareTab === 'swipe';
 
-        if (isTemporalSwipe) {
-          const sideA = isVisualVertical ? 'Left' : 'Top';
-          const sideB = isVisualVertical ? 'Right' : 'Bottom';
-          labelAText = `${sideA}: ${timelapseSettings.fromYear}`;
-          labelBText = `${sideB}: ${timelapseSettings.toYear}`;
-        } else {
-          const sideA = isVisualVertical ? 'Left' : 'Top';
-          const sideB = isVisualVertical ? 'Right' : 'Bottom';
-          labelAText = `${sideA}: ${layersConfig.find(l => l.id === splitLayers.left)?.title || 'Left Layer'}`;
-          labelBText = `${sideB}: ${layersConfig.find(l => l.id === splitLayers.right)?.title || 'Right Layer'}`;
-        }
+          if (isTemporalSwipe) {
+            const sideA = isVisualVertical ? 'Left' : 'Top';
+            const sideB = isVisualVertical ? 'Right' : 'Bottom';
+            labelAText = `${sideA}: ${timelapseSettings.fromYear}`;
+            labelBText = `${sideB}: ${timelapseSettings.toYear}`;
+          } else {
+            const sideA = isVisualVertical ? 'Left' : 'Top';
+            const sideB = isVisualVertical ? 'Right' : 'Bottom';
+            labelAText = `${sideA}: ${layersConfig.find(l => l.id === splitLayers.left)?.title || 'Left Layer'}`;
+            labelBText = `${sideB}: ${layersConfig.find(l => l.id === splitLayers.right)?.title || 'Right Layer'}`;
+          }
 
-        return (
-          <div className="swipe-labels-container" style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
-            <div className="swipe-label" style={labelA}>
-              {labelAText}
+          return (
+            <div className="swipe-labels-container" style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
+              <div className="swipe-label" style={labelA}>
+                {labelAText}
+              </div>
+              <div className="swipe-label" style={labelB}>
+                {labelBText}
+              </div>
             </div>
-            <div className="swipe-label" style={labelB}>
-              {labelBText}
-            </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
+      </div>
 
       {/* Mobile Tool Drawer / Bottom Sheet */}
       <AnimatePresence>

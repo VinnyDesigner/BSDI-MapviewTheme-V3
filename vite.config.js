@@ -15,6 +15,16 @@ export default defineConfig({
           'Origin': 'http://localhost:5173',
           'Referer': 'https://gis9.smartgeoapps.com/'
         }
+      },
+      '/arcgis-proxy-gis12': {
+        target: 'https://gis12.smartgeoapps.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/arcgis-proxy-gis12/, ''),
+        headers: {
+          'Origin': 'http://localhost:5173',
+          'Referer': 'https://gis12.smartgeoapps.com/'
+        }
       }
     }
   }

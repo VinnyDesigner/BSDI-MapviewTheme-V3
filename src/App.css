@@ -2690,3 +2690,24 @@
   }
 }
 
+/* Map interaction helper to prevent responsive overlays from blocking pointer events */
+.map-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.map-overlay-container button,
+.map-overlay-container input,
+.map-overlay-container select,
+.map-overlay-container textarea,
+.map-overlay-container a,
+.map-overlay-container [role="button"],
+.map-overlay-container .interactive-element {
+  pointer-events: auto;
+}
+
