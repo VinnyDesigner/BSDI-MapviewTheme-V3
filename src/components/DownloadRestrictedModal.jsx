@@ -1,14 +1,17 @@
 import React from 'react';
 import { Lock, X, AlertTriangle, Send } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 import './DownloadRestrictedModal.css';
 
 const DownloadRestrictedModal = ({ isOpen, onClose, onRequestData }) => {
+  const { t } = useLanguage();
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
       <div className="restricted-modal">
-        <button className="modal-close" onClick={onClose}>
+        <button className="modal-close" onClick={onClose} aria-label={t('closePanel') || 'Close'}>
           <X size={20} />
         </button>
         
@@ -18,22 +21,21 @@ const DownloadRestrictedModal = ({ isOpen, onClose, onRequestData }) => {
             <AlertTriangle size={24} className="warning-badge" />
           </div>
           
-          <h2>Download Restricted</h2>
+          <h2>{t('downloadRestrictedTitle')}</h2>
           <p>
-            Direct download is not permitted for this dataset. 
-            Please submit a spatial data request for administrative approval.
+            {t('downloadRestrictedDesc')}
           </p>
           
           <div className="modal-actions">
             <button className="modal-btn secondary" onClick={onClose}>
-              Cancel
+              {t('cancelBtn')}
             </button>
             <button className="modal-btn primary" onClick={() => {
               onRequestData();
               onClose();
             }}>
               <Send size={16} />
-              Request Data
+              {t('requestDataBtn')}
             </button>
           </div>
         </div>

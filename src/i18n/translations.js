@@ -112,6 +112,12 @@ export const translations = {
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'Close panel',
     minimizePanel:  'Minimize panel',
+
+    // ── Modals ───────────────────────────────────────────
+    downloadRestrictedTitle: 'Download Restricted',
+    downloadRestrictedDesc:  'Direct download is not permitted for this dataset. Please submit a spatial data request for administrative approval.',
+    requestDataBtn:          'Request Data',
+    cancelBtn:               'Cancel',
   },
 
   AR: {
@@ -220,5 +226,11 @@ export const translations = {
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'إغلاق اللوحة',
     minimizePanel:  'تصغير اللوحة',
+
+    // ── Modals ───────────────────────────────────────────
+    downloadRestrictedTitle: 'التنزيل مقيد',
+    downloadRestrictedDesc:  'التنزيل المباشر غير مسموح لهذه المجموعة من البيانات. يرجى تقديم طلب بيانات مكانية للحصول على الموافقة الإدارية.',
+    requestDataBtn:          'طلب بيانات',
+    cancelBtn:               'إلغاء',
   },
 };

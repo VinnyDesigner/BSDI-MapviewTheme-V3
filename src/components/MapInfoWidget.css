@@ -81,6 +81,30 @@
   border-color: rgba(0, 0, 0, 0.25);
 }
 
+.scale-select-trigger {
+  cursor: text;
+}
+
+.scale-select-trigger:focus-within {
+  border-color: #DF261C;
+  box-shadow: 0 0 0 2px rgba(223, 38, 28, 0.15);
+}
+
+.scale-select-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 100px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+  box-sizing: border-box;
+}
+
 .mini-select-value {
   white-space: nowrap;
 }
@@ -158,11 +182,6 @@
 [dir="rtl"] .map-info-widget {
   left: auto;
   right: 16px;
-  align-items: flex-end;
-}
-
-[dir="rtl"] .info-row-item {
-  flex-direction: row-reverse;
 }
 
 [dir="rtl"] .mini-select-option {

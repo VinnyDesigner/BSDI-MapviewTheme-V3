@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import ArcGISMap from './components/MapView'
 import { motion, AnimatePresence } from 'framer-motion'
 import BottomToolbar from './components/BottomToolbar'
@@ -34,7 +35,7 @@ import {
 
 // Custom 4-dot drag handle (2×2 grid)
 const DragHandle = () => (
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" style={{ pointerEvents: 'none' }}>
     <circle cx="3" cy="3" r="1.2" />
     <circle cx="7" cy="3" r="1.2" />
     <circle cx="3" cy="7" r="1.2" />
@@ -149,6 +150,41 @@ function AppInner() {
   const [dynamicMapServerData, setDynamicMapServerData] = useState({});
 
   const [activeLayerMenu, setActiveLayerMenu] = useState(null); // { id: string, type: 'root'|'sub' }
+  const [layerMenuTriggerRect, setLayerMenuTriggerRect] = useState(null);
+
+  useEffect(() => {
+    if (activeLayerMenu === null) {
+      setLayerMenuTriggerRect(null);
+    }
+  }, [activeLayerMenu]);
+
+  useEffect(() => {
+    if (!activeLayerMenu) return;
+    const handleDocumentClick = (e) => {
+      if (!e.target.closest('.layer-action-menu') && !e.target.closest('.more-btn')) {
+        setActiveLayerMenu(null);
+      }
+    };
+    const handleScrollOrResize = () => {
+      const activeBtn = document.querySelector('.more-btn.active');
+      if (activeBtn) {
+        setLayerMenuTriggerRect(activeBtn.getBoundingClientRect());
+      } else {
+        setActiveLayerMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activeLayerMenu]);
+
   const [labelConfigModal, setLabelConfigModal] = useState(null); // { layerId: string, subId?: number }
 
   // Fetch MapServer data for dynamic layers
@@ -209,6 +245,8 @@ function AppInner() {
   const [layerSearch, setLayerSearch] = useState('');
   const [layerOrder, setLayerOrder] = useState(() => layersConfig.map(l => l.id));
   const [dragOverId, setDragOverId] = useState(null);
+  const [dragInsertPositionState, setDragInsertPositionState] = useState(null);
+  const dragInsertPosition = React.useRef(null);
   const dragItem = React.useRef(null);
   const dragOverItem = React.useRef(null);
 
@@ -261,10 +299,12 @@ function AppInner() {
       // Sync with ArcGIS View
       if (view) {
         const layer = view.map.findLayerById(layerId);
-        if (layer && layer.sublayers) {
+        if (layer) {
           Object.keys(updates).forEach(key => {
             const sId = parseInt(key.split('_sub_')[1]);
-            const s = layer.sublayers.find(x => x.id === sId);
+            const s = typeof layer.findSublayerById === 'function' 
+              ? layer.findSublayerById(sId) 
+              : (layer.sublayers ? layer.sublayers.find(x => x.id === sId) : null);
             if (s) s.visible = updates[key];
           });
         }
@@ -344,8 +384,12 @@ function AppInner() {
     let target;
     if (subId !== null) {
       const parent = view.map.findLayerById(layerId);
-      if (parent && parent.sublayers) {
-        target = parent.sublayers.find(s => s.id === subId || s.id === parseInt(subId));
+      if (parent) {
+        if (typeof parent.findSublayerById === 'function') {
+          target = parent.findSublayerById(Number(subId));
+        } else if (parent.sublayers) {
+          target = parent.sublayers.find(s => s.id === subId || s.id === parseInt(subId));
+        }
       }
     } else {
       target = view.map.findLayerById(layerId);
@@ -354,10 +398,42 @@ function AppInner() {
     if (!target) return;
 
     switch (action) {
-      case 'zoom':
-        const extent = target.fullExtent || (target.layer && target.layer.fullExtent);
+      case 'zoom': {
+        let extent = target.fullExtent || (target.layer && target.layer.fullExtent);
+        
+        // Group Layer Zoom Requirement:
+        // "Zoom to Full Extent should calculate the combined extent of child layers."
+        if (subId !== null && target.subLayerIds && target.subLayerIds.length > 0) {
+          const parent = view.map.findLayerById(layerId);
+          if (parent) {
+            let combinedExtent = null;
+            const collectExtent = (sub) => {
+              if (sub.fullExtent) {
+                if (!combinedExtent) {
+                  combinedExtent = sub.fullExtent.clone();
+                } else {
+                  combinedExtent = combinedExtent.union(sub.fullExtent);
+                }
+              }
+              if (sub.subLayerIds && sub.subLayerIds.length > 0) {
+                sub.subLayerIds.forEach(cid => {
+                  const childSub = typeof parent.findSublayerById === 'function'
+                    ? parent.findSublayerById(Number(cid))
+                    : (parent.sublayers ? parent.sublayers.find(s => s.id === cid || s.id === parseInt(cid)) : null);
+                  if (childSub) collectExtent(childSub);
+                });
+              }
+            };
+            collectExtent(target);
+            if (combinedExtent) {
+              extent = combinedExtent;
+            }
+          }
+        }
+        
         if (extent) view.goTo(extent);
         break;
+      }
       case 'zoomVisible':
         const targetScale = target.maxScale || target.minScale;
         if (targetScale > 0) {
@@ -414,39 +490,170 @@ function AppInner() {
   };
 
   // ── Drag & Drop Handlers ─────────────────────────────────────────────────
-  const handleDragStart = (e, id) => {
-    dragItem.current = id;
+  const handleDragStart = (e, dragData) => {
+    e.stopPropagation();
+    if (typeof dragData === 'string') {
+      dragItem.current = { type: 'root', id: dragData };
+    } else {
+      dragItem.current = dragData;
+    }
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragItem.current));
   };
 
-  const handleDragOver = (e, id) => {
+  const handleDragOver = (e, overData) => {
     e.preventDefault();
+    e.stopPropagation(); // Crucial to prevent bubbling
+    if (!dragItem.current) return;
+    
+    let overObj = overData;
+    if (typeof overData === 'string') {
+      overObj = { type: 'root', id: overData };
+    }
+    
+    if (dragItem.current.type !== overObj.type) {
+      e.dataTransfer.dropEffect = 'none';
+      setDragOverId(null);
+      return;
+    }
+    
+    if (dragItem.current.type === 'sublayer') {
+      if (dragItem.current.rootId !== overObj.rootId || dragItem.current.parentId !== overObj.parentId) {
+        e.dataTransfer.dropEffect = 'none';
+        setDragOverId(null);
+        return;
+      }
+    }
+    
     e.dataTransfer.dropEffect = 'move';
-    dragOverItem.current = id;
-    setDragOverId(id);
+    dragOverItem.current = overObj;
+    
+    const dragOverStr = overObj.type === 'root' ? overObj.id : `${overObj.rootId}_sub_${overObj.id}`;
+    setDragOverId(dragOverStr);
+
+    // Calculate insertion position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isAfter = (e.clientY - rect.top) > (rect.height / 2);
+    const pos = isAfter ? 'after' : 'before';
+    dragInsertPosition.current = pos;
+    setDragInsertPositionState(pos);
   };
 
-  const handleDrop = () => {
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const from = dragItem.current;
     const to = dragOverItem.current;
-    if (!from || !to || from === to) return;
-    setLayerOrder(prev => {
-      const arr = [...prev];
-      const fromIdx = arr.indexOf(from);
-      const toIdx = arr.indexOf(to);
-      arr.splice(fromIdx, 1);
-      arr.splice(toIdx, 0, from);
-      return arr;
-    });
-    dragItem.current = null;
-    dragOverItem.current = null;
-    setDragOverId(null);
+    if (!from || !to || from.id === to.id) {
+       handleDragEnd();
+       return;
+    }
+
+    const pos = dragInsertPosition.current;
+
+    if (from.type === 'root' && to.type === 'root') {
+      setLayerOrder(prev => {
+        const arr = [...prev];
+        const fromIdx = arr.indexOf(from.id);
+        const toIdx = arr.indexOf(to.id);
+        if (fromIdx > -1 && toIdx > -1) {
+          arr.splice(fromIdx, 1);
+          const newToIdx = arr.indexOf(to.id);
+          const insertIdx = pos === 'after' ? newToIdx + 1 : newToIdx;
+          arr.splice(insertIdx, 0, from.id);
+
+          if (mapView && mapView.map) {
+             const layerToMove = mapView.map.findLayerById(from.id);
+             if (layerToMove) {
+               const toLayer = mapView.map.findLayerById(to.id);
+               if (toLayer) {
+                 const mapLayerIdx = mapView.map.layers.indexOf(toLayer);
+                 const finalMapIdx = pos === 'after' ? mapLayerIdx + 1 : mapLayerIdx;
+                 mapView.map.reorder(layerToMove, finalMapIdx);
+               }
+             }
+          }
+        }
+        return arr;
+      });
+    } else if (from.type === 'sublayer' && to.type === 'sublayer') {
+      setDynamicMapServerData(prev => {
+        const newData = { ...prev };
+        const rootData = newData[from.rootId];
+        if (rootData && rootData.metadata && rootData.metadata.layers) {
+          rootData.metadata.layers = [...rootData.metadata.layers];
+          const parentLayer = rootData.metadata.layers.find(l => l.id === from.parentId);
+          
+          if (parentLayer && parentLayer.subLayerIds) {
+            const arr = [...parentLayer.subLayerIds];
+            const fromIdx = arr.indexOf(from.id);
+            const toIdx = arr.indexOf(to.id);
+            if (fromIdx > -1 && toIdx > -1) {
+              arr.splice(fromIdx, 1);
+              const newToIdx = arr.indexOf(to.id);
+              const insertIdx = pos === 'after' ? newToIdx + 1 : newToIdx;
+              arr.splice(insertIdx, 0, from.id);
+              parentLayer.subLayerIds = arr;
+              
+              if (mapView && mapView.map) {
+                const rootArcgisLayer = mapView.map.findLayerById(from.rootId);
+                if (rootArcgisLayer && rootArcgisLayer.type === 'map-image') {
+                  const parentSublayer = (from.parentId === -1 || from.parentId == null) ? rootArcgisLayer : rootArcgisLayer.findSublayerById(from.parentId);
+                  if (parentSublayer && parentSublayer.sublayers) {
+                     const sublayerItem = parentSublayer.sublayers.find(s => s.id === from.id);
+                     const toItem = parentSublayer.sublayers.find(s => s.id === to.id);
+                     if (sublayerItem && toItem) {
+                        const baseIdx = parentSublayer.sublayers.indexOf(toItem);
+                        const newColIdx = pos === 'after' ? baseIdx + 1 : baseIdx;
+                        parentSublayer.sublayers.reorder(sublayerItem, newColIdx);
+                     }
+                  }
+                }
+              }
+            }
+          } else if (from.parentId === -1 || from.parentId == null) {
+            const rootLayers = rootData.metadata.layers.filter(l => l.parentLayerId == null || l.parentLayerId === -1);
+            const fromLayer = rootLayers.find(l => l.id === from.id);
+            const toLayer = rootLayers.find(l => l.id === to.id);
+            if (fromLayer && toLayer) {
+              const fromArrayIdx = rootData.metadata.layers.indexOf(fromLayer);
+              const toArrayIdx = rootData.metadata.layers.indexOf(toLayer);
+              if (fromArrayIdx > -1 && toArrayIdx > -1) {
+                rootData.metadata.layers.splice(fromArrayIdx, 1);
+                const newToArrayIdx = rootData.metadata.layers.indexOf(toLayer);
+                const insertIdx = pos === 'after' ? newToArrayIdx + 1 : newToArrayIdx;
+                rootData.metadata.layers.splice(insertIdx, 0, fromLayer);
+                
+                if (mapView && mapView.map) {
+                  const rootArcgisLayer = mapView.map.findLayerById(from.rootId);
+                  if (rootArcgisLayer && rootArcgisLayer.type === 'map-image' && rootArcgisLayer.sublayers) {
+                    const sublayerItem = rootArcgisLayer.sublayers.find(s => s.id === from.id);
+                    const toItem = rootArcgisLayer.sublayers.find(s => s.id === to.id);
+                    if (sublayerItem && toItem) {
+                      const baseIdx = rootArcgisLayer.sublayers.indexOf(toItem);
+                      const newColIdx = pos === 'after' ? baseIdx + 1 : baseIdx;
+                      rootArcgisLayer.sublayers.reorder(sublayerItem, newColIdx);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        return newData;
+      });
+    }
+
+    handleDragEnd();
   };
 
   const handleDragEnd = () => {
     dragItem.current = null;
     dragOverItem.current = null;
     setDragOverId(null);
+    dragInsertPosition.current = null;
+    setDragInsertPositionState(null);
   };
 
   // ── Layer Tree State (specifically for EWA_WDD) ──────────────────────────
@@ -579,17 +786,36 @@ function AppInner() {
       layers: <Layers size={16} />, search: <Search size={16} />,
       navigation: <Navigation size={16} />, measure: <Ruler size={16} />,
       draw: <Pencil size={16} />, cad: <Box size={16} />,
-      data_request: <Database size={16} />, external_data: <Globe size={16} />,
+      data_request: <Database size={16} />, add_data: <Globe size={16} />,
       print: <Printer size={16} />, bookmark: <Bookmark size={16} />,
       identify:     <Info size={16} />, 
       split:        <Columns2 size={16} />,
       split_view:   <i className="material-icons" style={{ fontSize: '16px' }}>splitscreen</i>,
       blend: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <circle cx="8" cy="12" r="7" />
           <circle cx="16" cy="12" r="7" />
         </svg>
       ),
+      time_compare: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+          <path d="M16 12h-4V8" opacity="0.3"/>
+          <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
+        </svg>
+      ),
+      arcade: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
+        </svg>
+      ),
+      spatial_analysis: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+          <path d="M22 12A10 10 0 0 0 12 2v10z" />
+        </svg>
+      )
     };
     return icons[toolId] ?? null;
   }
@@ -601,29 +827,7 @@ function AppInner() {
       ?? (toolId.charAt(0).toUpperCase() + toolId.slice(1).replace('_', ' '));
   }
 
-  // ── Click-outside to close panel ───────────────────────────────────────────
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (
-        activeTool &&
-        activeTool !== 'split_view' && 
-        activeTool !== 'identify' && 
-        activeTool !== 'data_request' && 
-        activeTool !== 'print' && 
-        activeTool !== 'draw' && 
-        activeTool !== 'measure' && 
-        activeTool !== 'navigation' && 
-        !e.target.closest('.side-panel-container') &&
-        !e.target.closest('.bottom-toolbar-container') &&
-        !e.target.closest('.map-controls-container') &&
-        !e.target.closest('.right-toolbar-container')
-      ) {
-        setActiveTool(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeTool]);
+
 
   const handleToolSelect = (toolId) => {
     if (toolId === activeTool) { 
@@ -732,28 +936,28 @@ function AppInner() {
               title: 'Bloom',
               description: 'Create soft, glowing highlights on bright areas',
               icon: 'auto_awesome',
-              effectString: 'bloom(1.5, 0.5px, 0.1)'
+              effectString: 'bloom(3, 2px, 0.5)'
             },
             {
               id: 'shadow',
               title: 'Drop Shadow',
               description: 'Add elegant depth with a soft dark shadow',
               icon: 'layers',
-              effectString: 'drop-shadow(3px 3px 5px rgba(0,0,0,0.5))'
+              effectString: 'drop-shadow(3px, 3px, 5px, #000000)'
             },
             {
               id: 'blur',
               title: 'Blur',
               description: 'Soften and defocus layer features smoothly',
               icon: 'blur_on',
-              effectString: 'blur(4px)'
+              effectString: 'blur(6px)'
             },
             {
               id: 'brightness-contrast',
               title: 'Brightness & Contrast',
               description: 'Boost highlight luminosity and dynamic range',
               icon: 'brightness_6',
-              effectString: 'brightness(120%) contrast(110%)'
+              effectString: 'brightness(120%) contrast(150%)'
             },
             {
               id: 'grayscale',
@@ -788,21 +992,36 @@ function AppInner() {
               title: 'Sepia',
               description: 'Apply a nostalgic warm sepia tone overlay',
               icon: 'photo_filter',
-              effectString: 'sepia(80%)'
+              effectString: 'sepia(100%)'
             }
           ];
 
           const applyEffects = (activeEffectId) => {
-            if (!target) return;
+            const view = mapView;
+            if (!view || !activeLayerEdit) return;
+
+            const { layerId, subId } = activeLayerEdit;
+            const selectedLayerId = subId !== null ? String(subId) : layerId;
+            
+            // Ensure effect is applied on the actual ArcGIS layer instance
+            let arcgisLayer = view.map.findLayerById(selectedLayerId);
+            
+            // Fallback to parent layer if sublayer is not a standalone layer in the map
+            if (!arcgisLayer) {
+              arcgisLayer = view.map.findLayerById(layerId);
+            }
+
+            if (!arcgisLayer) return;
+
             try {
               if (!activeEffectId) {
-                target.effect = null;
+                arcgisLayer.effect = null;
               } else {
                 const config = EFFECTS_CONFIG.find(e => e.id === activeEffectId);
                 if (config) {
-                  target.effect = config.effectString;
+                  arcgisLayer.effect = config.effectString;
                 } else {
-                  target.effect = null;
+                  arcgisLayer.effect = null;
                 }
               }
             } catch (err) {
@@ -830,7 +1049,7 @@ function AppInner() {
 
           return (
             <div className="tool-content-full" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="tool-fixed-header" style={{ borderBottom: 'none', paddingBottom: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="tool-fixed-header" style={{ borderBottom: 'none', paddingBottom: '0px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button 
                   onClick={handleCancel}
                   style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: '#64748b', padding: 0, cursor: 'pointer' }}
@@ -869,8 +1088,8 @@ function AppInner() {
                           alignItems: 'center', 
                           padding: '8px 12px', 
                           borderRadius: '8px', 
-                          border: isActive ? '1px solid #bfdbfe' : '1px solid #f1f5f9', 
-                          backgroundColor: isActive ? '#eff6ff' : '#ffffff',
+                          border: isActive ? '1px solid #fecdd3' : '1px solid #f1f5f9', 
+                          backgroundColor: isActive ? '#fff1f2' : '#ffffff',
                           transition: 'all 0.2s ease',
                           cursor: 'pointer'
                         }}
@@ -890,7 +1109,7 @@ function AppInner() {
                             width: '30px', 
                             height: '30px', 
                             borderRadius: '6px', 
-                            backgroundColor: isActive ? '#3b82f6' : '#f1f5f9',
+                            backgroundColor: isActive ? '#e63946' : '#f1f5f9',
                             color: isActive ? '#ffffff' : '#64748b',
                             marginRight: '10px',
                             transition: 'all 0.2s ease',
@@ -900,13 +1119,13 @@ function AppInner() {
                           <i className="material-icons" style={{ fontSize: '16px' }}>{effect.icon}</i>
                         </div>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, paddingRight: '8px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: isActive ? '#1e40af' : '#1a2f4d' }}>{effect.title}</span>
-                          <span style={{ fontSize: '10.5px', color: isActive ? '#2563eb' : '#64748b', marginTop: '1px', lineHeight: '1.2' }}>{effect.description}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: isActive ? '#be123c' : '#1a2f4d' }}>{effect.title}</span>
+                          <span style={{ fontSize: '10.5px', color: isActive ? '#e11d48' : '#64748b', marginTop: '1px', lineHeight: '1.2' }}>{effect.description}</span>
                         </div>
                         <div onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
-                            className="switch-sm" 
+                            className="switch-sm switch-sm-red" 
                             checked={isActive}
                             onChange={(e) => handleToggleEffect(effect.id, e.target.checked)}
                           />
@@ -1142,12 +1361,61 @@ function AppInner() {
           const fullId = subId !== null ? `${id}_sub_${subId}` : id;
           const state = layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true };
 
-          return (
+          if (!layerMenuTriggerRect) return null;
+
+          const layer = layersConfig.find(l => l.id === id);
+          const isMapServer = layer && layer.type === 'map-image';
+
+          let hierarchyType = 'feature'; // 'root-group' | 'group' | 'feature'
+          if (subId === null) {
+            if (isMapServer) {
+              hierarchyType = 'root-group';
+            } else {
+              hierarchyType = 'feature';
+            }
+          } else {
+            const mapData = dynamicMapServerData[id];
+            const sublayerMeta = mapData?.metadata?.layers?.find(s => s.id === subId || s.id === parseInt(subId));
+            const hasChildren = sublayerMeta && sublayerMeta.subLayerIds && sublayerMeta.subLayerIds.length > 0;
+            if (hasChildren) {
+              hierarchyType = 'group';
+            } else {
+              hierarchyType = 'feature';
+            }
+          }
+
+          const isGroupType = hierarchyType === 'root-group' || hierarchyType === 'group';
+
+          const menuWidth = 210;
+          const menuHeight = isGroupType ? 120 : 130; // group menu is shorter, feature menu is capped at 130px max-height
+
+          let left = layerMenuTriggerRect.right - menuWidth;
+          if (left < 10) {
+            left = 10;
+          } else if (left + menuWidth > window.innerWidth - 10) {
+            left = window.innerWidth - menuWidth - 10;
+          }
+
+          const spaceBelow = window.innerHeight - layerMenuTriggerRect.bottom;
+          const spaceAbove = layerMenuTriggerRect.top;
+          const openUpward = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+
+          const posStyle = openUpward
+            ? { bottom: `${window.innerHeight - layerMenuTriggerRect.top}px`, top: 'auto', left: `${left}px`, right: 'auto' }
+            : { top: `${layerMenuTriggerRect.bottom}px`, bottom: 'auto', left: `${left}px`, right: 'auto' };
+
+          return createPortal(
             <motion.div 
               className="layer-action-menu"
-              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              initial={{ opacity: 0, scale: 0.95, y: openUpward ? 10 : -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                ...posStyle,
+                zIndex: 99999,
+                margin: 0
+              }}
             >
               <div className="menu-item" onClick={() => handleLayerAction('zoom', id, subId)}>
                 <i className="material-icons">zoom_out_map</i> Zoom to Full Extent
@@ -1172,47 +1440,92 @@ function AppInner() {
                         let target;
                         if (subId !== null) {
                           const p = view.map.findLayerById(id);
-                          if (p && p.sublayers) {
-                            target = p.sublayers.find(s => s.id === subId || s.id === parseInt(subId, 10));
+                          if (p) {
+                            target = typeof p.findSublayerById === 'function'
+                              ? p.findSublayerById(Number(subId))
+                              : (p.sublayers ? p.sublayers.find(s => s.id === subId || s.id === parseInt(subId, 10)) : null);
                           }
                         } else {
                           target = view.map.findLayerById(id);
                         }
-                        if (target) target.opacity = val;
+                        if (target) {
+                          target.opacity = val;
+
+                          // Recursive Group Transparency propagation
+                          const stateUpdatesObj = {};
+                          if (subId !== null) {
+                            // Sub-group layer recursive update
+                            const p = view.map.findLayerById(id);
+                            const applySublayerOpacityRecursive = (parentLayer, sId, opacityValue) => {
+                              const sublayer = typeof parentLayer.findSublayerById === 'function'
+                                ? parentLayer.findSublayerById(Number(sId))
+                                : (parentLayer.sublayers ? parentLayer.sublayers.find(s => s.id === sId || s.id === parseInt(sId, 10)) : null);
+                              if (sublayer) {
+                                sublayer.opacity = opacityValue;
+                                const childFullId = `${parentLayer.id}_sub_${sId}`;
+                                stateUpdatesObj[childFullId] = opacityValue;
+                                if (sublayer.subLayerIds && sublayer.subLayerIds.length > 0) {
+                                  sublayer.subLayerIds.forEach(childId => {
+                                    applySublayerOpacityRecursive(parentLayer, childId, opacityValue);
+                                  });
+                                }
+                              }
+                            };
+                            applySublayerOpacityRecursive(p, subId, val);
+                          } else {
+                            // Root group layer (MapImageLayer) recursive update
+                            if (target.sublayers && target.sublayers.length > 0) {
+                              target.sublayers.forEach(sub => {
+                                sub.opacity = val;
+                                stateUpdatesObj[`${id}_sub_${sub.id}`] = val;
+                              });
+                            }
+                          }
+
+                          if (Object.keys(stateUpdatesObj).length > 0) {
+                            setLayerStates(prev => {
+                              const next = { ...prev };
+                              Object.entries(stateUpdatesObj).forEach(([fid, opacityVal]) => {
+                                next[fid] = {
+                                  ...(next[fid] || { opacity: 1, labels: true, visible: true, renderer: true }),
+                                  opacity: opacityVal
+                                };
+                              });
+                              return next;
+                            });
+                          }
+                        }
                       }
                     }}
                   />
                   <span>{Math.round(state.opacity * 100)}%</span>
                 </div>
               </div>
-              <div className="menu-divider" />
-              <div className="menu-item-toggle">
-                <span><i className="material-icons">visibility</i> Visibility</span>
-                <input 
-                  type="checkbox" className="switch-sm" 
-                  checked={state.renderer !== false}
-                  onChange={() => handleLayerAction('toggleViz', id, subId)}
-                />
-              </div>
-              <div className="menu-item-toggle">
-                <span><i className="material-icons">label</i> Labels</span>
-                <input 
-                  type="checkbox" className="switch-sm" 
-                  checked={state.labels !== false}
-                  onChange={() => handleLayerAction('toggleLabels', id, subId)}
-                />
-              </div>
-              <div className="menu-item" onClick={() => handleLayerAction('customizeLayer', id, subId)}>
-                <i className="material-icons">tune</i> Customize Layer
-              </div>
-              <div className="menu-item" onClick={() => handleLayerAction('effectsLayer', id, subId)}>
-                <i className="material-icons">palette</i> Effects
-              </div>
-              <div className="menu-divider" />
-              <div className="menu-item delete" onClick={() => handleLayerAction('remove', id, subId)}>
-                <i className="material-icons">delete</i> Remove Layer
-              </div>
-            </motion.div>
+              {!isGroupType && (
+                <>
+                  <div className="menu-divider" />
+                  <div className="menu-item-toggle">
+                    <span><i className="material-icons">label</i> Labels</span>
+                    <input 
+                      type="checkbox" className="switch-sm" 
+                      checked={state.labels !== false}
+                      onChange={() => handleLayerAction('toggleLabels', id, subId)}
+                    />
+                  </div>
+                  <div className="menu-item" onClick={() => handleLayerAction('customizeLayer', id, subId)}>
+                    <i className="material-icons">tune</i> Customize Layer
+                  </div>
+                  <div className="menu-item" onClick={() => handleLayerAction('effectsLayer', id, subId)}>
+                    <i className="material-icons">palette</i> Effects
+                  </div>
+                  <div className="menu-divider" />
+                  <div className="menu-item delete" onClick={() => handleLayerAction('remove', id, subId)}>
+                    <i className="material-icons">delete</i> Remove Layer
+                  </div>
+                </>
+              )}
+            </motion.div>,
+            document.body
           );
         };
 
@@ -1273,9 +1586,7 @@ function AppInner() {
                         return (
                           <div 
                             key={layer.id}
-                            className={`layer-tree-container ${dragOverId === layer.id ? 'drag-over' : ''}`}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, layer.id)}
+                            className={`layer-tree-container ${dragOverId === layer.id ? `drag-over drag-insert-${dragInsertPositionState}` : ''}`}
                             onDragOver={(e) => handleDragOver(e, layer.id)}
                             onDrop={handleDrop}
                             onDragEnd={handleDragEnd}
@@ -1283,7 +1594,15 @@ function AppInner() {
                             <div className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                               <div className="layer-card-main" style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                                 <div className="layer-row-content">
-                                  <span className="layer-drag-handle" onMouseDown={(e) => e.stopPropagation()}>
+                                  <span 
+                                    className="layer-drag-handle" 
+                                    draggable
+                                    onDragStart={(e) => {
+                                      const row = e.currentTarget.closest('.layer-tree-container');
+                                      if (row) e.dataTransfer.setDragImage(row, 20, 20);
+                                      handleDragStart(e, layer.id);
+                                    }}
+                                  >
                                     <DragHandle />
                                   </span>
                                   
@@ -1311,7 +1630,13 @@ function AppInner() {
                                     className={`more-btn ${activeLayerMenu === layer.id ? 'active' : ''}`}
                                     onClick={(e) => { 
                                       e.stopPropagation(); 
-                                      setActiveLayerMenu(activeLayerMenu === layer.id ? null : layer.id); 
+                                      const nextActive = activeLayerMenu === layer.id ? null : layer.id;
+                                      setActiveLayerMenu(nextActive);
+                                      if (nextActive) {
+                                        setLayerMenuTriggerRect(e.currentTarget.getBoundingClientRect());
+                                      } else {
+                                        setLayerMenuTriggerRect(null);
+                                      }
                                     }}
                                   >
                                     <i className="material-icons">more_horiz</i>
@@ -1324,7 +1649,8 @@ function AppInner() {
                             {isMapServer && isExpanded && mapData && (
                               <div className="tree-children">
                                 {mapData.metadata.layers.map(sub => {
-                                  if (sub.parentLayerId !== -1) return null;
+                                  // Root layers have parentLayerId: -1 or null/undefined
+                                  if (sub.parentLayerId != null && sub.parentLayerId !== -1) return null;
 
                                   const renderSub = (s, depth = 1) => {
                                     const subId = `${layer.id}_sub_${s.id}`;
@@ -1334,7 +1660,13 @@ function AppInner() {
 
                                     return (
                                       <React.Fragment key={s.id}>
-                                        <div className={`tree-row ${depth > 1 ? 'nested' : ''}`} style={{ zIndex: activeLayerMenu === subId ? 9999 : undefined }}>
+                                        <div 
+                                          className={`tree-row ${depth > 1 ? 'nested' : ''} ${dragOverId === subId ? `drag-over drag-insert-${dragInsertPositionState}` : ''}`} 
+                                          style={{ zIndex: activeLayerMenu === subId ? 9999 : undefined }}
+                                          onDragOver={(e) => handleDragOver(e, { type: 'sublayer', rootId: layer.id, parentId: s.parentLayerId != null ? s.parentLayerId : -1, id: s.id })}
+                                          onDrop={handleDrop}
+                                          onDragEnd={handleDragEnd}
+                                        >
                                           <div className="layer-row-content">
                                             {/* Vertical/Horizontal connectors on the left */}
                                             {[...Array(depth)].map((_, i) => (
@@ -1343,6 +1675,19 @@ function AppInner() {
                                                 {i === depth - 1 && <div className="tree-line-h" />}
                                               </div>
                                             ))}
+                                            
+                                            <span 
+                                              className="layer-drag-handle" 
+                                              style={{ marginRight: '4px', display: 'flex', alignItems: 'center' }} 
+                                              draggable
+                                              onDragStart={(e) => {
+                                                const row = e.currentTarget.closest('.tree-row');
+                                                if (row) e.dataTransfer.setDragImage(row, 20, 20);
+                                                handleDragStart(e, { type: 'sublayer', rootId: layer.id, parentId: s.parentLayerId != null ? s.parentLayerId : -1, id: s.id });
+                                              }}
+                                            >
+                                              <DragHandle />
+                                            </span>
 
                                             {/* Parent checkbox */}
                                             <input 
@@ -1381,7 +1726,13 @@ function AppInner() {
                                               className={`more-btn ${activeLayerMenu === subId ? 'active' : ''}`}
                                               onClick={(e) => { 
                                                 e.stopPropagation(); 
-                                                setActiveLayerMenu(activeLayerMenu === subId ? null : subId); 
+                                                const nextActive = activeLayerMenu === subId ? null : subId;
+                                                setActiveLayerMenu(nextActive);
+                                                if (nextActive) {
+                                                  setLayerMenuTriggerRect(e.currentTarget.getBoundingClientRect());
+                                                } else {
+                                                  setLayerMenuTriggerRect(null);
+                                                }
                                               }}
                                             >
                                               <i className="material-icons">more_horiz</i>

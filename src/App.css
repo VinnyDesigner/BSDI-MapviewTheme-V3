@@ -2032,6 +2032,9 @@
   top: 100%;
   right: 0;
   width: 210px;
+  max-height: 130px;
+  overflow-y: auto;
+  scrollbar-width: thin;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -2042,6 +2045,20 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.layer-action-menu::-webkit-scrollbar {
+  width: 4px;
+}
+.layer-action-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.layer-action-menu::-webkit-scrollbar-thumb {
+  background: rgba(30, 60, 114, 0.2);
+  border-radius: 10px;
+}
+.layer-action-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(30, 60, 114, 0.4);
 }
 
 .menu-item {
@@ -2143,6 +2160,7 @@
 }
 .switch-sm:checked::after { left: 14px; }
 
+.switch-sm.switch-sm-red:checked { background: #e63946; }
 
 /* Force Refresh Hierarchy */
 .layer-card-main, .tree-row { display: flex !important; align-items: center !important; justify-content: space-between !important; width: 100% !important; }
@@ -2711,3 +2729,33 @@
   pointer-events: auto;
 }
 
+
+/* Drag insertion indicator lines */
+.layer-tree-container.drag-insert-before > .layer-card {
+  border-top: 2px solid #DF261C;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.layer-tree-container.drag-insert-after > .layer-card {
+  border-bottom: 2px solid #DF261C;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tree-row.drag-insert-before {
+  border-top: 2px solid #DF261C;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.tree-row.drag-insert-after {
+  border-bottom: 2px solid #DF261C;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.layer-tree-container.drag-over > .layer-card,
+.tree-row.drag-over {
+  background: rgba(30, 60, 114, 0.04);
+}

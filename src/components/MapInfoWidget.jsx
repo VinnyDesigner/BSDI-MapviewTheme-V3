@@ -8,8 +8,8 @@ const COORD_FORMATS = {
   WEBMERCATOR: 'webmercator',
   WGS84_DD: 'wgs84_dd',
   WGS84_DMS: 'wgs84_dms',
-  WGS84_DDM: 'wgs84_ddm',
-  DLTM: 'dltm'
+  DLTM: 'dltm',
+  AIN_EL_ABD: 'ain_el_abd'
 };
 
 const STANDARD_SCALES = [
@@ -29,16 +29,7 @@ const toDMS = (val, isLat) => {
   return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
 };
 
-// Helper to convert decimal degrees to DDM (Degrees Decimal Minutes)
-const toDDM = (val, isLat) => {
-  const absolute = Math.abs(val);
-  const degrees = Math.floor(absolute);
-  const minutes = ((absolute - degrees) * 60).toFixed(3);
-  const direction = isLat
-    ? (val >= 0 ? "N" : "S")
-    : (val >= 0 ? "E" : "W");
-  return `${degrees}° ${minutes}' ${direction}`;
-};
+
 
 // Mini Dropdown Component
 const MiniSelect = ({ options, value, displayValue, onChange }) => {
@@ -59,6 +50,95 @@ const MiniSelect = ({ options, value, displayValue, onChange }) => {
     <div className="mini-select-container" ref={containerRef}>
       <div className="mini-select-trigger" onClick={() => setIsOpen(!isOpen)}>
         <span className="mini-select-value">{displayValue || value}</span>
+        <span className="mini-select-arrow">▾</span>
+      </div>
+      {isOpen && (
+        <div className="mini-select-dropdown">
+          {options.map((opt) => (
+            <div
+              key={opt.value}
+              className={`mini-select-option ${opt.value === value ? 'active' : ''}`}
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Scale Dropdown & Manual Input Component
+const ScaleSelect = ({ options, value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const containerRef = useRef(null);
+
+  // Sync state with parent's active map scale (e.g. from mouse wheel, zoom buttons)
+  useEffect(() => {
+    setInputValue(`1:${value.toLocaleString('en-US')}`);
+  }, [value]);
+
+  useEffect(() => {
+    const clickOut = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickOut);
+    return () => document.removeEventListener('mousedown', clickOut);
+  }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      submitValue();
+      setIsOpen(false);
+      e.target.blur();
+    }
+  };
+
+  const handleBlur = () => {
+    submitValue();
+  };
+
+  const submitValue = () => {
+    const raw = inputValue.trim();
+    let clean = raw;
+    if (clean.toLowerCase().startsWith('1:')) {
+      clean = clean.substring(2);
+    }
+    clean = clean.replace(/,/g, '').trim();
+
+    const parsed = parseFloat(clean);
+    if (!isNaN(parsed) && parsed > 0 && isFinite(parsed)) {
+      onChange(parsed);
+    } else {
+      // Revert to current formatted value
+      setInputValue(`1:${value.toLocaleString('en-US')}`);
+    }
+  };
+
+  return (
+    <div className="mini-select-container scale-select-container" ref={containerRef}>
+      <div className="mini-select-trigger scale-select-trigger" onClick={(e) => {
+        // If clicking the container/arrow but not the input directly, toggle dropdown
+        if (e.target.tagName !== 'INPUT') {
+          setIsOpen(!isOpen);
+        }
+      }}>
+        <input
+          type="text"
+          className="scale-select-input"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onFocus={() => setIsOpen(true)}
+        />
         <span className="mini-select-arrow">▾</span>
       </div>
       {isOpen && (
@@ -190,13 +270,7 @@ const MapInfoWidget = ({ view }) => {
           };
         }
         return { display: `Lon: N/A  Lat: N/A` };
-      case COORD_FORMATS.WGS84_DDM:
-        if (lat !== undefined && lng !== undefined) {
-          return {
-            display: `${toDDM(lng, false)}  ${toDDM(lat, true)}`
-          };
-        }
-        return { display: `Lon: N/A  Lat: N/A` };
+
       case COORD_FORMATS.DLTM:
         if (isProjLoaded) {
           try {
@@ -211,6 +285,20 @@ const MapInfoWidget = ({ view }) => {
           }
         }
         return { display: `E: N/A  N: N/A` };
+      case COORD_FORMATS.AIN_EL_ABD:
+        if (isProjLoaded) {
+          try {
+            const ainPoint = projection.project(rawPoint, new SpatialReference({ wkid: 20439 }));
+            if (ainPoint) {
+              return {
+                display: `X: ${Math.round(ainPoint.x)}  Y: ${Math.round(ainPoint.y)}`
+              };
+            }
+          } catch (e) {
+            console.error("Ain el Abd projection error", e);
+          }
+        }
+        return { display: `X: N/A  Y: N/A` };
       case COORD_FORMATS.WEBMERCATOR:
       default:
         return {
@@ -223,8 +311,8 @@ const MapInfoWidget = ({ view }) => {
     { value: COORD_FORMATS.WEBMERCATOR, label: 'Map Spatial Reference (meters)' },
     { value: COORD_FORMATS.WGS84_DD, label: 'WGS 84 (Decimal Degrees)' },
     { value: COORD_FORMATS.WGS84_DMS, label: 'WGS 84 (DMS)' },
-    { value: COORD_FORMATS.WGS84_DDM, label: 'WGS 84 (DDM)' },
-    { value: COORD_FORMATS.DLTM, label: 'Dubai Transverse Mercator (DLTM)' }
+    { value: COORD_FORMATS.DLTM, label: 'Dubai Transverse Mercator (DLTM)' },
+    { value: COORD_FORMATS.AIN_EL_ABD, label: 'Ain el Abd / UTM zone 39N - EPSG:20439' }
   ];
 
   const scaleOptions = STANDARD_SCALES.map(s => ({
@@ -251,10 +339,9 @@ const MapInfoWidget = ({ view }) => {
       <div className="info-row-item scale-row">
         <div className="info-item">
           <span className="info-item-label">{t('scale') || 'Scale'}:</span>
-          <MiniSelect
+          <ScaleSelect
             options={scaleOptions}
             value={scale}
-            displayValue={`1:${scale.toLocaleString('en-US')}`}
             onChange={handleScaleChange}
           />
         </div>
