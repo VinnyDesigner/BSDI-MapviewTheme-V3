@@ -1,67 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { 
-  Layers, Info, Navigation, Ruler, 
-  Pencil, Box, Database, Globe, Printer, Bookmark,
-  Columns2, Map, Blend
-} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../i18n/translations';
+import { toolbarConfig } from '../config/toolbar';
+import { TOOL_REGISTRY } from '../registry/toolRegistry.jsx';
 import './BottomToolbar.css';
-
-// Tool group structure — IDs are code keys, names resolved via translations
-const TOOL_GROUP_DEFS = [
-  {
-    id: 'explore',
-    tools: [
-      { id: 'layers',     icon: Layers },
-      { id: 'time_compare', icon: () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-          <path d="M16 12h-4V8" opacity="0.3"/>
-          <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
-        </svg>
-      )},
-      { id: 'split',      icon: Columns2 },
-      { id: 'split_view', icon: Map },
-      { id: 'blend',      icon: Blend },
-      { id: 'arcade',     icon: () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
-        </svg>
-      )},
-      { id: 'spatial_analysis', icon: () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-          <path d="M22 12A10 10 0 0 0 12 2v10z" />
-        </svg>
-      )},
-    ]
-  },
-  {
-    id: 'analysis',
-    tools: [
-      { id: 'navigation', icon: Navigation },
-      { id: 'measure', icon: Ruler },
-      { id: 'draw',    icon: Pencil },
-    ]
-  },
-  {
-    id: 'data',
-    tools: [
-      { id: 'data_request',  icon: Database },
-      { id: 'add_data', icon: Globe },
-    ]
-  },
-  {
-    id: 'output',
-    tools: [
-      { id: 'print',    icon: Printer },
-      { id: 'bookmark', icon: Bookmark },
-    ]
-  },
-];
 
 const BottomToolbar = ({ 
   activeTool, 
@@ -74,7 +17,20 @@ const BottomToolbar = ({
   const toolbarRef = useRef(null);
   const [notchX, setNotchX] = useState(0);
 
-  const allToolIds = TOOL_GROUP_DEFS.flatMap(g => g.tools.map(t => t.id));
+  // Dynamically map configurations and tool registries into toolbar groups
+  const toolGroups = toolbarConfig.groups.map(group => ({
+    id: group.id,
+    tools: group.toolIds.map(toolId => {
+      const registryEntry = TOOL_REGISTRY[toolId];
+      if (!registryEntry || registryEntry.toolbar === false) return null;
+      return {
+        id: registryEntry.id,
+        icon: registryEntry.icon
+      };
+    }).filter(Boolean)
+  }));
+
+  const allToolIds = toolGroups.flatMap(g => g.tools.map(t => t.id));
   const isBottomToolActive = (activeTool && allToolIds.includes(activeTool)) || isSplitView;
 
   useEffect(() => {
@@ -86,7 +42,7 @@ const BottomToolbar = ({
         setNotchX((btnRect.left - toolbarRect.left) + btnRect.width / 2);
       }
     }
-  }, [activeTool, isBottomToolActive, isSplitView]);
+  }, [activeTool, isBottomToolActive, isSplitView, toolGroups]);
 
   return (
     <div className="bottom-toolbar-container">
@@ -97,12 +53,11 @@ const BottomToolbar = ({
         animate={{ y: 0, opacity: 1, '--notch-x': `${notchX}px` }}
         transition={{ type: 'spring', damping: 20, stiffness: 100 }}
       >
-        {TOOL_GROUP_DEFS.map((group, groupIndex) => (
+        {toolGroups.map((group, groupIndex) => (
           <React.Fragment key={group.id}>
             <div className="tool-group">
               {group.tools.map((tool) => {
                 const Icon = tool.icon;
-                // ✅ Static UI tooltip from translations — NOT dynamic data
                 const label = translations[lang].tools[tool.id] ?? tool.id;
                 const isActive = activeTool === tool.id || 
                                (tool.id === 'split_view' && isSplitView) ||
@@ -123,31 +78,6 @@ const BottomToolbar = ({
                       </i>
                     ) : tool.id === 'split_view' ? (
                       <i className="material-icons" style={{ fontSize: '18px' }}>splitscreen</i>
-                    ) : tool.id === 'blend' ? (
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                        <circle cx="8" cy="12" r="7" />
-                        <circle cx="16" cy="12" r="7" />
-                      </svg>
-                    ) : tool.id === 'arcade' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
-                      </svg>
-                    ) : tool.id === 'arcade' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
-                      </svg>
-                    ) : tool.id === 'spatial_analysis' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                      </svg>
-                    ) : tool.id === 'time_compare' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
-                        <path d="M16 12h-4V8" opacity="0.3"/>
-                        <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
-                      </svg>
                     ) : (
                       <Icon size={18} />
                     )}
@@ -155,7 +85,7 @@ const BottomToolbar = ({
                 );
               })}
             </div>
-            {groupIndex < TOOL_GROUP_DEFS.length - 1 && (
+            {groupIndex < toolGroups.length - 1 && (
               <div className="toolbar-divider" />
             )}
           </React.Fragment>
@@ -166,3 +96,4 @@ const BottomToolbar = ({
 };
 
 export default BottomToolbar;
+

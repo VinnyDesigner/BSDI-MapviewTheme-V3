@@ -47,3 +47,36 @@ export const layersConfig = [
     type: 'feature'
   }
 ];
+
+export const basemaps = [
+  {
+    id: "dark-gray-vector",
+    title: "Dark Gray Canvas",
+    thumbnail: "/assets/basemaps/dark-gray.jpg"
+  },
+  {
+    id: "satellite",
+    title: "Imagery",
+    thumbnail: "/assets/basemaps/imagery.jpg"
+  },
+  {
+    id: "hybrid",
+    title: "Imagery Hybrid",
+    thumbnail: "/assets/basemaps/hybrid.jpg"
+  },
+  {
+    id: "gray-vector",
+    title: "Light Gray Canvas",
+    thumbnail: "/assets/basemaps/light-gray.jpg"
+  },
+  {
+    id: "streets-navigation-vector",
+    title: "Navigation Map",
+    thumbnail: "/assets/basemaps/navigation.jpg"
+  },
+  {
+    id: "oceans",
+    title: "Oceans",
+    thumbnail: "/assets/basemaps/oceans.jpg"
+  }
+];

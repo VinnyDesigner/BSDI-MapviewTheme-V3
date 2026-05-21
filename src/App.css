@@ -681,11 +681,11 @@
 .custom-checkbox, .layer-card-label input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   background: white;
   border: 1.5px solid rgba(0, 0, 0, 0.15); /* Reduced opacity for unchecked */
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: all 0.2s;

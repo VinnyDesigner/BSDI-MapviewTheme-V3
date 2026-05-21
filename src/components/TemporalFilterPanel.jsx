@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Info, Zap, Clock, Columns2, Square } from 'lucide-react';
 import CustomSelect from './CustomSelect';
+import TreeSelect from './TreeSelect';
 import './TemporalFilterPanel.css';
 
 const SPEED_MAP = { Slow: 2000, Medium: 1200, Fast: 600 };
@@ -275,6 +276,9 @@ const getActiveFeatureCount = async (layerItem, fieldName, filterExpr) => {
 // --- Desktop Dynamic Time Lapse Component ---
 const DesktopTimeLapsePanel = ({ 
   mapView,
+  layersConfig,
+  dynamicMapServerData,
+  treeData,
   timelapseSettings,
   setTimelapseSettings
 }) => {
@@ -589,11 +593,8 @@ const DesktopTimeLapsePanel = ({
         {/* Layer Selection */}
         <div className="temporal-section">
           <label className="temporal-label">Select Layer</label>
-          <CustomSelect 
-            options={layersList.map(l => ({
-              id: l.id,
-              title: `${l.title} (${formatGeometryType(l.geometryType)})`
-            }))}
+          <TreeSelect 
+            treeData={treeData}
             value={selectedLayerId}
             onChange={(val) => {
               setSelectedLayerId(val);
@@ -706,6 +707,8 @@ const DesktopTimeLapsePanel = ({
 // --- Mobile & Tablet Temporal Filter Component ---
 const MobileTabletTemporalPanel = ({ 
   layersConfig, 
+  dynamicMapServerData,
+  treeData,
   timelapseSettings, 
   setTimelapseSettings,
   timeCompareTab = 'slider',
@@ -716,7 +719,7 @@ const MobileTabletTemporalPanel = ({
   const [fieldError, setFieldError] = useState(null);
   const intervalRef = useRef(null);
 
-  const temporalLayers = layersConfig.filter(l => l.timeEnabled || l.startYear || l.timeField);
+  const temporalLayers = layersConfig.filter(l => l.timeField);
   const activeLayer = temporalLayers.find(l => l.id === timelapseSettings.layerId);
 
   const pushFilter = useCallback((overrides = {}) => {
@@ -898,11 +901,15 @@ const MobileTabletTemporalPanel = ({
 
         <div className="temporal-section">
           <label className="temporal-label">Temporal Layer</label>
-          <CustomSelect 
-            options={temporalLayers.map(l => ({ id: l.id, title: l.title }))}
+          <TreeSelect 
+            treeData={treeData}
             value={timelapseSettings.layerId}
             onChange={(val) => {
-              const layer = temporalLayers.find(l => l.id === val);
+              let rootId = val;
+              if (val.includes('_sub_')) {
+                rootId = val.split('_sub_')[0];
+              }
+              const layer = layersConfig.find(l => l.id === rootId);
               if (!layer) return;
               stopPlayback();
               setTimelapseSettings({
@@ -1092,6 +1099,7 @@ const MobileTabletTemporalPanel = ({
 // --- Main Exported Component ---
 const TemporalFilterPanel = ({ 
   layersConfig, 
+  dynamicMapServerData,
   timelapseSettings, 
   setTimelapseSettings,
   timeCompareTab = 'slider',
@@ -1099,6 +1107,89 @@ const TemporalFilterPanel = ({
   mapView
 }) => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 1024);
+
+  const treeData = React.useMemo(() => {
+    const tree = [];
+
+    layersConfig.forEach(l => {
+      // 1. Feature layers (flat)
+      if (l.type === 'feature') {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      }
+      // 2. MapServer layers (hierarchical)
+      else if (l.type === 'map-image') {
+        const mapData = dynamicMapServerData?.[l.id];
+        if (mapData && mapData.metadata && mapData.metadata.layers) {
+          const sublayers = mapData.metadata.layers;
+          
+          const buildNode = (sub) => {
+            const subId = `${l.id}_sub_${sub.id}`;
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+            if (hasChildren) {
+              const childrenNodes = [];
+              sub.subLayerIds.forEach(childId => {
+                const childSub = sublayers.find(s => s.id === childId);
+                if (childSub) {
+                  const childNode = buildNode(childSub);
+                  if (childNode) {
+                    childrenNodes.push(childNode);
+                  }
+                }
+              });
+              
+              if (childrenNodes.length > 0) {
+                return {
+                  id: subId,
+                  title: sub.name || sub.title,
+                  type: 'group',
+                  selectable: false,
+                  children: childrenNodes
+                };
+              }
+              return null;
+            } else {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'feature',
+                selectable: true,
+                children: []
+              };
+            }
+          };
+
+          const rootChildren = [];
+          sublayers.forEach(sub => {
+            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+              const node = buildNode(sub);
+              if (node) {
+                rootChildren.push(node);
+              }
+            }
+          });
+
+          if (rootChildren.length > 0) {
+            tree.push({
+              id: l.id,
+              title: l.title,
+              type: 'root-group',
+              selectable: false,
+              children: rootChildren
+            });
+          }
+        }
+      }
+    });
+
+    return tree;
+  }, [layersConfig, dynamicMapServerData]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1112,6 +1203,8 @@ const TemporalFilterPanel = ({
     return (
       <MobileTabletTemporalPanel
         layersConfig={layersConfig}
+        dynamicMapServerData={dynamicMapServerData}
+        treeData={treeData}
         timelapseSettings={timelapseSettings}
         setTimelapseSettings={setTimelapseSettings}
         timeCompareTab={timeCompareTab}
@@ -1123,6 +1216,9 @@ const TemporalFilterPanel = ({
   return (
     <DesktopTimeLapsePanel
       mapView={mapView}
+      layersConfig={layersConfig}
+      dynamicMapServerData={dynamicMapServerData}
+      treeData={treeData}
       timelapseSettings={timelapseSettings}
       setTimelapseSettings={setTimelapseSettings}
     />
