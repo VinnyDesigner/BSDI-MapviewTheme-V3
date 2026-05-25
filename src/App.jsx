@@ -43,8 +43,8 @@ function AppInner() {
 
   const drawerTools = [
     { id: 'layers', icon: Layers, label: translations[lang].tools.layers ?? 'Layers' },
-    { id: 'time_compare', icon: () => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    { id: 'time_compare', icon: (props) => (
+      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <polyline points="12 6 12 12 16 14"/>
         <path d="M16 12h-4V8" opacity="0.3"/>
@@ -52,20 +52,20 @@ function AppInner() {
       </svg>
     ), label: translations[lang].tools.time_compare ?? 'Timelapse' },
     { id: 'split', icon: Columns2, label: translations[lang].tools.split ?? 'Swipe' },
-    { id: 'split_view', icon: () => <i className="material-icons" style={{ fontSize: '20px' }}>splitscreen</i>, label: translations[lang].tools.split_view ?? 'Split View' },
-    { id: 'blend', icon: () => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    { id: 'split_view', icon: (props) => <i {...props} className={`material-icons ${props.className || ''}`} style={{ fontSize: '20px' }}>splitscreen</i>, label: translations[lang].tools.split_view ?? 'Split View' },
+    { id: 'blend', icon: (props) => (
+      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="8" cy="12" r="7" />
         <circle cx="16" cy="12" r="7" />
       </svg>
     ), label: translations[lang].tools.blend ?? 'Blend' },
-    { id: 'arcade', icon: () => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    { id: 'arcade', icon: (props) => (
+      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
       </svg>
     ), label: translations[lang].tools.arcade ?? 'Arcade' },
-    { id: 'spatial_analysis', icon: () => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    { id: 'spatial_analysis', icon: (props) => (
+      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
         <path d="M22 12A10 10 0 0 0 12 2v10z" />
       </svg>
@@ -77,7 +77,6 @@ function AppInner() {
     { id: 'add_data', icon: Globe, label: translations[lang].tools.add_data ?? 'Add Data' },
     { id: 'print', icon: Printer, label: translations[lang].tools.print ?? 'Print' },
     { id: 'bookmark', icon: Bookmark, label: translations[lang].tools.bookmark ?? 'Bookmark' },
-    { id: 'basemap', icon: Map, label: translations[lang].tools.basemap ?? 'Basemaps' },
     { id: 'geoprocessing', icon: Cpu, label: 'Geoprocessing' }
   ];
 
@@ -1029,7 +1028,7 @@ function AppInner() {
 
   return (
     <div className="app-container" data-swipe-mode={swipeMode}>
-      <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+      <Header onMenuClick={() => setIsMobileMenuOpen(true)} view={mapView} />
       <div style={{ display: isSplitView ? 'none' : 'block', width: '100%', height: '100%' }}>
         <ArcGISMap 
           layerVisibility={layerVisibility} 
@@ -1209,12 +1208,12 @@ function AppInner() {
               onClick={() => setIsMobileMenuOpen(false)}
             />
 
-            {/* Bottom Sheet Drawer */}
+            {/* Side Drawer */}
             <motion.div
               className="mobile-drawer-container"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={{ x: lang === 'AR' ? '-100%' : '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: lang === 'AR' ? '-100%' : '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
             >
               {/* Drag Handle Indicator */}
@@ -1222,17 +1221,14 @@ function AppInner() {
 
               {/* Drawer Header */}
               <div className="mobile-drawer-header">
-                <h3>{lang === 'AR' ? 'عارض الخرائط الذكي BSDI' : 'BSDI Smart Map Viewer'}</h3>
+                <div className="mobile-user-profile">
+                  <div className="mobile-avatar">
+                    AK
+                  </div>
+                  <span className="mobile-username">User Name</span>
+                </div>
                 
                 <div className="mobile-drawer-header-actions">
-                  {/* Language Toggle */}
-                  <button 
-                    className="mobile-drawer-lang-toggle" 
-                    onClick={toggleLanguage}
-                  >
-                    {t('langToggle')}
-                  </button>
-                  
                   {/* Close button */}
                   <button 
                     className="mobile-drawer-close-btn"
@@ -1257,9 +1253,7 @@ function AppInner() {
                         onClick={() => handleMobileToolSelect(tool.id)}
                         className={`mobile-tool-card ${isActive ? 'active' : ''}`}
                       >
-                        <div className="mobile-tool-icon-wrapper">
-                          <Icon />
-                        </div>
+                        <Icon className="mobile-tool-icon" />
                         <span className="mobile-tool-label">{tool.label}</span>
                       </button>
                     );

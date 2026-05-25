@@ -198,6 +198,12 @@ const ArcGISMap = ({
     });
     map.add(buildingsLayer);
 
+    const ifcVillaLayer = new SceneLayer({
+      url: "https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer?f=json",
+      title: "IFC Old Villa", id: "ifc-old-villa", opacity: 1.0
+    });
+    map.add(ifcVillaLayer);
+
     const loadPromises = layersConfig.map(config => {
       if (layers3DRef.current[config.id]) return layers3DRef.current[config.id].load();
 

@@ -2581,3 +2581,625 @@ ReferenceError: is3DView is not defined
 	🔗 See https://arcg.is/1vaqf42#watch for more details.
 [5:07:59 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
 [5:07:59 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:20:18 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:20:18 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:20:18 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:20:18 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:20:18 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:20:18 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:20:18 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:20:19 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:20:19 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:20:19 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:20:21 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer
+[5:20:21 pm] [ERROR] [ArcGIS] 3D Layer [ifc-old-villa] load failed: Source type "undefined" is not supported
+[5:20:21 pm] [ERROR] [@arcgis/core/layers/FeatureLayer] #load() Failed to load layer (title: 'Old Villa', id: 'ifc-old-villa') {"error":{"name":"feature-layer-source:unsupported-type","message":"Source type \"undefined\" is not supported"}}
+[5:23:46 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:23:46 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:23:46 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:23:46 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:23:46 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:23:46 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:23:46 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:23:46 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:23:46 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:23:46 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:23:46 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:23:46 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:23:46 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:23:46 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:23:46 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:23:46 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:23:46 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:23:47 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:23:47 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:23:47 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:23:47 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer
+[5:23:47 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:23:47 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer/layers/0 -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer/layers/0
+[5:23:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer/layers/0/nodepages/0 -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer/layers/0/nodepages/0
+[5:23:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer
+[5:23:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/info -> /arcgis-proxy/server/rest/info
+[5:23:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/portals/self -> /arcgis-proxy/portal/sharing/rest/portals/self
+[5:23:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/content/items/5913274802c8417ba688c5ece97d70a6 -> /arcgis-proxy/portal/sharing/rest/content/items/5913274802c8417ba688c5ece97d70a6
+[5:23:49 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/content/items/5913274802c8417ba688c5ece97d70a6/relatedItems -> /arcgis-proxy/portal/sharing/rest/content/items/5913274802c8417ba688c5ece97d70a6/relatedItems
+[5:23:49 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d -> /arcgis-proxy/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d
+[5:23:49 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d/data -> /arcgis-proxy/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d/data
+[5:23:49 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer
+[5:23:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d/data -> /arcgis-proxy/portal/sharing/rest/content/items/a91bb7d241944fc5aec8b59614cf287d/data
+[5:23:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer
+[5:23:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer/2 -> /arcgis-proxy/server/rest/services/Hosted/IFC_OldVilla_WSL2/FeatureServer/2
+[5:26:09 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:26:09 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:26:09 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:26:09 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:26:09 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:26:09 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:26:09 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:26:09 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:26:09 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:26:09 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:26:09 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:26:09 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:26:09 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:26:09 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:26:09 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:26:09 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:26:10 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:26:12 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:26:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:26:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:26:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:26:42 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:26:42 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:26:42 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:26:42 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:26:43 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:26:43 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:26:43 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:26:43 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:26:43 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:26:43 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:26:45 pm] [WARN] [@arcgis/core/views/SceneView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:29:13 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:29:25 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:30:17 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:30:19 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:30:45 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:30:47 pm] [ERROR] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+[5:31:04 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:31:04 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:31:07 pm] [WARN] [@arcgis/core/widgets/DirectLineMeasurement3D] 🛑 DEPRECATED - This widget is deprecated. Use the Direct Line Measurement 3D component instead.
+	🛠️ Replacement: <arcgis-direct-line-measurement-3d></arcgis-direct-line-measurement-3d>
+	⚙️ Version: 4.33
+	🔗 See for more details:
+		Direct Line Measurement 3D component reference: https://www.esriurl.com/arcgis-direct-line-measurement-3d/
+		Esri's move to web components: https://www.esriurl.com/components-transition-plan/
+[5:31:09 pm] [WARN] [@arcgis/core/widgets/AreaMeasurement3D] 🛑 DEPRECATED - This widget is deprecated. Use the Area Measurement 3D component instead.
+	🛠️ Replacement: <arcgis-area-measurement-3d></arcgis-area-measurement-3d>
+	⚙️ Version: 4.33
+	🔗 See for more details:
+		Area Measurement 3D component reference: https://www.esriurl.com/arcgis-area-measurement-3d/
+		Esri's move to web components: https://www.esriurl.com/components-transition-plan/
+[5:31:17 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:33:03 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:33:03 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:33:03 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:33:03 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:33:03 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:33:03 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:33:03 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:33:03 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:33:03 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:33:03 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:33:07 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:33:10 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:33:10 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:33:11 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:33:11 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:33:11 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:33:11 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:34:29 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:34:29 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:34:29 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:34:29 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:34:29 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:34:29 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:34:29 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:34:29 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:34:29 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:34:29 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:34:30 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:34:30 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:34:30 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:34:30 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:34:30 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:34:30 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:34:30 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:36:35 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:36:35 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:36:35 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:36:35 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:36:35 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:36:35 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:36:35 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:36:35 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:36:35 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:36:36 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:36:36 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:36:36 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:36:36 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:36:36 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:36:36 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:37:05 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:37:05 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:37:05 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:37:05 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:37:05 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:37:05 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:37:05 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:37:05 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:37:05 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:37:05 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:37:05 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:37:05 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:37:05 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:37:05 pm] [WARN] [@arcgis/core/widgets/Search] 🛑 DEPRECATED - This widget is deprecated. Use the Search component instead.
+	🛠️ Replacement: <arcgis-search></arcgis-search>
+	⚙️ Version: 4.33
+	🔗 See for more details:
+		Search component reference: https://www.esriurl.com/arcgis-search/
+		Esri's move to web components: https://www.esriurl.com/components-transition-plan/
+[5:37:05 pm] [WARN] [@arcgis/core/widgets/Search] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:37:05 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:37:05 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:37:06 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:37:06 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:45:23 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:45:23 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:45:23 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:45:23 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:45:23 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:45:23 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:45:23 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:45:23 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:45:23 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:45:23 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:45:23 pm] [WARN] [@arcgis/core/widgets/Search] 🛑 DEPRECATED - This widget is deprecated. Use the Search component instead.
+	🛠️ Replacement: <arcgis-search></arcgis-search>
+	⚙️ Version: 4.33
+	🔗 See for more details:
+		Search component reference: https://www.esriurl.com/arcgis-search/
+		Esri's move to web components: https://www.esriurl.com/components-transition-plan/
+[5:45:23 pm] [WARN] [@arcgis/core/widgets/Search] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:45:23 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:45:23 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:45:23 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:45:23 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:45:23 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:45:23 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:45:24 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:45:33 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:45:33 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:45:33 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:45:33 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:45:33 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:45:33 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:45:33 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:45:33 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:45:33 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:45:33 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:45:33 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:45:33 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:45:33 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:45:33 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:45:33 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:50:13 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:50:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:50:13 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:50:13 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:50:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:50:13 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:50:13 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:50:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:50:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:50:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:50:14 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:50:14 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:50:14 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:50:14 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:50:14 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:50:14 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:50:14 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:51:06 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:51:07 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:51:07 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:51:07 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:51:07 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:51:07 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:51:07 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:51:07 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:51:07 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:51:07 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:51:07 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:51:07 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:51:08 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:51:08 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:51:08 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:51:08 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:51:08 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:54:31 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:54:31 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:54:31 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:54:31 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:54:31 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:54:31 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:54:31 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:54:31 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:54:31 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:54:31 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:54:31 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[5:54:32 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:54:32 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:54:32 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:54:32 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:54:32 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:54:32 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:55:13 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[5:55:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:55:13 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:55:13 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:55:13 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[5:55:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[5:55:13 pm] [LOG] [DataRequest] Bailing – not active or no view
+[5:55:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[5:55:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[5:55:13 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[5:55:13 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[5:55:14 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[5:55:14 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[5:55:14 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[5:55:14 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[5:55:14 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[5:55:14 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:08:07 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:08:07 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:15:02 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:15:02 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:15:02 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:15:02 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:15:25 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:15:25 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:15:25 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:21:53 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:21:53 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:21:53 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:21:53 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:22:10 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:22:10 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:22:10 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:22:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:22:13 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:22:13 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:22:13 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:22:15 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:22:15 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:22:15 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:22:18 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:22:18 pm] [LOG] [Blend] Basemap applied: streets
+[6:22:18 pm] [LOG] [DataRequest] Effect run → {"activeTool":"blend","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:00 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:23:01 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:01 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:01 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:01 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:01 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:01 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:23:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:23:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:23:01 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:23:01 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:23:02 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:23:02 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:23:02 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:23:02 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:23:02 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:23:06 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:06 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:08 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:08 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:08 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:08 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:09 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:09 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:09 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:10 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:10 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split_view","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:14 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:23:14 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:14 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:14 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:14 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:23:14 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:23:14 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:23:14 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:23:14 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:23:14 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:23:15 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:23:15 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:23:15 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:23:15 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:23:16 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:23:16 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:23:17 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:29:48 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:29:48 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:29:48 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:29:48 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:29:48 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:29:48 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:29:48 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:29:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:29:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:29:48 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:29:50 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:29:50 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:29:50 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:29:50 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:29:50 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:29:50 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:29:50 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:29:54 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:29:54 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:29:54 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:29:54 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:29:54 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:29:54 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:29:54 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:29:54 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:29:54 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:29:54 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:29:54 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:29:54 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:29:54 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:29:54 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:29:54 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:29:54 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:29:54 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:31:36 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:31:36 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:31:36 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:31:36 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:31:36 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:31:36 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:31:36 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:31:36 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:31:36 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:31:36 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:31:36 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:31:36 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:31:36 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:31:36 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:31:37 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:31:37 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:31:38 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:32:01 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:32:01 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:32:01 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:32:01 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:32:01 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:32:01 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:32:01 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:32:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:32:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:32:01 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:32:01 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:32:02 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:32:02 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:32:02 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:32:03 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:32:03 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:32:03 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:32:09 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:32:09 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:34 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:34 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:34 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:34:34 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:37 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:37 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:37 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:34:46 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:46 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:34:46 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:46 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:48 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:34:48 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:34:48 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:50 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split_view","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:34:50 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:15 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:15 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:19 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:19 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:27 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:39:27 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:39:27 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:27 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:29 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:39:29 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:29 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:31 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:31 pm] [LOG] [DataRequest] Effect run → {"activeTool":"split_view","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:33 pm] [LOG] [Blend] Basemap applied: streets
+[6:39:33 pm] [LOG] [DataRequest] Effect run → {"activeTool":"blend","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:33 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:35 pm] [LOG] [DataRequest] Effect run → {"activeTool":"arcade","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:35 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:42 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:42 pm] [LOG] [DataRequest] Effect run → {"activeTool":"bookmark","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:42 pm] [ERROR] %c  ERR color: #f33 Canceled
+Canceled: Canceled
+    at of.cancel (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:14851)
+    at HTMLBodyElement.e (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:888:14179)
+[6:39:45 pm] [ERROR] %c  ERR color: #f33 Canceled
+Canceled: Canceled
+    at of.cancel (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:14851)
+    at HTMLBodyElement.e (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:888:14179)
+[6:39:47 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:47 pm] [LOG] [DataRequest] Effect run → {"activeTool":"add_data","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:47 pm] [ERROR] %c  ERR color: #f33 Canceled
+Canceled: Canceled
+    at of.cancel (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:7:14851)
+    at HTMLBodyElement.e (https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/editor.api-CalNCsUg.js:888:14179)
+[6:39:56 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:39:56 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:39:56 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:56 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:56 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:39:56 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:39:56 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:39:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:39:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:39:56 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:39:56 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:39:56 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:39:56 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:39:56 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:39:56 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:39:56 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:39:57 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:40:32 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:40:32 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:40:32 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:40:32 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:40:32 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:40:32 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:40:32 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:40:32 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[6:40:32 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[6:40:32 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[6:40:33 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:40:33 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:40:33 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:40:33 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:40:33 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:40:33 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:40:34 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:40:41 pm] [LOG] [DataRequest] Effect run → {"activeTool":"measure","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:40:41 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:40:41 pm] [LOG] Cleanup: MeasurePanel
+[6:40:43 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:40:43 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:40:43 pm] [LOG] Cleanup: MeasurePanel
