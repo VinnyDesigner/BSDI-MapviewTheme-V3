@@ -183,41 +183,90 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
   useEffect(() => {
     if (!leftView || !rightView) return;
     
-    const leftConfigs = Array.isArray(splitLayers.left) ? splitLayers.left.map(id => layersConfig.find(l => l.id === id)).filter(Boolean) : [];
-    const rightConfigs = Array.isArray(splitLayers.right) ? splitLayers.right.map(id => layersConfig.find(l => l.id === id)).filter(Boolean) : [];
-
-    const updateMapLayers = (map, configs, isHistorical) => {
-      // Remove only operational layers, preserve all core 3D scene environment layers
-      const toRemove = map.layers.filter(lyr => 
-        lyr.id !== 'esri-3d-buildings' && 
-        lyr.id !== '3d-trees' && 
-        lyr.id !== '3d-labels' &&
-        lyr.id !== 'detailed-buildings' && 
-        lyr.id !== 'mesh-layer'
-      );
-      map.removeMany(toRemove.toArray());
-
-      if (configs && configs.length > 0) {
-        configs.forEach((config, idx) => {
-          let layer;
-          if (config.type === 'tile') {
-            layer = new TileLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
-          } else if (config.type === 'map-image') {
-            layer = new MapImageLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
-          } else {
-            layer = new FeatureLayer({ id: `${config.id}_split`, url: config.url, title: config.title });
+    const parseLayerSelection = (selectedIds) => {
+      const parsed = {};
+      if (!Array.isArray(selectedIds)) return parsed;
+      
+      selectedIds.forEach(id => {
+        if (!id) return;
+        if (id.includes('_sub_')) {
+          const [pId, subId] = id.split('_sub_');
+          if (!parsed[pId]) {
+            parsed[pId] = { config: layersConfig.find(l => l.id === pId), subIds: [] };
+          } else if (parsed[pId].subIds === null) {
+            parsed[pId].subIds = [];
           }
-
-          if (isHistorical) layer.effect = 'grayscale(1.0) brightness(0.8) contrast(1.2)';
-          
-          // Add operational layers at the bottom of the stack (below 3D layers)
-          map.add(layer, idx);
-        });
-      }
+          parsed[pId].subIds.push(Number(subId));
+        } else {
+          if (!parsed[id]) {
+            parsed[id] = { config: layersConfig.find(l => l.id === id), subIds: null };
+          } else {
+            parsed[id].subIds = null;
+          }
+        }
+      });
+      return parsed;
     };
 
-    updateMapLayers(leftView.map, leftConfigs, true);
-    updateMapLayers(rightView.map, rightConfigs, false);
+    const leftParsed = parseLayerSelection(splitLayers.left);
+    const rightParsed = parseLayerSelection(splitLayers.right);
+
+    const updateMapLayers = (map, parsedLayers, side) => {
+      // Find all current operational split layers
+      const existingLayers = map.layers.filter(lyr => lyr.id && lyr.id.endsWith(`_split_${side}`));
+      
+      // Determine which ones to keep/remove
+      const neededLayerIds = Object.keys(parsedLayers).map(id => `${id}_split_${side}`);
+      const toRemove = existingLayers.filter(lyr => !neededLayerIds.includes(lyr.id));
+      map.removeMany(toRemove.toArray());
+
+      // Add or update needed layers
+      Object.entries(parsedLayers).forEach(([layerId, data]) => {
+        const { config, subIds } = data;
+        if (!config) return;
+
+        const targetId = `${layerId}_split_${side}`;
+        let layer = map.findLayerById(targetId);
+
+        if (!layer) {
+          // Create new layer instance
+          if (config.type === 'tile') {
+            layer = new TileLayer({ id: targetId, url: config.url, title: config.title });
+          } else if (config.type === 'map-image') {
+            layer = new MapImageLayer({ id: targetId, url: config.url, title: config.title });
+          } else {
+            // Support FeatureServer suffix handling if needed, but using direct url usually works for FeatureLayer
+            let layerUrl = config.url;
+            if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
+              layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
+            }
+            layer = new FeatureLayer({ id: targetId, url: layerUrl, title: config.title });
+          }
+          map.add(layer);
+        }
+
+        // Ensure layer is visible
+        layer.visible = true;
+
+        // Apply sublayer visibility if applicable
+        if (layer.type === 'map-image') {
+          layer.load().then(() => {
+            if (!layer.allSublayers) return;
+            layer.allSublayers.forEach(sub => {
+              if (!sub.sublayers) {
+                // If subIds is null, it means the entire MapImageLayer was selected, so show all sublayers.
+                sub.visible = subIds === null ? true : subIds.includes(sub.id);
+              } else {
+                sub.visible = true; // Keep groups visible so children can render
+              }
+            });
+          });
+        }
+      });
+    };
+
+    updateMapLayers(leftView.map, leftParsed, 'left');
+    updateMapLayers(rightView.map, rightParsed, 'right');
 
   }, [leftView, rightView, splitLayers]);
 
@@ -255,10 +304,10 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
       <div ref={leftMapDiv} className="map-panel" style={{ width: `${splitPercentage}%` }}>
         <div className="map-label left-label">
           {splitModes?.left || '2D'} | {
-            Array.isArray(splitLayers.left) 
-              ? splitLayers.left.length === 1 
-                ? layersConfig.find(l => l.id === splitLayers.left[0])?.title 
-                : `${splitLayers.left.length} layers`
+            Array.isArray(splitLayers.left) && splitLayers.left.length > 0
+              ? (splitLayers.left.length === 1 
+                  ? (splitLayers.left[0].includes('_sub_') ? '1 sublayer' : layersConfig.find(l => l.id === splitLayers.left[0])?.title || '1 layer')
+                  : `${splitLayers.left.length} layers`)
               : 'No Layer'
           }
         </div>
@@ -278,10 +327,10 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
       <div ref={rightMapDiv} className="map-panel" style={{ width: `${100 - splitPercentage}%` }}>
         <div className="map-label right-label">
           {splitModes?.right || '2D'} | {
-            Array.isArray(splitLayers.right) 
-              ? splitLayers.right.length === 1 
-                ? layersConfig.find(l => l.id === splitLayers.right[0])?.title 
-                : `${splitLayers.right.length} layers`
+            Array.isArray(splitLayers.right) && splitLayers.right.length > 0
+              ? (splitLayers.right.length === 1 
+                  ? (splitLayers.right[0].includes('_sub_') ? '1 sublayer' : layersConfig.find(l => l.id === splitLayers.right[0])?.title || '1 layer')
+                  : `${splitLayers.right.length} layers`)
               : 'No Layer'
           }
         </div>

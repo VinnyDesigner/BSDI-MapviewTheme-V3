@@ -18,6 +18,8 @@ import * as print from "@arcgis/core/rest/print";
 import PrintParameters from "@arcgis/core/rest/support/PrintParameters";
 import PrintTemplate from "@arcgis/core/rest/support/PrintTemplate";
 import PrintViewModel from "@arcgis/core/widgets/Print/PrintViewModel";
+import SpatialReference from "@arcgis/core/geometry/SpatialReference";
+import { PDFDocument } from 'pdf-lib';
 import './PrintPanel.css';
 
 const TEMPLATES = {
@@ -27,7 +29,7 @@ const TEMPLATES = {
   'A3 Landscape': { width: 420, height: 297, ratio: 420/297 },
 };
 
-const PrintPanel = ({ view }) => {
+const PrintPanel = ({ view, t, lang }) => {
   const [activeTab, setActiveTab] = useState('layout');
   
   // Layout Form State
@@ -295,31 +297,188 @@ const PrintPanel = ({ view }) => {
     setIsPrinting(true);
 
     try {
-      // Calculate the actual extent to print based on the current preview
-      let printExtent = manualExtent;
+      // Use proxy directly to prevent any interceptor mismatch
+      const printUrl = "/arcgis-proxy/server/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
+      const originalExtent = view.extent.clone();
       
-      if (!printExtent && showPrintArea) {
-        const t = TEMPLATES[template];
-        if (t && scale) {
-          const mapWidth = (t.width / 1000) * scale;
-          const mapHeight = (t.height / 1000) * scale;
-          const grid = calculateGrid();
-          const totalWidth = mapWidth * grid.cols;
-          const totalHeight = mapHeight * grid.rows;
+      const pagesToPrint = [];
+      
+      if (multiPage && printLayer.graphics.length > 0) {
+        // Sort graphics by page number if available
+        const sortedGraphics = printLayer.graphics.toArray().sort((a, b) => {
+          return (a.attributes?.page || 0) - (b.attributes?.page || 0);
+        });
+        sortedGraphics.forEach(graphic => {
+          if (graphic.geometry && graphic.geometry.type === "extent") {
+            pagesToPrint.push({
+              extent: graphic.geometry,
+              pageNumber: graphic.attributes?.page || 1
+            });
+          }
+        });
+      } else {
+        // Single page print
+        let printExtent = manualExtent;
+        if (!printExtent && showPrintArea) {
+          const t = TEMPLATES[template];
+          if (t && scale) {
+            const mapWidth = (t.width / 1000) * scale;
+            const mapHeight = (t.height / 1000) * scale;
+            const grid = calculateGrid();
+            const totalWidth = mapWidth * grid.cols;
+            const totalHeight = mapHeight * grid.rows;
+            
+            printExtent = {
+              xmin: view.center.x - totalWidth / 2,
+              ymin: view.center.y - totalHeight / 2,
+              xmax: view.center.x + totalWidth / 2,
+              ymax: view.center.y + totalHeight / 2,
+              spatialReference: view.spatialReference
+            };
+          }
+        }
+        const targetExtent = printExtent ? (printExtent instanceof Extent ? printExtent : new Extent(printExtent)) : view.extent.clone();
+        pagesToPrint.push({
+          extent: targetExtent,
+          pageNumber: 1
+        });
+      }
+
+      // Hide print interaction layers so they don't appear in the print output
+      const prevPrintLayerVisible = printLayer.visible;
+      const prevInteractionLayerVisible = interactionLayer.visible;
+      printLayer.visible = false;
+      interactionLayer.visible = false;
+
+      const generatedExports = [];
+      const pdfUrls = [];
+
+      for (let i = 0; i < pagesToPrint.length; i++) {
+        const page = pagesToPrint[i];
+        
+        try {
+          // Move the view to the page extent without animation
+          await view.goTo(page.extent, { animate: false });
+        } catch (e) {
+          console.warn("View goTo interrupted during print", e);
+        }
+        
+        // Wait for a short moment to ensure the view state is updated
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        let layout = template;
+        if (!layout || layout === '') {
+          layout = 'MAP_ONLY';
+        }
+
+        const actualFormat = format.toLowerCase() === 'png' ? 'png32' : format.toLowerCase();
+        
+        const layoutOpts = {
+          titleText: pagesToPrint.length > 1 ? `${title} - Page ${page.pageNumber}` : title,
+          authorText: author,
+          copyrightText: copyright
+        };
+        
+        if (!includeLegend) {
+          layoutOpts.legendLayers = [];
+        }
+
+        const templateParams = new PrintTemplate({
+          format: actualFormat,
+          exportOptions: {
+            dpi: parseInt(dpi, 10) || 96
+          },
+          layout: layout,
+          layoutOptions: layout !== 'MAP_ONLY' ? layoutOpts : undefined
+        });
+        
+        if (enableScale && scale) {
+          templateParams.outScale = parseFloat(scale);
+          templateParams.preserveScale = true;
+        } else {
+          templateParams.preserveScale = false;
+        }
+
+        const params = new PrintParameters({
+          view: view,
+          template: templateParams,
+          outSpatialReference: wkid ? new SpatialReference({ wkid: parseInt(wkid, 10) }) : view.spatialReference
+        });
+
+        // Call the print service
+        const result = await print.execute(printUrl, params);
+
+        if (format === 'PDF' && pagesToPrint.length > 1) {
+          pdfUrls.push(result.url);
+        } else {
+          const pageTitle = pagesToPrint.length > 1 ? `${title || 'Map_Export'}_Page_${page.pageNumber}` : (title || 'Map_Export');
           
-          printExtent = {
-            xmin: view.center.x - totalWidth / 2,
-            ymin: view.center.y - totalHeight / 2,
-            xmax: view.center.x + totalWidth / 2,
-            ymax: view.center.y + totalHeight / 2,
-            spatialReference: view.spatialReference
-          };
+          generatedExports.push({
+            id: crypto.randomUUID(),
+            name: `${pageTitle}.${actualFormat.replace('png32', 'png')}`,
+            format: format,
+            url: result.url,
+            date: new Date().toLocaleString(),
+            pages: 1
+          });
         }
       }
 
-      const targetExtent = printExtent instanceof Extent ? printExtent : new Extent(printExtent || view.extent);
+      // Merge PDFs if necessary
+      if (format === 'PDF' && pdfUrls.length > 1) {
+        try {
+          const mergedPdf = await PDFDocument.create();
+          for (const url of pdfUrls) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch PDF page from server");
+            const pdfBytes = await response.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(pdfBytes);
+            const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+            copiedPages.forEach((p) => mergedPdf.addPage(p));
+          }
+          
+          const mergedPdfBytes = await mergedPdf.save();
+          const mergedBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+          const mergedUrl = URL.createObjectURL(mergedBlob);
+          
+          generatedExports.push({
+            id: crypto.randomUUID(),
+            name: `${title || 'Map_Export_Combined'}.pdf`,
+            format: format,
+            url: mergedUrl,
+            date: new Date().toLocaleString(),
+            pages: pdfUrls.length
+          });
+        } catch (mergeError) {
+          console.error("Failed to merge PDFs:", mergeError);
+          // Fallback to separate PDFs if merge fails
+          pdfUrls.forEach((url, idx) => {
+            generatedExports.push({
+              id: crypto.randomUUID(),
+              name: `${title || 'Map_Export'}_Page_${idx + 1}.pdf`,
+              format: format,
+              url: url,
+              date: new Date().toLocaleString(),
+              pages: 1
+            });
+          });
+        }
+      }
 
-      // 📝 Audit Logging Start
+      try {
+        // Restore view extent
+        await view.goTo(originalExtent, { animate: false });
+      } catch (e) {
+        // Ignore interruption
+      }
+
+      // Restore layers
+      printLayer.visible = prevPrintLayerVisible;
+      interactionLayer.visible = prevInteractionLayerVisible;
+
+      setExportsList(prev => [...generatedExports, ...prev]);
+      setActiveTab('exports');
+      
       const auditDetails = {
         title,
         template,
@@ -328,28 +487,9 @@ const PrintPanel = ({ view }) => {
         dpi,
         wkid: wkid || view.spatialReference.wkid,
         layers: view.map.layers.filter(l => l.visible).map(l => l.title).toArray(),
-        extent: targetExtent.toJSON(),
-        pageCount: multiPage ? (pageGrid.cols * pageGrid.rows) : 1
+        pageCount: pagesToPrint.length
       };
 
-      // Capture the full viewport including the selection graphics
-      const screenshot = await view.takeScreenshot({
-        format: format.toLowerCase() === 'jpg' ? 'jpg' : 'png',
-        quality: 100
-      });
-
-      const newExport = {
-        id: crypto.randomUUID(),
-        name: `${title || 'Map_Export'}.${format.toLowerCase()}`,
-        format: format,
-        url: screenshot.dataUrl,
-        date: new Date().toLocaleString(),
-        pages: multiPage ? (pageGrid.cols * pageGrid.rows) : 1
-      };
-
-      setExportsList(prev => [newExport, ...prev]);
-      setActiveTab('exports');
-      
       logPrintActivity({ ...auditDetails, status: 'SUCCESS' });
     } catch (err) {
       console.error("Print generation failed", err);
@@ -400,20 +540,20 @@ const PrintPanel = ({ view }) => {
   };
 
   return (
-    <div className="print-panel-wrapper">
+    <div className="print-panel-wrapper" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
       {/* Tabs */}
       <div className="print-tabs">
         <button 
           className={`print-tab ${activeTab === 'layout' ? 'active' : ''}`}
           onClick={() => setActiveTab('layout')}
         >
-          Layout
+          {t('printLayoutTab')}
         </button>
         <button 
           className={`print-tab ${activeTab === 'exports' ? 'active' : ''}`}
           onClick={() => setActiveTab('exports')}
         >
-          Exports {exportsList.length > 0 && <span className="export-badge">{exportsList.length}</span>}
+          {t('printExportsTab')} {exportsList.length > 0 && <span className="export-badge">{exportsList.length}</span>}
         </button>
       </div>
 
@@ -422,24 +562,24 @@ const PrintPanel = ({ view }) => {
         {activeTab === 'layout' ? (
           <div className="print-layout-form">
             <div className="form-group">
-              <label>Title</label>
+              <label>{t('printTitleLabel')}</label>
               <input 
                 type="text" 
                 className="tool-input"
-                placeholder="Enter Title"
+                placeholder={t('printTitlePlaceholder')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 
             <div className="form-group">
-              <label>Template</label>
+              <label>{t('printTemplateLabel')}</label>
               <select 
                 className="tool-select"
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
               >
-                <option value="" disabled>Select Template</option>
+                <option value="" disabled>{t('printSelectTemplate')}</option>
                 <option>A4 Portrait</option>
                 <option>A4 Landscape</option>
                 <option>A3 Portrait</option>
@@ -461,13 +601,13 @@ const PrintPanel = ({ view }) => {
                     }
                   }}
                 />
-                Enable Multi-Page Print
+                {t('printMultiPage')}
               </label>
             </div>
 
             {multiPage && (
               <div className="selection-workflow-box">
-                <p className="workflow-hint">Define the area on map to split into pages</p>
+                <p className="workflow-hint">{t('printWorkflowHint')}</p>
                 <button 
                   className={`workflow-btn ${isSelectingBoundary ? 'active' : ''}`}
                   onClick={() => {
@@ -482,13 +622,13 @@ const PrintPanel = ({ view }) => {
                     }
                   }}
                 >
-                  {isSelectingBoundary ? 'Click & Drag on Map...' : 'Define Print Area Boundary'}
+                  {isSelectingBoundary ? t('printClickDrag') : t('printDefineBoundary')}
                 </button>
               </div>
             )}
 
             <div className="form-group">
-              <label>File Format</label>
+              <label>{t('printFormat')}</label>
               <select 
                 className="tool-select"
                 value={format}
@@ -506,7 +646,7 @@ const PrintPanel = ({ view }) => {
                 className="advanced-toggle"
                 onClick={() => setAdvancedExpanded(!advancedExpanded)}
               >
-                <span>Advanced</span>
+                <span>{t('printAdvanced')}</span>
                 {advancedExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
               
@@ -519,13 +659,13 @@ const PrintPanel = ({ view }) => {
                         checked={enableScale}
                         onChange={handleEnableScaleToggle}
                       />
-                      Set Scale
+                      {t('printSetScale')}
                     </label>
                   </div>
 
                   {enableScale && (
                     <div className="form-group">
-                      <label>Scale</label>
+                      <label>{t('printScaleLabel')}</label>
                       <div className="scale-input-wrapper">
                         <button className="scale-btn" onClick={() => setScale(s => Math.max(1, s - 1000))}><Minus size={14} /></button>
                         <input 
@@ -533,6 +673,7 @@ const PrintPanel = ({ view }) => {
                           className="tool-input text-center"
                           value={scaleInput}
                           onChange={(e) => setScaleInput(e.target.value)}
+                          dir="ltr"
                         />
                         <button className="scale-btn" onClick={() => {
                           const next = Math.round(scale + 1000);
@@ -548,7 +689,7 @@ const PrintPanel = ({ view }) => {
                               setScaleInput(s.toString());
                             } 
                           }}
-                          title="Refresh to current map scale"
+                          title={t('printRefreshScale')}
                         >
                           <RefreshCw size={14} />
                         </button>
@@ -563,16 +704,16 @@ const PrintPanel = ({ view }) => {
                         checked={showPrintArea}
                         onChange={(e) => setShowPrintArea(e.target.checked)}
                       />
-                      Show print area {showPrintArea && pageGrid.cols * pageGrid.rows > 1 && (
-                        <span className="page-count-tag">
-                          ({pageGrid.cols * pageGrid.rows} Pages - {pageGrid.cols}x{pageGrid.rows})
+                      {t('printShowArea')} {showPrintArea && pageGrid.cols * pageGrid.rows > 1 && (
+                        <span className="page-count-tag" dir="ltr">
+                          ({pageGrid.cols * pageGrid.rows} {t('printPagesCount')} - {pageGrid.cols}x{pageGrid.rows})
                         </span>
                       )}
                     </label>
                   </div>
 
                   <div className="form-group">
-                    <label>Author</label>
+                    <label>{t('printAuthorLabel')}</label>
                     <input 
                       type="text" 
                       className="tool-input"
@@ -582,7 +723,7 @@ const PrintPanel = ({ view }) => {
                   </div>
 
                   <div className="form-group">
-                    <label>Copyright</label>
+                    <label>{t('printCopyrightLabel')}</label>
                     <input 
                       type="text" 
                       className="tool-input"
@@ -592,7 +733,7 @@ const PrintPanel = ({ view }) => {
                   </div>
 
                   <div className="form-group">
-                    <label>DPI</label>
+                    <label>{t('printDpiLabel')}</label>
                     <select 
                       className="tool-select"
                       value={dpi}
@@ -605,7 +746,7 @@ const PrintPanel = ({ view }) => {
                   </div>
 
                   <div className="form-group">
-                    <label>Output spatial reference (WKID)</label>
+                    <label>{t('printWkidLabel')}</label>
                     <input 
                       type="text" 
                       className="tool-input"
@@ -622,7 +763,7 @@ const PrintPanel = ({ view }) => {
                         checked={includeLegend}
                         onChange={(e) => setIncludeLegend(e.target.checked)}
                       />
-                      Include legend
+                      {t('printIncludeLegend')}
                     </label>
                   </div>
 
@@ -633,7 +774,7 @@ const PrintPanel = ({ view }) => {
                         checked={includeNorthArrow}
                         onChange={(e) => setIncludeNorthArrow(e.target.checked)}
                       />
-                      Include North Arrow
+                      {t('printIncludeNorthArrow')}
                     </label>
                   </div>
                 </div>
@@ -649,8 +790,8 @@ const PrintPanel = ({ view }) => {
                   <div className="empty-icon-wrapper">
                     <FileImage size={32} />
                   </div>
-                  <h3 className="empty-title">No Exports Yet</h3>
-                  <p className="empty-desc">Your generated print files will appear here.</p>
+                  <h3 className="empty-title">{t('printNoExportsTitle')}</h3>
+                  <p className="empty-desc">{t('printNoExportsDesc')}</p>
                 </div>
               </div>
             ) : (
@@ -664,10 +805,10 @@ const PrintPanel = ({ view }) => {
                     <span className="export-date">{item.date}</span>
                   </div>
                   <div className="export-actions">
-                    <button className="action-btn" onClick={() => handleDownload(item)} title="Download">
+                    <button className="action-btn" onClick={() => handleDownload(item)} title={t('downloadBtn') || "Download"}>
                       <Download size={16} />
                     </button>
-                    <button className="action-btn delete-btn" onClick={() => handleDelete(item.id)} title="Remove">
+                    <button className="action-btn delete-btn" onClick={() => handleDelete(item.id)} title={t('deleteBtn') || "Delete"}>
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -694,7 +835,7 @@ const PrintPanel = ({ view }) => {
                 if (sketchVMRef.current) sketchVMRef.current.cancel();
               }}
             >
-              Cancel
+              {t('cancelBtn')}
             </button>
             <button 
               className="primary-btn" 
@@ -704,10 +845,10 @@ const PrintPanel = ({ view }) => {
               {isPrinting ? (
                 <span className="flex-center gap-2">
                   <RefreshCw size={16} className="spinning" />
-                  Generating...
+                  {t('printGenerating')}
                 </span>
               ) : (
-                'Print'
+                t('printPrintBtn')
               )}
             </button>
           </div>

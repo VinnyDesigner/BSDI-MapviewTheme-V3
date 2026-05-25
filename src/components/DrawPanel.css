@@ -393,3 +393,44 @@
   outline: none;
   margin-top: 8px;
 }
+
+/* ── RTL Style Support for Arabic Mode ── */
+.draw-panel-wrapper.rtl {
+  text-align: right;
+}
+
+.draw-panel-wrapper.rtl .config-section,
+.draw-panel-wrapper.rtl .property-group,
+.draw-panel-wrapper.rtl .form-group {
+  text-align: right;
+}
+
+.draw-panel-wrapper.rtl .tool-input,
+.draw-panel-wrapper.rtl .tool-select,
+.draw-panel-wrapper.rtl .tool-textarea {
+  text-align: right;
+}
+
+[dir="rtl"] .preview-label {
+  right: 8px;
+  left: auto;
+}
+
+[dir="rtl"] .drawings-table th {
+  text-align: right;
+}
+
+[dir="rtl"] .draw-content-scroll {
+  padding: 2px 0 24px 3px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2f4d;
+  cursor: pointer;
+}
+

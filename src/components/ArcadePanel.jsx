@@ -7,29 +7,42 @@ import {
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import CustomSelect from './CustomSelect';
+import TreeSelect from './TreeSelect';
+import { useLanguage } from '../context/LanguageContext';
 import './ArcadePanel.css';
 
-// ─── Recursive flattener for dropdown list ──────────────────────────────────
-function flattenLayers(sublayers, parentTitle) {
+// ─── Recursive builder for tree dropdown list ──────────────────────────────────
+function buildTreeFromSublayers(sublayers, parentId) {
   const items = sublayers.toArray ? sublayers.toArray() : Array.from(sublayers);
-  let flat = [];
-  items.forEach(sub => {
+  // ArcGIS MapImageLayer sublayers are usually in reverse order for rendering, 
+  // but we'll just keep the API order. We can reverse if needed, but standard is fine.
+  return items.map(sub => {
     const title = sub.title || `Layer ${sub.id}`;
+    const nodeId = `${parentId}:::sub:::${sub.id}`;
     if (sub.sublayers && sub.sublayers.length > 0) {
-      flat = flat.concat(flattenLayers(sub.sublayers, title));
-    } else {
-      flat.push({
-        id: `${sub.layer.id}:::sub:::${sub.id}`,
+      return {
+        id: nodeId + '_group',
         title: title,
-        label: title,
-        group: parentTitle
-      });
+        type: 'group',
+        selectable: false,
+        children: buildTreeFromSublayers(sub.sublayers, parentId)
+      };
+    } else {
+      return {
+        id: nodeId,
+        title: title,
+        type: 'feature',
+        selectable: true,
+        children: []
+      };
     }
   });
-  return flat;
 }
 
 const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
+  const { t, lang } = useLanguage();
+  const isRTL = lang === 'AR';
+
   const [selectedLayerId, setSelectedLayerId] = useState(settings?.layerId || '');
   const [expressionType, setExpressionType] = useState('Styling');
   const [expression, setExpression] = useState(settings?.expression || '');
@@ -44,12 +57,12 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
   const editorRef = useRef(null);
 
   const expressionTypes = [
-    { value: 'Styling',    title: 'Symbology / Renderer' },
-    { value: 'Labels',     title: 'Labels' },
-    { value: 'Popup',      title: 'Pop-up' },
-    { value: 'Filter',     title: 'Filter' },
-    { value: 'FieldCalc',  title: 'Field Calculation' },
-    { value: 'Visibility', title: 'Visibility' }
+    { value: 'Styling',    title: t('Symbology / Renderer') || 'Symbology / Renderer' },
+    { value: 'Labels',     title: t('Labels') || 'Labels' },
+    { value: 'Popup',      title: t('Pop-up') || 'Pop-up' },
+    { value: 'Filter',     title: t('Filter') || 'Filter' },
+    { value: 'FieldCalc',  title: t('Field Calculation') || 'Field Calculation' },
+    { value: 'Visibility', title: t('Visibility') || 'Visibility' }
   ];
 
   const arcadeFunctionCategories = [
@@ -87,13 +100,13 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
     }
   ];
 
-  // ── Load flat layer list ──────────────────────────────────────────────────
+  // ── Load hierarchical layer tree ──────────────────────────────────────────────────
   useEffect(() => {
     if (!view || !layersConfig) return;
 
     const loadLayers = async () => {
       setIsLoadingLayers(true);
-      const options = [];
+      const tree = [];
 
       for (const config of layersConfig) {
         const layer = view.map.findLayerById(config.id);
@@ -102,21 +115,31 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
         try {
           await layer.load();
           if (layer.type === 'map-image' && layer.sublayers) {
-            const subs = flattenLayers(layer.sublayers, config.title);
-            options.push(...subs);
+            const rootChildren = buildTreeFromSublayers(layer.sublayers, config.id);
+            if (rootChildren.length > 0) {
+              tree.push({
+                id: config.id,
+                title: config.title,
+                type: 'root-group',
+                selectable: false,
+                children: rootChildren
+              });
+            }
           } else if (layer.type === 'feature') {
-            options.push({ id: config.id, title: config.title, label: config.title });
+            tree.push({
+              id: config.id,
+              title: config.title,
+              type: 'feature',
+              selectable: true,
+              children: []
+            });
           }
         } catch (e) {
           console.warn(`Layer ${config.id} load error:`, e);
         }
       }
       
-      const finalOptions = [
-        { id: 'all-visible', title: 'All Visible Layers' },
-        ...options
-      ];
-      setFlatLayerOptions(finalOptions);
+      setFlatLayerOptions(tree);
       setIsLoadingLayers(false);
     };
 
@@ -227,23 +250,24 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
   };
 
   return (
-    <div className="arcade-unified-container">
+    <div className="arcade-unified-container" style={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <div className="editor-main-content no-scrollbar">
         {/* Layer & Type Selection */}
         <div className="editor-top-grid">
           <div className="form-group">
-            <label>Select Layer</label>
-            <CustomSelect 
-              options={flatLayerOptions.map(opt => ({ value: opt.id, title: opt.title }))}
+            <label>{t('Select Layer')}</label>
+            <TreeSelect 
+              treeData={flatLayerOptions}
               value={selectedLayerId}
               onChange={setSelectedLayerId}
-              placeholder={isLoadingLayers ? "Loading layers..." : "Choose a layer..."}
+              placeholder={isLoadingLayers ? t('gpSelectPlaceholder') + "..." : t('Select Layer') + "..."}
+              showAllOption={false}
             />
           </div>
           <div className="form-group">
-            <label>Expression Type</label>
+            <label>{t('Expression Type') || 'Expression Type'}</label>
             <CustomSelect 
-              options={expressionTypes}
+              options={expressionTypes.map(opt => ({ value: opt.value, label: opt.title }))}
               value={expressionType}
               onChange={setExpressionType}
             />
@@ -253,12 +277,12 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
         {/* Available Fields */}
         <div className="editor-section-v3">
           <div className="section-header-v3">
-            <span>Available Fields</span>
+            <span>{t('Available Fields') || 'Available Fields'}</span>
           </div>
           <div className="white-box-container">
             <div className="fields-chip-container">
               {isLoadingFields ? (
-                <div className="loading-text">Fetching fields...</div>
+                <div className="loading-text">{t('Loading') || 'Fetching fields...'}</div>
               ) : fields.length > 0 ? (
                 fields.map(f => (
                   <button 
@@ -271,7 +295,7 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
                   </button>
                 ))
               ) : (
-                <div className="empty-text">Select a layer to see fields</div>
+                <div className="empty-text">{t('Select a layer to see fields') || 'Select a layer to see fields'}</div>
               )}
             </div>
           </div>
@@ -284,7 +308,7 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
               className="accordion-header-v4"
               onClick={() => setIsFunctionsExpanded(!isFunctionsExpanded)}
             >
-              <span className="placeholder-text-v4">Functions</span>
+              <span className="placeholder-text-v4">{t('Functions') || 'Functions'}</span>
               {isFunctionsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
             {isFunctionsExpanded && (
@@ -309,15 +333,15 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
         {/* Monaco Editor */}
         <div className="editor-workspace">
           <div className="workspace-header">
-            <span>Expression Editor</span>
+            <span>{t('Expression Editor') || 'Expression Editor'}</span>
             {validationResult && (
               <span className={`status-tag ${validationResult.status}`}>
                 {validationResult.status === 'success' ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
-                {validationResult.status === 'success' ? 'Valid' : 'Error'}
+                {validationResult.status === 'success' ? (t('Valid') || 'Valid') : (t('Error') || 'Error')}
               </span>
             )}
           </div>
-          <div className="monaco-unified-wrapper">
+          <div className="monaco-unified-wrapper" style={{ direction: 'ltr' /* Monaco stays LTR */ }}>
             <Editor
               height="180px"
               defaultLanguage="javascript"
@@ -342,13 +366,13 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
       {/* Fixed Footer - Responsive Balanced Layout */}
       <div className="editor-footer">
         <button className="editor-btn-secondary" onClick={handleReset}>
-          <RotateCcw size={15} /> Reset
+          <RotateCcw size={15} /> {t('Reset') || 'Reset'}
         </button>
         <button className="editor-btn-outline" onClick={handleValidate} disabled={isValidating}>
-          {isValidating ? 'Validate' : 'Validate'}
+          {isValidating ? (t('Validating') || 'Validating') : (t('Validate') || 'Validate')}
         </button>
         <button className="editor-btn-primary" onClick={handleApply} disabled={!selectedLayerId}>
-          <Play size={15} /> Apply
+          <Play size={15} /> {t('Apply') || 'Apply'}
         </button>
       </div>
     </div>

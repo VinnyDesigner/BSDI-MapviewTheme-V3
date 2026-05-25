@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Layers, Info, Navigation, Ruler, 
   Pencil, Box, Database, Globe, Printer, Bookmark,
-  Columns2, Map, Blend
+  Columns2, Map, Blend, Cpu
 } from 'lucide-react';
 
 export const TOOL_REGISTRY = {
@@ -116,6 +116,12 @@ export const TOOL_REGISTRY = {
     supportedModes: ['2d', '3d'],
     toolbar: false, // Background query tool
     icon: Info
+  },
+  geoprocessing: {
+    id: 'geoprocessing',
+    supportedModes: ['2d', '3d'],
+    toolbar: true,
+    icon: Cpu
   }
 };
 

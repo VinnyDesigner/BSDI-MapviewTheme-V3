@@ -263,15 +263,15 @@ const Analysis3DPanel = ({ view, is3D }) => {
               {activeTool === 'volume' && (
                 <>
                   <div className="result-item">
-                    <span className="res-label">CUT VOLUME</span>
+                    <span className="res-label">Cut Volume</span>
                     <span className="res-value">{(measureData?.cutVolume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} m³</span>
                   </div>
                   <div className="result-item">
-                    <span className="res-label">FILL VOLUME</span>
+                    <span className="res-label">Fill Volume</span>
                     <span className="res-value">{(measureData?.fillVolume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} m³</span>
                   </div>
                   <div className="result-item" style={{ borderTop: '1px solid #e2e8f0', marginTop: '8px', paddingTop: '8px' }}>
-                    <span className="res-label" style={{ fontWeight: '700', color: '#1a2f4d' }}>NET VOLUME</span>
+                    <span className="res-label" style={{ fontWeight: '700', color: '#1a2f4d' }}>Net Volume</span>
                     <span className="res-value" style={{ 
                       fontWeight: '700',
                       color: (measureData?.netVolume ?? 0) < 0 ? '#df261c' : '#10b981' 

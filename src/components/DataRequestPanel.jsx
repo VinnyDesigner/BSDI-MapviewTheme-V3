@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { 
   FileText, 
   Send, 
@@ -36,6 +37,8 @@ const DataRequestPanel = ({
   requestHistory = [],
   onReset
 }) => {
+  const { t, lang } = useLanguage();
+  const isRtl = lang === 'AR';
   const [activeTab, setActiveTab] = useState('new');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -72,19 +75,19 @@ const DataRequestPanel = ({
   };
 
   return (
-    <div className="data-request-panel">
+    <div className={`data-request-panel ${isRtl ? 'rtl' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="tool-tabs">
         <button 
           className={`tool-tab ${activeTab === 'new' ? 'active' : ''}`}
           onClick={() => setActiveTab('new')}
         >
-          Request Data
+          {t('dataRequestTabRequest')}
         </button>
         <button 
           className={`tool-tab ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
-          History
+          {t('dataRequestTabHistory')}
         </button>
       </div>
 
@@ -95,7 +98,7 @@ const DataRequestPanel = ({
               <div className="step-container">
                 <div className="step-content">
                   <p className="instruction-text">
-                    Select a shape tool and draw on the map to define your area of interest.
+                    {t('dataRequestDrawInstruction')}
                   </p>
 
                   <div className="drawing-tools">
@@ -104,21 +107,21 @@ const DataRequestPanel = ({
                       onClick={() => onDrawingToolSelect('circle')}
                     >
                       <Circle size={24} />
-                      <span>Circle</span>
+                      <span>{t('dataRequestToolCircle')}</span>
                     </button>
                     <button 
                       className={`draw-tool-btn ${activeDrawingTool === 'rectangle' ? 'active' : ''}`}
                       onClick={() => onDrawingToolSelect('rectangle')}
                     >
                       <Square size={24} />
-                      <span>Rectangle</span>
+                      <span>{t('dataRequestToolRectangle')}</span>
                     </button>
                     <button 
                       className={`draw-tool-btn ${activeDrawingTool === 'polygon' ? 'active' : ''}`}
                       onClick={() => onDrawingToolSelect('polygon')}
                     >
                       <Hexagon size={24} />
-                      <span>Polygon</span>
+                      <span>{t('dataRequestToolPolygon')}</span>
                     </button>
                   </div>
 
@@ -130,7 +133,7 @@ const DataRequestPanel = ({
               <div className="step-container">
                 <div className="step-content">
                   <div className="selection-summary-top">
-                    <span>{selectedLayers.length}/{intersectingLayers.length} Layers Selected</span>
+                    <span>{selectedLayers.length}/{intersectingLayers.length} {t('dataRequestSelectedLayers')}</span>
                   </div>
 
                   <div className="dataset-list">
@@ -151,64 +154,99 @@ const DataRequestPanel = ({
 
                 <div className="step-footer-right">
                   <button className="secondary-btn" onClick={() => setStep('drawing')}>
-                    Redraw
+                    {t('dataRequestRedraw')}
                   </button>
                   <button 
                     className="primary-btn" 
                     disabled={selectedLayers.length === 0}
                     onClick={() => setStep('form')}
                   >
-                    Next
+                    {t('dataRequestNext')}
                   </button>
                 </div>
               </div>
             )}
 
-            {step === 'form' && (
+             {step === 'form' && (
               <form className="step-container" onSubmit={handleFormSubmit}>
                 <div className="step-content">
                   <div className="form-group">
-                    <label>Full Name</label>
+                    <label>{t('dataRequestMatchedLayers')} ({selectedLayers.length} / {intersectingLayers.length})</label>
+                    <div className="dataset-list no-scrollbar" style={{ 
+                      maxHeight: '140px', 
+                      overflowY: 'auto', 
+                      border: '1px solid #e2e8f0', 
+                      borderRadius: '8px', 
+                      padding: '6px', 
+                      background: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      {intersectingLayers.length === 0 ? (
+                        <span style={{ fontSize: '12px', color: '#64748b', padding: '8px', textAlign: 'center' }}>
+                          {t('dataRequestNoIntersect')}
+                        </span>
+                      ) : (
+                        intersectingLayers.map(layer => (
+                          <div 
+                            key={layer.id} 
+                            className={`dataset-item ${selectedLayers.includes(layer.id) ? 'selected' : ''}`}
+                            onClick={() => toggleLayerSelection(layer.id)}
+                            style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s', background: 'white' }}
+                          >
+                            <div className="checkbox" style={{ width: '14px', height: '14px', flexShrink: 0 }}>
+                              {selectedLayers.includes(layer.id) && <Check size={10} />}
+                            </div>
+                            <span className="layer-title" style={{ fontSize: '12px', fontWeight: '500', color: '#1e293b' }}>{layer.title}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>{t('dataRequestFullName')}</label>
                     <input 
                       className="form-input"
                       type="text" 
                       required 
-                      placeholder="Enter your full name"
+                      placeholder={t('dataRequestFullNamePlaceholder')}
                       value={formData.fullName}
                       onChange={e => setFormData({...formData, fullName: e.target.value})}
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>Email Address</label>
+                    <label>{t('dataRequestEmail')}</label>
                     <input 
                       className="form-input"
                       type="email" 
                       required 
-                      placeholder="Enter your email address"
+                      placeholder={t('dataRequestEmailPlaceholder')}
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value})}
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>Organization</label>
+                    <label>{t('dataRequestOrganization')}</label>
                     <input 
                       className="form-input"
                       type="text" 
                       required 
-                      placeholder="Enter your organization"
+                      placeholder={t('dataRequestOrganizationPlaceholder')}
                       value={formData.organization}
                       onChange={e => setFormData({...formData, organization: e.target.value})}
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>Description</label>
+                    <label>{t('dataRequestDescription')}</label>
                     <textarea 
                       className="tool-textarea"
                       required
-                      placeholder="Describe the intended use for this data..."
+                      placeholder={t('dataRequestDescriptionPlaceholder')}
                       value={formData.description}
                       onChange={e => setFormData({...formData, description: e.target.value})}
                     />
@@ -216,11 +254,11 @@ const DataRequestPanel = ({
                 </div>
 
                 <div className="step-footer-right">
-                  <button type="button" className="secondary-btn" onClick={() => setStep('selection')}>
-                    Back
+                  <button type="button" className="secondary-btn" onClick={() => setStep('drawing')}>
+                    {t('dataRequestRedraw')}
                   </button>
-                  <button type="submit" className="primary-btn">
-                    Submit Request
+                  <button type="submit" className="primary-btn" disabled={selectedLayers.length === 0}>
+                    {t('dataRequestSubmit')}
                   </button>
                 </div>
               </form>
@@ -232,19 +270,20 @@ const DataRequestPanel = ({
                   <div className="success-icon-large">
                     <CheckCircle size={40} color="#16a34a" />
                   </div>
-                  <h2>Request submitted for approval</h2>
+                  <h2>{t('dataRequestSuccessTitle')}</h2>
                   <p>
-                    Your spatial data request for {selectedLayers.length} layers has been logged. 
-                    You will receive an email shortly with tracking details.
+                    {lang === 'AR' 
+                      ? `تم تسجيل طلب البيانات المكانية الخاص بك لـ ${selectedLayers.length} من الطبقات بنجاح. ستتلقى رسالة بريد إلكتروني قريباً تحتوي على تفاصيل المتابعة.`
+                      : `Your spatial data request for ${selectedLayers.length} layers has been logged. You will receive an email shortly with tracking details.`}
                   </p>
 
                   <div className="reference-card">
-                    <span className="ref-label">Reference Number</span>
+                    <span className="ref-label">{t('dataRequestRefNumber')}</span>
                     <span className="ref-value">{lastRequestRef}</span>
                   </div>
 
                   <button className="primary-btn success-action-btn" onClick={onReset}>
-                    Start New Request
+                    {t('dataRequestStartNew')}
                   </button>
                 </div>
               </div>
@@ -256,7 +295,7 @@ const DataRequestPanel = ({
               {requestHistory.length === 0 ? (
                 <div className="empty-state">
                   <FileText size={40} opacity={0.2} />
-                  <p>No request history found.</p>
+                  <p>{t('dataRequestHistoryEmpty')}</p>
                 </div>
               ) : (
                 requestHistory.map(req => (
@@ -266,7 +305,7 @@ const DataRequestPanel = ({
                       <span className="history-date">{req.submittedDate}</span>
                     </div>
                     <div className="history-card-mid">
-                      <span className="history-layer-count">{req.layers?.length || 0} Layers Requested</span>
+                      <span className="history-layer-count">{req.layers?.length || 0} {t('dataRequestLayersRequested')}</span>
                       <span className={`history-status-badge ${req.status.toLowerCase()}`}>
                         {getStatusIcon(req.status)}
                         {req.status}

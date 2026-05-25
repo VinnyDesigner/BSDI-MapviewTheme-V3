@@ -304,6 +304,10 @@
   color: #df261c;
 }
 
+[dir="rtl"] .compact-capture-btn svg {
+  transform: scaleX(-1);
+}
+
 /* Custom Dropdown */
 .custom-dropdown-container {
   position: relative;

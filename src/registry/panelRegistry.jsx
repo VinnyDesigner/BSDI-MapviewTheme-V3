@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   MousePointer2, Square, Hexagon, Maximize2, Map,
-  ChevronDown, ChevronRight, ChevronLeft, Check, Folder, FileText, Layers
+  ChevronDown, ChevronRight, ChevronLeft, Check, Folder, FileText, Layers,
+  Eye, EyeOff, Download, Trash2, Database
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
+import * as XLSX from 'xlsx';
+import shpwrite from '@mapbox/shp-write';
+import { graphicsToGeoJSON } from '../geoprocessing/crsUtils';
 
 // Import modular feature panel components
 import NavigationPanel from '../components/NavigationPanel';
@@ -19,6 +23,8 @@ import BookmarkPanel from '../components/BookmarkPanel';
 import CustomSelect from '../components/CustomSelect';
 import LayersPanel from '../components/LayersPanel';
 import TreeSelect from '../components/TreeSelect';
+import GPPanel from '../geoprocessing/GPPanel';
+import { useLanguage } from '../context/LanguageContext';
 
 // ── Search Panel Component ──────────────────────────────────────────────────
 export const SearchPanel = ({ t }) => (
@@ -406,83 +412,193 @@ export const BlendPanel = ({
   blendSettings, 
   setBlendSettings, 
   setCurrentBasemap, 
-  currentBasemap 
+  currentBasemap,
+  layersConfig,
+  dynamicMapServerData,
+  t,
+  lang
 }) => {
+  const isRTL = lang === 'AR';
   const basemapOptions = basemaps.map(bm => ({ id: bm.id, title: bm.title }));
   const isOverlaySelected = !!blendSettings.overlayLayerId;
 
+  // Build hierarchical tree data for Overlay Layer selection
+  const treeData = React.useMemo(() => {
+    const tree = [];
+    if (!layersConfig) return tree;
+
+    layersConfig.forEach(l => {
+      if (l.type === 'feature') {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      } else if (l.type === 'map-image') {
+        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
+        if (mapData && mapData.metadata && mapData.metadata.layers) {
+          const sublayers = mapData.metadata.layers;
+          
+          const buildNode = (sub) => {
+            const subId = `${l.id}_sub_${sub.id}`;
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+            if (hasChildren) {
+              const childrenNodes = [];
+              sub.subLayerIds.forEach(childId => {
+                const childSub = sublayers.find(s => s.id === childId);
+                if (childSub) {
+                  const childNode = buildNode(childSub);
+                  if (childNode) childrenNodes.push(childNode);
+                }
+              });
+              
+              if (childrenNodes.length > 0) {
+                return {
+                  id: subId,
+                  title: sub.name || sub.title,
+                  type: 'group',
+                  selectable: false,
+                  children: childrenNodes
+                };
+              }
+              return null;
+            } else {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'feature',
+                selectable: true,
+                children: []
+              };
+            }
+          };
+
+          const rootChildren = [];
+          sublayers.forEach(sub => {
+            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+              const node = buildNode(sub);
+              if (node) rootChildren.push(node);
+            }
+          });
+
+          if (rootChildren.length > 0) {
+            tree.push({
+              id: l.id,
+              title: l.title,
+              type: 'root-group',
+              selectable: false,
+              children: rootChildren
+            });
+          }
+        }
+      }
+    });
+    return tree;
+  }, [layersConfig, dynamicMapServerData]);
+
+  const handleReset = () => {
+    setBlendSettings(prev => ({
+      ...prev,
+      baseLayerId: basemaps[0]?.id || null,
+      overlayLayerId: null,
+      opacity: 0.5,
+      blendMode: 'multiply'
+    }));
+    setCurrentBasemap(basemaps[0]?.id || null);
+  };
+
   return (
-    <div className="tool-content">
-      <div className="form-group" style={{ marginBottom: '12px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-          Base Layer (Background)
-        </label>
-        <CustomSelect 
-          options={basemapOptions}
-          value={blendSettings.baseLayerId}
-          onChange={(val) => {
-            setBlendSettings(prev => ({ ...prev, baseLayerId: val }));
-            setCurrentBasemap(val); 
-          }}
-          placeholder="Select background imagery..."
-        />
-      </div>
-
-      <div className="form-group" style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-          Overlay Layer (Imagery)
-        </label>
-        <CustomSelect 
-          options={basemapOptions.filter(bm => bm.id !== blendSettings.baseLayerId)}
-          value={blendSettings.overlayLayerId}
-          onChange={(val) => setBlendSettings(prev => ({ ...prev, overlayLayerId: val }))}
-          placeholder="Select overlay imagery..."
-        />
-      </div>
-
-      <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <label style={{ fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Opacity</label>
-          <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', direction: isRTL ? 'rtl' : 'ltr' }}>
+      <div className="panel-content-scroll" style={{ padding: 0, flex: 1 }}>
+        <div className="form-group" style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+            {t('Base Layer (Background)')}
+          </label>
+          <CustomSelect 
+            options={basemapOptions}
+            value={blendSettings.baseLayerId}
+            onChange={(val) => {
+              setBlendSettings(prev => ({ ...prev, baseLayerId: val }));
+              setCurrentBasemap(val); 
+            }}
+            placeholder={t('Select background imagery') + "..."}
+          />
         </div>
-        <input 
-          type="range" 
-          min="0" 
-          max="1" 
-          step="0.01"
-          value={blendSettings.opacity}
-          disabled={!isOverlaySelected}
-          onChange={(e) => setBlendSettings(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
-          style={{ 
-            width: '100%', 
-            accentColor: '#DF261C',
-            cursor: isOverlaySelected ? 'pointer' : 'default'
-          }}
-        />
+
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+            {t('Overlay Layer (Imagery)')}
+          </label>
+          <TreeSelect 
+            treeData={treeData}
+            value={blendSettings.overlayLayerId}
+            onChange={(val) => setBlendSettings(prev => ({ ...prev, overlayLayerId: val }))}
+            placeholder={t('Select overlay imagery') + "..."}
+            showAllOption={false}
+          />
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label style={{ fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>{t('Opacity')}</label>
+            <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
+          </div>
+          <input 
+            type="range" 
+            min="0" 
+            max="1" 
+            step="0.01"
+            value={blendSettings.opacity}
+            disabled={!isOverlaySelected}
+            onChange={(e) => setBlendSettings(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
+            style={{ 
+              width: '100%', 
+              accentColor: '#DF261C',
+              cursor: isOverlaySelected ? 'pointer' : 'default'
+            }}
+          />
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
+            {t('Blend Mode')}
+          </label>
+          <CustomSelect 
+            options={[
+              { id: 'normal', title: 'normal' },
+              { id: 'multiply', title: 'multiply' },
+              { id: 'screen', title: 'screen' },
+              { id: 'overlay', title: 'overlay' },
+              { id: 'darken', title: 'darken' },
+              { id: 'lighten', title: 'lighten' },
+              { id: 'soft-light', title: 'soft-light' },
+              { id: 'hard-light', title: 'hard-light' },
+              { id: 'color-burn', title: 'color-burn' },
+              { id: 'color-dodge', title: 'color-dodge' }
+            ]}
+            value={blendSettings.blendMode}
+            disabled={!isOverlaySelected}
+            onChange={(val) => setBlendSettings(prev => ({ ...prev, blendMode: val }))}
+            placeholder={t('Select blend mode') + "..."}
+          />
+        </div>
       </div>
 
-      <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
-          Blend Mode
-        </label>
-        <CustomSelect 
-          options={[
-            { id: 'normal', title: 'normal' },
-            { id: 'multiply', title: 'multiply' },
-            { id: 'screen', title: 'screen' },
-            { id: 'overlay', title: 'overlay' },
-            { id: 'darken', title: 'darken' },
-            { id: 'lighten', title: 'lighten' },
-            { id: 'soft-light', title: 'soft-light' },
-            { id: 'hard-light', title: 'hard-light' },
-            { id: 'color-burn', title: 'color-burn' },
-            { id: 'color-dodge', title: 'color-dodge' }
-          ]}
-          value={blendSettings.blendMode}
-          disabled={!isOverlaySelected}
-          onChange={(val) => setBlendSettings(prev => ({ ...prev, blendMode: val }))}
-          placeholder="Select blend mode..."
-        />
+      <div style={{ 
+        padding: '12px 0',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        flexShrink: 0
+      }}>
+        <button 
+          className="secondary-btn"
+          onClick={handleReset}
+        >
+          {t('measureReset') || 'Reset'}
+        </button>
       </div>
     </div>
   );
@@ -490,123 +606,501 @@ export const BlendPanel = ({
 
 // ── Spatial Analysis Panel Component ─────────────────────────────────────────
 export const SpatialAnalysisPanel = ({ 
+  view,
   layersConfig, 
+  dynamicMapServerData,
   spatialSettings, 
   setSpatialSettings 
 }) => {
-  return (
-    <div className="tool-content-full">
-      <div className="tool-scroll-body">
-        <div className="form-group">
-          <label>Select Analysis Tool</label>
-          <CustomSelect 
-            options={[
-              "Buffer Analysis",
-              "Select by Location",
-              "Overlay (Intersect)",
-              "Proximity (Nearest)",
-              "Heatmap Density"
-            ]}
-            value={spatialSettings.subTool}
-            onChange={(val) => setSpatialSettings({...spatialSettings, subTool: val})}
-          />
-        </div>
+  const { t, lang } = useLanguage();
+  const isRTL = lang === 'AR';
+  
+  const [activeTab, setActiveTab] = React.useState('analysis');
+  const [exportMenuState, setExportMenuState] = React.useState(null);
 
-        <div className="form-group">
-          <label>Target Layer</label>
-          <CustomSelect 
-            options={layersConfig}
-            value={spatialSettings.layerId}
-            onChange={(val) => setSpatialSettings({...spatialSettings, layerId: val})}
-            placeholder="Select Layer..."
-          />
-        </div>
+  const history = spatialSettings.history || [];
+  
+  const prevHistoryLenRef = React.useRef(history.length);
 
-        {spatialSettings.subTool === 'Buffer Analysis' && (
-          <div className="form-group">
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div style={{ flex: 2 }}>
-                <label>Distance</label>
-                <input 
-                  type="number" 
-                  className="tool-input" 
-                  value={spatialSettings.bufferDistance}
-                  onChange={(e) => setSpatialSettings({...spatialSettings, bufferDistance: Number(e.target.value)})}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label>Unit</label>
-                <CustomSelect 
-                  options={[
-                    { label: 'm', value: 'meters' },
-                    { label: 'km', value: 'kilometers' },
-                    { label: 'mi', value: 'miles' }
-                  ]}
-                  value={spatialSettings.bufferUnit}
-                  onChange={(val) => setSpatialSettings({...spatialSettings, bufferUnit: val})}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+  React.useEffect(() => {
+    if (history.length > prevHistoryLenRef.current) {
+      setActiveTab('results');
+    }
+    prevHistoryLenRef.current = history.length;
+  }, [history.length]);
 
-        {spatialSettings.subTool === 'Proximity (Nearest)' && (
-          <div className="instruction-box">
-            <span className="box-title">Instructions:</span>
-            <p>Click any point on the map to find the nearest feature in the selected layer.</p>
-          </div>
-        )}
+  const handleExport = async (format, runId) => {
+    setExportMenuState(null);
+    if (!view || !view.map) return;
+    
+    const layer = view.map.findLayerById('spatial-analysis-layer');
+    if (!layer || !layer.graphics) return;
 
-        <div className="form-group">
-          <div className="info-box">
-            <h4 className="info-title">Tool Info:</h4>
-            <p className="info-text">
-              {spatialSettings.subTool === 'Buffer Analysis' && "Creates a polygon around map features at a specified distance."}
-              {spatialSettings.subTool === 'Select by Location' && "Filters features based on their spatial relationship with another layer."}
-              {spatialSettings.subTool === 'Overlay (Intersect)' && "Identifies areas where two layers geographically overlap."}
-              {spatialSettings.subTool === 'Proximity (Nearest)' && "Calculates the straight-line distance to the closest item."}
-              {spatialSettings.subTool === 'Heatmap Density' && "Visualizes the geographic concentration of features."}
-            </p>
-          </div>
-        </div>
+    const targetGraphics = layer.graphics.toArray().filter(g => g.attributes?.runId === runId);
+    if (targetGraphics.length === 0) {
+      alert("No features to export.");
+      return;
+    }
 
-        {spatialSettings.status && (
-          <div className={`status-box ${spatialSettings.status.includes('Click') ? 'waiting' : 'success'}`}>
-            {spatialSettings.status.includes('Click') ? '📍 ' : '✔ '} {spatialSettings.status}
-          </div>
-        )}
+    const titleInfo = targetGraphics[0]?.attributes?.title || 'Analysis_Result';
+    const cleanTitle = titleInfo.replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+    const geojson = graphicsToGeoJSON(targetGraphics, view.spatialReference);
 
-        {spatialSettings.distanceResult && (
-          <div className="result-highlight-card">
-            <span className="result-label">Nearest Distance</span>
-            <span className="result-value">{spatialSettings.distanceResult}</span>
-          </div>
-        )}
-      </div>
+    try {
+      if (format === 'GeoJSON') {
+        const blob = new Blob([JSON.stringify(geojson)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${cleanTitle}.geojson`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'Shapefile ZIP') {
+        shpwrite.download(geojson, { folder: cleanTitle, types: { point: 'points', polygon: 'polygons', line: 'lines' }});
+      } else if (format === 'CSV' || format === 'Excel') {
+        const data = targetGraphics.map(g => g.attributes || {});
+        if (data.length === 0) return;
+        
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
+        
+        if (format === 'CSV') {
+          const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+          const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${cleanTitle}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          XLSX.writeFile(workbook, `${cleanTitle}.xlsx`);
+        }
+      } else if (format === 'Image') {
+        await view.goTo(targetGraphics);
+        // Small delay to allow rendering to settle before taking screenshot
+        setTimeout(async () => {
+          const screenshot = await view.takeScreenshot({ format: 'png', quality: 100 });
+          const a = document.createElement('a');
+          a.href = screenshot.dataUrl;
+          a.download = `${cleanTitle}.png`;
+          a.click();
+        }, 800);
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to export data: ' + err.message);
+    }
+  };
 
-      <div className="tool-fixed-footer">
-        <button 
-          className="secondary-btn"
-          onClick={() => setSpatialSettings({...spatialSettings, status: '', lastRun: null, distanceResult: null, isWaitingForClick: false})}
-        >
-          Clear
-        </button>
-        <button 
-          className="primary-btn" 
-          onClick={() => {
-            const isProximity = spatialSettings.subTool === 'Proximity (Nearest)';
-            setSpatialSettings({
-              ...spatialSettings, 
-              lastRun: Date.now(), 
-              isWaitingForClick: isProximity,
-              status: isProximity ? 'Ready: Click any point on the map' : `${spatialSettings.subTool} applied successfully`,
-              distanceResult: null
+  const handleToggle = (runId) => {
+    setSpatialSettings(prev => ({
+      ...prev,
+      history: (prev.history || []).map(r => r.id === runId ? { ...r, visible: !r.visible } : r)
+    }));
+    if (view && view.map) {
+      const targetResults = (spatialSettings.history || []).find(r => r.id === runId);
+      const nextVisible = targetResults ? !targetResults.visible : true;
+
+      const layer = view.map.findLayerById('spatial-analysis-layer');
+      if (layer && layer.graphics) {
+        layer.graphics.forEach(g => {
+          if (g.attributes?.runId === runId) {
+            g.visible = nextVisible;
+          }
+        });
+      }
+
+      const hmLayer = view.map.findLayerById(`heatmap-${runId}`);
+      if (hmLayer) hmLayer.visible = nextVisible;
+    }
+  };
+
+  const handleDelete = (runId) => {
+    setSpatialSettings(prev => ({
+      ...prev,
+      history: (prev.history || []).filter(r => r.id !== runId)
+    }));
+    if (view && view.map) {
+      const layer = view.map.findLayerById('spatial-analysis-layer');
+      if (layer && layer.graphics) {
+        const graphicsToRemove = layer.graphics.toArray().filter(g => g.attributes?.runId === runId);
+        layer.removeMany(graphicsToRemove);
+      }
+      const hmLayer = view.map.findLayerById(`heatmap-${runId}`);
+      if (hmLayer) view.map.remove(hmLayer);
+    }
+  };
+
+  const handleZoom = (runId) => {
+    if (view && view.map) {
+      const layer = view.map.findLayerById('spatial-analysis-layer');
+      if (layer && layer.graphics) {
+        const graphics = layer.graphics.toArray().filter(g => g.attributes?.runId === runId);
+        if (graphics.length > 0) {
+           view.goTo(graphics);
+        }
+      }
+    }
+  };
+
+  const treeData = React.useMemo(() => {
+    const tree = [];
+
+    layersConfig.forEach(l => {
+      // 1. Feature layers (flat)
+      if (l.type === 'feature') {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      }
+      // 2. MapServer layers (hierarchical)
+      else if (l.type === 'map-image') {
+        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
+        if (mapData && mapData.metadata && mapData.metadata.layers) {
+          const sublayers = mapData.metadata.layers;
+          
+          const buildNode = (sub) => {
+            const subId = `${l.id}_sub_${sub.id}`;
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+            if (hasChildren) {
+              const childrenNodes = [];
+              sub.subLayerIds.forEach(childId => {
+                const childSub = sublayers.find(s => s.id === childId);
+                if (childSub) {
+                  const childNode = buildNode(childSub);
+                  if (childNode) {
+                    childrenNodes.push(childNode);
+                  }
+                }
+              });
+              
+              if (childrenNodes.length > 0) {
+                return {
+                  id: subId,
+                  title: sub.name || sub.title,
+                  type: 'group',
+                  selectable: false,
+                  children: childrenNodes
+                };
+              }
+              return null;
+            } else {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'feature',
+                selectable: true,
+                children: []
+              };
+            }
+          };
+
+          const rootChildren = [];
+          sublayers.forEach(sub => {
+            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+              const node = buildNode(sub);
+              if (node) {
+                rootChildren.push(node);
+              }
+            }
+          });
+
+          if (rootChildren.length > 0) {
+            tree.push({
+              id: l.id,
+              title: l.title,
+              type: 'root-group',
+              selectable: false,
+              children: rootChildren
             });
-          }}
-        >
-          {spatialSettings.subTool === 'Proximity (Nearest)' ? 'Start Tracking' : 'Run Analysis'}
+          }
+        }
+      }
+    });
+
+    return tree;
+  }, [layersConfig, dynamicMapServerData]);
+
+  React.useEffect(() => {
+    if (spatialSettings.layerId && spatialSettings.layerId !== 'all') {
+      const findNode = (nodes, id) => {
+        for (const n of nodes) {
+          if (n.id === id) return true;
+          if (n.children && n.children.length > 0) {
+            if (findNode(n.children, id)) return true;
+          }
+        }
+        return false;
+      };
+      
+      if (!findNode(treeData, spatialSettings.layerId)) {
+        setSpatialSettings(prev => ({ ...prev, layerId: '' }));
+      }
+    }
+  }, [treeData, spatialSettings.layerId, setSpatialSettings]);
+
+  return (
+    <div className="add-data-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', direction: isRTL ? 'rtl' : 'ltr' }}>
+      {/* Tabs */}
+      <div className="tool-tabs" style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
+        <button className={`tool-tab ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>
+          {t('Analysis')}
+        </button>
+        <button className={`tool-tab ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>
+          {t('gpTabResults')} {history.length > 0 && <span className="tab-badge">{history.length}</span>}
         </button>
       </div>
+
+      <div className="panel-content-scroll" style={{ padding: '6px 0' }}>
+        {activeTab === 'analysis' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>{t('Select Analysis Tool')}</label>
+              <CustomSelect 
+                options={[
+                  { label: t('Buffer Analysis'), value: "Buffer Analysis" },
+                  { label: t('Select by Location'), value: "Select by Location" },
+                  { label: t('Overlay (Intersect)'), value: "Overlay (Intersect)" },
+                  { label: t('Proximity (Nearest)'), value: "Proximity (Nearest)" },
+                  { label: t('Heatmap Density'), value: "Heatmap Density" }
+                ]}
+                value={spatialSettings.subTool}
+                onChange={(val) => setSpatialSettings({...spatialSettings, subTool: val})}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>{t('Target Layer')}</label>
+              <TreeSelect 
+                treeData={treeData}
+                value={spatialSettings.layerId}
+                onChange={(val) => setSpatialSettings({...spatialSettings, layerId: val})}
+                placeholder={`${t('gpSelectPlaceholder')} ${t('Target Layer')}...`}
+                showAllOption={false}
+              />
+            </div>
+
+            {['Select by Location', 'Overlay (Intersect)'].includes(spatialSettings.subTool) && (
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>{t('Intersecting Layer')}</label>
+                <TreeSelect 
+                  treeData={treeData}
+                  value={spatialSettings.secondaryLayerId}
+                  onChange={(val) => setSpatialSettings({...spatialSettings, secondaryLayerId: val})}
+                  placeholder={`${t('gpSelectPlaceholder')} ${t('Intersecting Layer')}...`}
+                  showAllOption={false}
+                />
+              </div>
+            )}
+
+            {spatialSettings.subTool === 'Buffer Analysis' && (
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ flex: 2 }}>
+                    <label>{t('Distance')}</label>
+                    <input 
+                      type="number" 
+                      className="tool-input" 
+                      value={spatialSettings.bufferDistance}
+                      onChange={(e) => setSpatialSettings({...spatialSettings, bufferDistance: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label>{t('Unit')}</label>
+                    <CustomSelect 
+                      options={[
+                        { label: 'm', value: 'meters' },
+                        { label: 'km', value: 'kilometers' },
+                        { label: 'mi', value: 'miles' }
+                      ]}
+                      value={spatialSettings.bufferUnit}
+                      onChange={(val) => setSpatialSettings({...spatialSettings, bufferUnit: val})}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {spatialSettings.subTool === 'Proximity (Nearest)' && (
+              <div className="instruction-box">
+                <span className="box-title">{t('Instructions:')}</span>
+                <p>{t('Click any point on the map to find the nearest feature in the selected layer.')}</p>
+              </div>
+            )}
+
+
+
+            {spatialSettings.status && (
+              <div className={`status-box ${spatialSettings.status.includes('Click') ? 'waiting' : 'success'}`}>
+                {spatialSettings.status.includes('Click') ? '📍 ' : '✔ '} {spatialSettings.status}
+              </div>
+            )}
+
+            {spatialSettings.distanceResult && (
+              <div className="result-highlight-card">
+                <span className="result-label">{t('Nearest Distance')}</span>
+                <span className="result-value">{spatialSettings.distanceResult}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="results-list">
+            {history.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-card">
+                  <div className="empty-icon-wrapper"><Database size={32} /></div>
+                  <h3 className="empty-title">{t('No Analysis Results')}</h3>
+                  <p className="empty-desc">{t('Run an analysis tool to see outputs here.')}</p>
+                </div>
+              </div>
+            ) : (
+              history.map(item => (
+                <div key={item.id} className="result-tree-node">
+                  <div className={`result-row ${item.visible ? '' : 'hidden-layer'}`}>
+                    <div className="result-row-first">
+                      <div className="result-info">
+                        <input
+                          type="checkbox"
+                          className="custom-checkbox"
+                          checked={item.visible}
+                          onChange={() => handleToggle(item.id)}
+                        />
+                        <div className="child-symbol-wrapper" style={{ margin: '0 4px' }}>
+                          <div 
+                            className="legend-symbol polygon-symbol" 
+                            style={{
+                              width: '14px',
+                              height: '10px',
+                              backgroundColor: 'rgba(38, 143, 255, 0.4)',
+                              border: `1.5px dashed rgba(38, 143, 255, 1)`,
+                              borderRadius: '2px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+                        <span className="result-name" title={item.title}>{item.title}</span>
+                      </div>
+                      
+                      <div className="result-actions" style={{ position: 'relative' }}>
+                        <button className="action-btn" onClick={() => handleZoom(item.id)} title="Zoom to layer">
+                          <Maximize2 size={15} />
+                        </button>
+                        
+                        <button 
+                          className="action-btn" 
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setExportMenuState(exportMenuState?.id === item.id ? null : {
+                              id: item.id,
+                              x: rect.left,
+                              y: rect.bottom
+                            });
+                          }} 
+                          title="Export"
+                        >
+                          <Download size={15} />
+                        </button>
+
+                        <button className="action-btn delete-btn" onClick={() => handleDelete(item.id)} title="Delete result">
+                          <Trash2 size={15} />
+                        </button>
+
+                        {exportMenuState?.id === item.id && createPortal(
+                          <div 
+                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99998 }}
+                            onClick={(e) => { e.stopPropagation(); setExportMenuState(null); }}
+                          >
+                            <div style={{ 
+                              position: 'absolute', 
+                              top: exportMenuState.y + 4, 
+                              left: exportMenuState.x - 110,
+                              background: 'white', 
+                              border: '1px solid #e2e8f0', 
+                              borderRadius: '6px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                              zIndex: 99999, 
+                              minWidth: '140px',
+                              display: 'flex', 
+                              flexDirection: 'column'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            >
+                              {['GeoJSON', 'Shapefile ZIP', 'CSV', 'Excel', 'Image'].map(fmt => (
+                                <button 
+                                  key={fmt}
+                                  style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: 'transparent', border: 'none', textAlign: 'left', width: '100%', color: '#1e293b' }}
+                                  onClick={(e) => { e.stopPropagation(); handleExport(fmt, item.id); }}
+                                >
+                                  {fmt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>,
+                          document.body
+                        )}
+                      </div>
+                    </div>
+                    <div className="result-row-second">
+                      <span className="result-feature-count">
+                        {item.count} {t('gpFeatures')}
+                      </span>
+                      <span className="result-upload-date">
+                        {item.date}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {activeTab === 'analysis' && (
+        <div className="tool-fixed-footer">
+          <button 
+            className="secondary-btn"
+            onClick={() => {
+              setSpatialSettings({...spatialSettings, status: '', lastRun: null, distanceResult: null, isWaitingForClick: false, history: []});
+              if (view && view.map) {
+                const layer = view.map.findLayerById('spatial-analysis-layer');
+                if (layer && layer.removeAll) layer.removeAll();
+                
+                const layersToRemove = view.map.layers.filter(l => l.id && l.id.startsWith('heatmap-')).toArray();
+                if (layersToRemove.length > 0) {
+                  view.map.removeMany(layersToRemove);
+                }
+              }
+            }}
+          >
+            {t('Clear All')}
+          </button>
+          <button 
+            className="primary-btn" 
+            onClick={() => {
+              const isProximity = spatialSettings.subTool === 'Proximity (Nearest)';
+              
+              setSpatialSettings({
+                ...spatialSettings, 
+                lastRun: Date.now(), 
+                isWaitingForClick: isProximity,
+                status: isProximity ? t('Ready: Click any point on the map') || 'Ready: Click any point on the map' : `${t('Running')} ${t(spatialSettings.subTool)}...`,
+                distanceResult: null
+              });
+            }}
+          >
+            {spatialSettings.subTool === 'Proximity (Nearest)' ? t('Start Tracking') || 'Start Tracking' : t('Run Analysis')}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -614,6 +1108,7 @@ export const SpatialAnalysisPanel = ({
 // ── Swipe/Split Panel Component ──────────────────────────────────────────────
 export const SwipePanel = ({ 
   t, 
+  lang,
   layersConfig, 
   dynamicMapServerData, 
   splitLayers, 
@@ -628,139 +1123,204 @@ export const SwipePanel = ({
   showSplitBasemap,
   setShowSplitBasemap
 }) => {
-  const allIdentifyLayers = [];
-  layersConfig.forEach(l => {
-    if (l.type === 'feature') {
-      allIdentifyLayers.push({ id: l.id, title: l.title });
-    } else if (l.type === 'map-image' && dynamicMapServerData[l.id]) {
-      const mapData = dynamicMapServerData[l.id];
-      if (mapData.metadata.layers) {
-        mapData.metadata.layers.forEach(sub => {
-          allIdentifyLayers.push({ id: `${l.id}_sub_${sub.id}`, title: sub.name || sub.title });
-        });
-      }
-    }
-  });
+  const isRTL = lang === 'AR';
 
-  const splitOptionsList = [
-    { id: 'all-visible', title: 'All Visible Layers' },
-    ...allIdentifyLayers
-  ];
+  const treeData = React.useMemo(() => {
+    const tree = [];
+    if (!layersConfig) return tree;
+
+    layersConfig.forEach(l => {
+      if (l.type === 'feature') {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      } else if (l.type === 'map-image') {
+        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
+        if (mapData && mapData.metadata && mapData.metadata.layers) {
+          const sublayers = mapData.metadata.layers;
+          
+          const buildNode = (sub) => {
+            const subId = `${l.id}_sub_${sub.id}`;
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+            if (hasChildren) {
+              const childrenNodes = [];
+              sub.subLayerIds.forEach(childId => {
+                const childSub = sublayers.find(s => s.id === childId);
+                if (childSub) {
+                  const childNode = buildNode(childSub);
+                  if (childNode) childrenNodes.push(childNode);
+                }
+              });
+              
+              if (childrenNodes.length > 0) {
+                return {
+                  id: subId,
+                  title: sub.name || sub.title,
+                  type: 'group',
+                  selectable: false,
+                  children: childrenNodes
+                };
+              }
+              return null;
+            } else {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'feature',
+                selectable: true,
+                children: []
+              };
+            }
+          };
+
+          const rootChildren = [];
+          sublayers.forEach(sub => {
+            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+              const node = buildNode(sub);
+              if (node) rootChildren.push(node);
+            }
+          });
+
+          if (rootChildren.length > 0) {
+            tree.push({
+              id: l.id,
+              title: l.title,
+              type: 'root-group',
+              selectable: false,
+              children: rootChildren
+            });
+          }
+        }
+      }
+    });
+    return tree;
+  }, [layersConfig, dynamicMapServerData]);
 
   return (
-    <div className="tool-content">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
-        <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
-          {isSplitModePersistent ? 'Swipe Active' : 'Enable Swipe'}
-        </span>
-        <button 
-          onClick={() => setIsSplitModePersistent(!isSplitModePersistent)}
-          className="no-stroke-btn"
-          style={{ background: isSplitModePersistent ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitModePersistent ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', transition: 'all 0.3s ease', cursor: 'pointer' }}
-        >
-          {isSplitModePersistent ? 'Disable' : 'Enable'}
-        </button>
-      </div>
+    <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
+          <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
+            {isSplitModePersistent ? t('Swipe Active') : t('Enable Swipe')}
+          </span>
+          <button 
+            onClick={() => setIsSplitModePersistent(!isSplitModePersistent)}
+            className="no-stroke-btn"
+            style={{ background: isSplitModePersistent ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitModePersistent ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', transition: 'all 0.3s ease', cursor: 'pointer' }}
+          >
+            {isSplitModePersistent ? t('Disable') : t('Enable')}
+          </button>
+        </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Swipe Direction</label>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {[
-            { id: 'vertical',   label: '| Vertical Swipe' },
-            { id: 'horizontal', label: '— Horizontal Swipe' }
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setSwipeMode(id)}
-              style={{ 
-                flex: 1, 
-                padding: '7px 0', 
-                borderRadius: '6px', 
-                border: '1.5px solid', 
-                borderColor: swipeMode === id ? '#3b82f6' : '#e2e8f0', 
-                background: swipeMode === id ? 'linear-gradient(135deg, #f0f7ff, #e0efff)' : 'white', 
-                color: swipeMode === id ? '#1e3c72' : '#64748b', 
-                fontWeight: '700', 
-                fontSize: '11px', 
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>{t('Swipe Direction')}</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {[
+              { id: 'vertical',   label: `| ${t('Vertical Swipe')}` },
+              { id: 'horizontal', label: `— ${t('Horizontal Swipe')}` }
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setSwipeMode(id)}
+                style={{ 
+                  flex: 1, 
+                  padding: '7px 0', 
+                  borderRadius: '6px', 
+                  border: '1.5px solid', 
+                  borderColor: swipeMode === id ? '#3b82f6' : '#e2e8f0', 
+                  background: swipeMode === id ? 'linear-gradient(135deg, #f0f7ff, #e0efff)' : 'white', 
+                  color: swipeMode === id ? '#1e3c72' : '#64748b', 
+                  fontWeight: '700', 
+                  fontSize: '11px', 
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('Left Side Layer')}</label>
+          <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TreeSelect 
+                treeData={treeData}
+                value={splitLayers.left} 
+                onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
+                placeholder={t('Select left layers') + "..."}
+                multi={true}
+                showAllOption={false}
+              />
+            </div>
+            <button 
+              className={`basemap-toggle-btn ${showSplitBasemap.left ? 'active' : ''}`}
+              onClick={() => setShowSplitBasemap(prev => ({ ...prev, left: !prev.left, right: false }))}
+              title="Change Basemap"
+              style={{ marginTop: '2px' }}
             >
-              {label}
+              <Map size={16} />
             </button>
-          ))}
-        </div>
-      </div>
 
-      <div className="form-group" style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitLeftLayer')}</label>
-        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <CustomSelect 
-              options={splitOptionsList}
-              value={splitLayers.left} 
-              onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
-              placeholder="Select left layers..."
-              multi={true}
-            />
+            {showSplitBasemap.left && (
+              <div className="split-basemap-popup left">
+                {basemaps.map(bm => (
+                  <div 
+                    key={bm.id} 
+                    className={`split-bm-item ${splitBasemaps.left === bm.id ? 'active' : ''}`}
+                    onClick={() => { setSplitBasemaps(prev => ({ ...prev, left: bm.id })); setShowSplitBasemap(prev => ({ ...prev, left: false })); }}
+                  >
+                    {bm.title}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <button 
-            className={`basemap-toggle-btn ${showSplitBasemap.left ? 'active' : ''}`}
-            onClick={() => setShowSplitBasemap(prev => ({ ...prev, left: !prev.left, right: false }))}
-            title="Change Basemap"
-          >
-            <Map size={16} />
-          </button>
-
-          {showSplitBasemap.left && (
-            <div className="split-basemap-popup left">
-              {basemaps.map(bm => (
-                <div 
-                  key={bm.id} 
-                  className={`split-bm-item ${splitBasemaps.left === bm.id ? 'active' : ''}`}
-                  onClick={() => { setSplitBasemaps(prev => ({ ...prev, left: bm.id })); setShowSplitBasemap(prev => ({ ...prev, left: false })); }}
-                >
-                  {bm.title}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      </div>
 
-      <div className="form-group">
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('splitRightLayer')}</label>
-        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <CustomSelect 
-              options={splitOptionsList}
-              value={splitLayers.right} 
-              onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
-              placeholder="Select right layers..."
-              multi={true}
-            />
-          </div>
-          <button 
-            className={`basemap-toggle-btn ${showSplitBasemap.right ? 'active' : ''}`}
-            onClick={() => setShowSplitBasemap(prev => ({ ...prev, right: !prev.right, left: false }))}
-            title="Change Basemap"
-          >
-            <Map size={16} />
-          </button>
-
-          {showSplitBasemap.right && (
-            <div className="split-basemap-popup right">
-              {basemaps.map(bm => (
-                <div 
-                  key={bm.id} 
-                  className={`split-bm-item ${splitBasemaps.right === bm.id ? 'active' : ''}`}
-                  onClick={() => { setSplitBasemaps(prev => ({ ...prev, right: bm.id })); setShowSplitBasemap(prev => ({ ...prev, right: false })); }}
-                >
-                  {bm.title}
-                </div>
-              ))}
+        <div className="form-group">
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d' }}>{t('Right Side Layer')}</label>
+          <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TreeSelect 
+                treeData={treeData}
+                value={splitLayers.right} 
+                onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
+                placeholder={t('Select right layers') + "..."}
+                multi={true}
+                showAllOption={false}
+              />
             </div>
-          )}
+            <button 
+              className={`basemap-toggle-btn ${showSplitBasemap.right ? 'active' : ''}`}
+              onClick={() => setShowSplitBasemap(prev => ({ ...prev, right: !prev.right, left: false }))}
+              title="Change Basemap"
+              style={{ marginTop: '2px' }}
+            >
+              <Map size={16} />
+            </button>
+
+            {showSplitBasemap.right && (
+              <div className="split-basemap-popup right">
+                {basemaps.map(bm => (
+                  <div 
+                    key={bm.id} 
+                    className={`split-bm-item ${splitBasemaps.right === bm.id ? 'active' : ''}`}
+                    onClick={() => { setSplitBasemaps(prev => ({ ...prev, right: bm.id })); setShowSplitBasemap(prev => ({ ...prev, right: false })); }}
+                  >
+                    {bm.title}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -785,142 +1345,209 @@ export const SplitViewPanel = ({
   syncMode, 
   setSyncMode,
   showSplitBasemap, 
-  setShowSplitBasemap 
+  setShowSplitBasemap,
+  t,
+  lang
 }) => {
-  const allIdentifyLayersView = [];
-  layersConfig.forEach(l => {
-    if (l.type === 'feature') {
-      allIdentifyLayersView.push({ id: l.id, title: l.title });
-    } else if (l.type === 'map-image' && dynamicMapServerData[l.id]) {
-      const mapData = dynamicMapServerData[l.id];
-      if (mapData.metadata.layers) {
-        mapData.metadata.layers.forEach(sub => {
-          allIdentifyLayersView.push({ id: `${l.id}_sub_${sub.id}`, title: sub.name || sub.title });
-        });
-      }
-    }
-  });
+  const isRTL = lang === 'AR';
 
-  const splitViewOptionsList = [
-    { id: 'all-visible', title: 'All Visible Layers' },
-    ...allIdentifyLayersView
-  ];
+  // Build hierarchical tree data for Split Layers selection
+  const treeData = React.useMemo(() => {
+    const tree = [];
+    if (!layersConfig) return tree;
+
+    layersConfig.forEach(l => {
+      if (l.type === 'feature') {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      } else if (l.type === 'map-image') {
+        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
+        if (mapData && mapData.metadata && mapData.metadata.layers) {
+          const sublayers = mapData.metadata.layers;
+          
+          const buildNode = (sub) => {
+            const subId = `${l.id}_sub_${sub.id}`;
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+            if (hasChildren) {
+              const childrenNodes = [];
+              sub.subLayerIds.forEach(childId => {
+                const childSub = sublayers.find(s => s.id === childId);
+                if (childSub) {
+                  const childNode = buildNode(childSub);
+                  if (childNode) childrenNodes.push(childNode);
+                }
+              });
+              
+              if (childrenNodes.length > 0) {
+                return {
+                  id: subId,
+                  title: sub.name || sub.title,
+                  type: 'group',
+                  selectable: false,
+                  children: childrenNodes
+                };
+              }
+              return null;
+            } else {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'feature',
+                selectable: true,
+                children: []
+              };
+            }
+          };
+
+          const rootChildren = [];
+          sublayers.forEach(sub => {
+            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+              const node = buildNode(sub);
+              if (node) rootChildren.push(node);
+            }
+          });
+
+          if (rootChildren.length > 0) {
+            tree.push({
+              id: l.id,
+              title: l.title,
+              type: 'root-group',
+              selectable: false,
+              children: rootChildren
+            });
+          }
+        }
+      }
+    });
+    return tree;
+  }, [layersConfig, dynamicMapServerData]);
 
   return (
-    <div className="tool-content">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
-        <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
-          {isSplitView ? 'Split View Active' : 'Enable Split View'}
-        </span>
-        <button 
-          onClick={() => { setIsSplitView(!isSplitView); if (isSplitModePersistent) setIsSplitModePersistent(false); }}
-          className="no-stroke-btn"
-          style={{ background: isSplitView ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitView ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
-        >
-          {isSplitView ? 'Disable' : 'Enable'}
-        </button>
-      </div>
-
-      {/* Left Side Controls */}
-      <div className="form-group" style={{ marginBottom: '12px' }}>
-        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#1a2f4d' }}>Left Side</label>
-        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <CustomSelect
-              options={splitViewOptionsList}
-              value={splitLayers.left}
-              onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
-              placeholder="Select left layers..."
-              multi={true}
-            />
-          </div>
+    <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
+          <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
+            {isSplitView ? 'Split View Active' : 'Enable Split View'}
+          </span>
           <button 
-            className={`basemap-toggle-btn ${showSplitBasemap.left ? 'active' : ''}`}
-            onClick={() => setShowSplitBasemap(prev => ({ ...prev, left: !prev.left, right: false }))}
-            title="Change Basemap"
+            onClick={() => { setIsSplitView(!isSplitView); if (isSplitModePersistent) setIsSplitModePersistent(false); }}
+            className="no-stroke-btn"
+            style={{ background: isSplitView ? '#cbd5e1' : 'linear-gradient(135deg, #df261c, #002D5D)', color: isSplitView ? '#1a2f4d' : 'white', padding: '8px 18px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
           >
-            <Map size={16} />
+            {isSplitView ? 'Disable' : 'Enable'}
           </button>
-          <button 
-            className="view-mode-single-btn"
-            onClick={() => setSplitModes(prev => ({ ...prev, left: prev.left === '2D' ? '3D' : '2D' }))}
-            style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-          >
-            {splitModes.left === '2D' ? '3D' : '2D'}
-          </button>
+        </div>
 
-          {showSplitBasemap.left && (
-            <div className="split-basemap-popup left">
-              {basemaps.map(bm => (
-                <div 
-                  key={bm.id} 
-                  className={`split-bm-item ${splitBasemaps.left === bm.id ? 'active' : ''}`}
-                  onClick={() => { setSplitBasemaps(prev => ({ ...prev, left: bm.id })); setShowSplitBasemap(prev => ({ ...prev, left: false })); }}
-                >
-                  {bm.title}
-                </div>
-              ))}
+        {/* Left Side Controls */}
+        <div className="form-group" style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#1a2f4d' }}>{t('Left Side')}</label>
+          <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TreeSelect
+                treeData={treeData}
+                value={splitLayers.left}
+                onChange={(val) => setSplitLayers(prev => ({ ...prev, left: val }))}
+                placeholder={t('Select left layers') + "..."}
+                multi={true}
+                showAllOption={false}
+              />
             </div>
-          )}
-        </div>
-      </div>
+            <button 
+              className={`basemap-toggle-btn ${showSplitBasemap.left ? 'active' : ''}`}
+              onClick={() => setShowSplitBasemap(prev => ({ ...prev, left: !prev.left, right: false }))}
+              title="Change Basemap"
+              style={{ marginTop: '2px' }}
+            >
+              <Map size={16} />
+            </button>
+            <button 
+              className="view-mode-single-btn"
+              onClick={() => setSplitModes(prev => ({ ...prev, left: prev.left === '2D' ? '3D' : '2D' }))}
+              style={{ marginTop: '2px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+            >
+              {splitModes.left === '2D' ? '3D' : '2D'}
+            </button>
 
-      {/* Right Side Controls */}
-      <div className="form-group" style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#1a2f4d' }}>Right Side</label>
-        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'center' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <CustomSelect
-              options={splitViewOptionsList}
-              value={splitLayers.right}
-              onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
-              placeholder="Select right layers..."
-              multi={true}
-            />
-          </div>
-          <button 
-            className={`basemap-toggle-btn ${showSplitBasemap.right ? 'active' : ''}`}
-            onClick={() => setShowSplitBasemap(prev => ({ ...prev, right: !prev.right, left: false }))}
-            title="Change Basemap"
-          >
-            <Map size={16} />
-          </button>
-          <button 
-            className="view-mode-single-btn"
-            onClick={() => setSplitModes(prev => ({ ...prev, right: prev.right === '2D' ? '3D' : '2D' }))}
-            style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-          >
-            {splitModes.right === '2D' ? '3D' : '2D'}
-          </button>
-        </div>
-
-        {showSplitBasemap.right && (
-          <div className="split-basemap-popup right">
-            {basemaps.map(bm => (
-              <div 
-                key={bm.id} 
-                className={`split-bm-item ${splitBasemaps.right === bm.id ? 'active' : ''}`}
-                onClick={() => { setSplitBasemaps(prev => ({ ...prev, right: bm.id })); setShowSplitBasemap(prev => ({ ...prev, right: false })); }}
-              >
-                {bm.title}
+            {showSplitBasemap.left && (
+              <div className="split-basemap-popup left">
+                {basemaps.map(bm => (
+                  <div 
+                    key={bm.id} 
+                    className={`split-bm-item ${splitBasemaps.left === bm.id ? 'active' : ''}`}
+                    onClick={() => { setSplitBasemaps(prev => ({ ...prev, left: bm.id })); setShowSplitBasemap(prev => ({ ...prev, left: false })); }}
+                  >
+                    {bm.title}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
-      <div className="form-group" style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>Extent Synchronization</label>
-        <CustomSelect
-          options={[
-            { value: 'both', title: 'Sync Both Views (pan + zoom)' },
-            { value: 'zoom', title: 'Sync Zoom Only' },
-            { value: 'none', title: 'Independent Views' }
-          ]}
-          value={syncMode}
-          onChange={(val) => setSyncMode(val)}
-          placeholder="Select sync mode..."
-        />
+        {/* Right Side Controls */}
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#1a2f4d' }}>{t('Right Side')}</label>
+          <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TreeSelect
+                treeData={treeData}
+                value={splitLayers.right}
+                onChange={(val) => setSplitLayers(prev => ({ ...prev, right: val }))}
+                placeholder={t('Select right layers') + "..."}
+                multi={true}
+                showAllOption={false}
+              />
+            </div>
+            <button 
+              className={`basemap-toggle-btn ${showSplitBasemap.right ? 'active' : ''}`}
+              onClick={() => setShowSplitBasemap(prev => ({ ...prev, right: !prev.right, left: false }))}
+              title="Change Basemap"
+              style={{ marginTop: '2px' }}
+            >
+              <Map size={16} />
+            </button>
+            <button 
+              className="view-mode-single-btn"
+              onClick={() => setSplitModes(prev => ({ ...prev, right: prev.right === '2D' ? '3D' : '2D' }))}
+              style={{ marginTop: '2px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', minWidth: '40px', fontSize: '12px', fontWeight: '800', color: '#1a2f4d', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+            >
+              {splitModes.right === '2D' ? '3D' : '2D'}
+            </button>
+            {showSplitBasemap.right && (
+              <div className="split-basemap-popup right">
+                {basemaps.map(bm => (
+                  <div 
+                    key={bm.id} 
+                    className={`split-bm-item ${splitBasemaps.right === bm.id ? 'active' : ''}`}
+                    onClick={() => { setSplitBasemaps(prev => ({ ...prev, right: bm.id })); setShowSplitBasemap(prev => ({ ...prev, right: false })); }}
+                  >
+                    {bm.title}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>{t('Extent Synchronization')}</label>
+          <CustomSelect
+            options={[
+              { value: 'both', title: t('Sync Both Views (pan + zoom)') },
+              { value: 'zoom', title: t('Sync Zoom Only') },
+              { value: 'none', title: t('Independent Views') }
+            ]}
+            value={syncMode}
+            onChange={(val) => setSyncMode(val)}
+            placeholder="Select sync mode..."
+          />
+        </div>
       </div>
     </div>
   );
@@ -940,6 +1567,9 @@ export const PANEL_REGISTRY = {
   bookmark: BookmarkPanel,
   layers: LayersPanel,
 
+  // Geoprocessing Framework
+  geoprocessing: GPPanel,
+
   // Custom inline layouts compiled as React elements
   search: SearchPanel,
   basemap: BasemapPanel,
@@ -953,3 +1583,4 @@ export const PANEL_REGISTRY = {
 export const getPanelComponent = (toolId) => {
   return PANEL_REGISTRY[toolId] || null;
 };
+

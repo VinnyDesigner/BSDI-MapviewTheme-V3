@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import ArcGISMap from './components/MapView'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -21,7 +21,7 @@ import {
   Layers, Search, Navigation, Ruler, Pencil,
   Box, Database, Globe, Printer, Bookmark, Info,
   Columns2, ChevronRight, ChevronLeft, ChevronDown, MousePointer2, Square, Hexagon, Maximize2,
-  Download, Lock, Map, Play, Pause, RotateCcw
+  Download, Lock, Map, Play, Pause, RotateCcw, Cpu
 } from 'lucide-react';
 
 // Custom 4-dot drag handle (2×2 grid)
@@ -77,7 +77,8 @@ function AppInner() {
     { id: 'add_data', icon: Globe, label: translations[lang].tools.add_data ?? 'Add Data' },
     { id: 'print', icon: Printer, label: translations[lang].tools.print ?? 'Print' },
     { id: 'bookmark', icon: Bookmark, label: translations[lang].tools.bookmark ?? 'Bookmark' },
-    { id: 'basemap', icon: Map, label: translations[lang].tools.basemap ?? 'Basemaps' }
+    { id: 'basemap', icon: Map, label: translations[lang].tools.basemap ?? 'Basemaps' },
+    { id: 'geoprocessing', icon: Cpu, label: 'Geoprocessing' }
   ];
 
   const handleMobileToolSelect = (toolId) => {
@@ -234,6 +235,8 @@ function AppInner() {
   }, []);
 
   const [layerSearch, setLayerSearch] = useState('');
+  const [addDataResults, setAddDataResults] = useState([]);
+  const [addDataExpandedItems, setAddDataExpandedItems] = useState({});
   const [layerOrder, setLayerOrder] = useState(() => layersConfig.map(l => l.id));
   const [dragOverId, setDragOverId] = useState(null);
   const [dragInsertPositionState, setDragInsertPositionState] = useState(null);
@@ -735,7 +738,44 @@ function AppInner() {
   });
   const [timeCompareTab, setTimeCompareTab] = useState('slider'); // 'slider' | 'swipe'
   const [swipeMode, setSwipeMode] = useState('vertical'); // 'vertical' | 'horizontal'
-  const [swipeInfo, setSwipeInfo] = useState({ position: 50, viewWidth: 0, viewHeight: 0 });
+  
+  // High performance swipe label updates using refs
+  const labelARef = useRef(null);
+  const labelBRef = useRef(null);
+  const swipeReqRef = useRef(null);
+  
+  const handleSwipePosition = useCallback((info) => {
+    if (swipeReqRef.current) cancelAnimationFrame(swipeReqRef.current);
+    swipeReqRef.current = requestAnimationFrame(() => {
+      const pos = info.position;
+      const isVisualVertical = swipeMode === 'horizontal';
+      const clearance = isVisualVertical ? '20px' : '60px';
+      
+      if (labelARef.current) {
+        if (isVisualVertical) {
+          labelARef.current.style.top = '85px';
+          labelARef.current.style.left = `${pos}%`;
+          labelARef.current.style.transform = `translate3d(calc(-100% - ${clearance}), 0, 0)`;
+        } else {
+          labelARef.current.style.left = '50%';
+          labelARef.current.style.top = `${pos}%`;
+          labelARef.current.style.transform = `translate3d(-50%, calc(-100% - ${clearance}), 0)`;
+        }
+      }
+
+      if (labelBRef.current) {
+        if (isVisualVertical) {
+          labelBRef.current.style.top = '85px';
+          labelBRef.current.style.left = `${pos}%`;
+          labelBRef.current.style.transform = `translate3d(${clearance}, 0, 0)`;
+        } else {
+          labelBRef.current.style.left = '50%';
+          labelBRef.current.style.top = `${pos}%`;
+          labelBRef.current.style.transform = `translate3d(-50%, ${clearance}, 0)`;
+        }
+      }
+    });
+  }, [swipeMode]);
   const [currentBasemap, setCurrentBasemap] = useState('streets');
 
   const basemaps = [
@@ -910,10 +950,14 @@ function AppInner() {
       updateLayerState,
       layerOrder,
       setLayerOrder,
-      layerSearch,
-      setLayerSearch,
       layerVisibility,
       setLayerVisibility,
+      layerSearch,
+      setLayerSearch,
+      results: addDataResults,
+      setResults: setAddDataResults,
+      expandedItems: addDataExpandedItems,
+      setExpandedItems: setAddDataExpandedItems,
       treeExpanded,
       setTreeExpanded,
       dragOverId,
@@ -973,7 +1017,11 @@ function AppInner() {
       lastRequestRef,
       onRequestSubmit: handleRequestSubmit,
       requestHistory: dataRequests,
-      onReset: handleStartDataRequest
+      onReset: handleStartDataRequest,
+      timeCompareTab,
+      setTimeCompareTab,
+      timelapseSettings,
+      setTimelapseSettings
     };
 
     return <PanelComponent {...allCollectedProps} />;
@@ -1002,22 +1050,47 @@ function AppInner() {
             toYear: prev.mode === 'range' ? year : prev.toYear,
             currentYear: prev.mode === 'single' ? year : prev.currentYear 
           }))}
-          onSpatialResult={(dist) => setSpatialSettings(prev => ({ ...prev, distanceResult: dist, status: 'Nearest feature identified' }))}
+          onSpatialResult={(data) => {
+            if (typeof data === 'string' || data?.distance !== undefined && !data?.id) {
+              const dist = typeof data === 'string' ? data : data.distance;
+              setSpatialSettings(prev => ({ ...prev, distanceResult: dist, status: 'Nearest feature identified' }));
+            } else if (data?.id) {
+              setSpatialSettings(prev => ({ 
+                ...prev, 
+                history: [
+                  ...(prev.history || []), 
+                  { 
+                    id: data.id, 
+                    title: data.title, 
+                    count: data.count, 
+                    distance: data.distance, 
+                    unit: data.unit,
+                    date: new Date().toLocaleString(),
+                    visible: true
+                  }
+                ],
+                distanceResult: data.distanceResult !== undefined ? data.distanceResult : prev.distanceResult,
+                status: 'Analysis complete' 
+              }));
+            }
+          }}
           onArcadePreview={(val, debug) => setArcadeSettings(prev => ({ ...prev, preview: val, debugInfo: debug }))}
           splitLayers={splitLayers}
           splitBasemaps={splitBasemaps}
           basemap={currentBasemap}
           swipeMode={swipeMode}
-          onSwipePositionChange={setSwipeInfo}
+          onSwipePositionChange={handleSwipePosition}
           onDataRequestAOIChange={(geometry, layers, isComplete) => {
             setRequestAOI(geometry);
             setIntersectingLayers(layers);
             if (isComplete) {
-              setDataRequestStep('selection');
+              setSelectedLayersForRequest(layers.map(l => l.id));
+              setDataRequestStep('form');
               setActiveDrawingTool(null);
             }
           }}
           dataRequestDrawingTool={activeDrawingTool}
+          dataRequestStep={dataRequestStep}
         />
       </div>
       
@@ -1058,39 +1131,20 @@ function AppInner() {
           <RightToolbar pinnedTools={pinnedTools} getToolIcon={getToolIcon} onRestore={handleRestore} />
         )}
 
-        <BottomToolbar 
-          activeTool={activeTool} 
-          onToolSelect={handleToolSelect} 
-          swipeMode={swipeMode} 
-          isSplitView={isSplitView}
-          isSplitModePersistent={isSplitModePersistent}
-        />
+        {!is3D && (
+          <BottomToolbar 
+            activeTool={activeTool} 
+            onToolSelect={handleToolSelect} 
+            swipeMode={swipeMode} 
+            isSplitView={isSplitView}
+            isSplitModePersistent={isSplitModePersistent}
+          />
+        )}
 
         {/* Swipe Labels — mode-aware positioning (Vertical Divider = L/R, Horizontal Divider = T/B) */}
         {(isSplitModePersistent || (activeTool === 'time_compare' && timeCompareTab === 'swipe')) && (() => {
-          const isVertical = swipeMode === 'vertical';
-          const pos = swipeInfo.position ?? 50;
-
-          const labelBase = {
-            // Base styles are now in .swipe-label class in App.css
-          };
-
-
-          // Visual Vertical Line (L/R) corresponds to swipeMode="horizontal"
-          // Visual Horizontal Line (T/B) corresponds to swipeMode="vertical"
           const isVisualVertical = swipeMode === 'horizontal';
-
-          // Perfection: Use exactly 20px clearance for vertical, and 60px for horizontal to clear the circular handle
-          const clearance = isVisualVertical ? '20px' : '60px';
-
-          const labelA = isVisualVertical
-            ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` } // Left
-            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` }; // Top
-
-          const labelB = isVisualVertical
-            ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` } // Right
-            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` }; // Bottom
-
+          
           let labelAText = '';
           let labelBText = '';
 
@@ -1104,16 +1158,37 @@ function AppInner() {
           } else {
             const sideA = isVisualVertical ? 'Left' : 'Top';
             const sideB = isVisualVertical ? 'Right' : 'Bottom';
-            labelAText = `${sideA}: ${layersConfig.find(l => l.id === splitLayers.left)?.title || 'Left Layer'}`;
-            labelBText = `${sideB}: ${layersConfig.find(l => l.id === splitLayers.right)?.title || 'Right Layer'}`;
+            
+            const getLabelText = (layerIds, defaultText) => {
+              if (!Array.isArray(layerIds) || layerIds.length === 0) return defaultText;
+              if (layerIds.length === 1) {
+                const id = layerIds[0];
+                if (id.includes('_sub_')) return '1 sublayer';
+                return layersConfig.find(l => l.id === id)?.title || '1 layer';
+              }
+              return `${layerIds.length} layers`;
+            };
+
+            labelAText = `${sideA}: ${getLabelText(splitLayers.left, 'Left Layer')}`;
+            labelBText = `${sideB}: ${getLabelText(splitLayers.right, 'Right Layer')}`;
           }
+          
+          // Initial styles for server side render / mount
+          const pos = 50;
+          const clearance = isVisualVertical ? '20px' : '60px';
+          const initLabelA = isVisualVertical
+            ? { top: '85px', left: `${pos}%`, transform: `translate3d(calc(-100% - ${clearance}), 0, 0)` }
+            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, calc(-100% - ${clearance}), 0)` };
+          const initLabelB = isVisualVertical
+            ? { top: '85px', left: `${pos}%`, transform: `translate3d(${clearance}, 0, 0)` }
+            : { left: '50%', top: `${pos}%`, transform: `translate3d(-50%, ${clearance}, 0)` };
 
           return (
             <div className="swipe-labels-container" style={{ position: 'fixed', top: '60px', bottom: 0, left: 0, right: 0, zIndex: 1000, pointerEvents: 'none' }}>
-              <div className="swipe-label" style={labelA}>
+              <div className="swipe-label" ref={labelARef} style={initLabelA}>
                 {labelAText}
               </div>
-              <div className="swipe-label" style={labelB}>
+              <div className="swipe-label" ref={labelBRef} style={initLabelB}>
                 {labelBText}
               </div>
             </div>

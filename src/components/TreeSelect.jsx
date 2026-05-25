@@ -1,7 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ChevronDown, ChevronRight, ChevronLeft, Check, Search } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer...", showAllOption = false, multi = false }) => {
+  const { t, lang } = useLanguage();
+  const isRTL = lang === 'AR';
+
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
   const [expandedNodes, setExpandedNodes] = useState({});
@@ -9,20 +13,44 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
   const allOptionId = typeof showAllOption === 'string' ? showAllOption : 'all';
   const allOptionLabel = 'All Visible Layers';
 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filterTree = (nodes, query) => {
+    if (!query) return nodes;
+    const lowerQuery = query.toLowerCase();
+    const result = [];
+    for (const node of nodes) {
+      const matchesSelf = node.title.toLowerCase().includes(lowerQuery);
+      let filteredChildren = [];
+      if (node.children) {
+        filteredChildren = filterTree(node.children, query);
+      }
+      if (matchesSelf || filteredChildren.length > 0) {
+        result.push({ ...node, children: filteredChildren });
+      }
+    }
+    return result;
+  };
+
+  const filteredData = useMemo(() => filterTree(treeData, searchQuery), [treeData, searchQuery]);
+
   useEffect(() => {
-    // Default expand all group/root nodes
-    const initialExpanded = {};
+    if (!searchQuery) {
+      setExpandedNodes({}); // Collapse all by default or when search is cleared
+      return;
+    }
+    const newExpanded = {};
     const traverse = (nodes) => {
       nodes.forEach(node => {
-        if (node.type === 'root-group' || node.type === 'group') {
-          initialExpanded[node.id] = true;
-          if (node.children) traverse(node.children);
+        if ((node.type === 'root-group' || node.type === 'group') && node.children && node.children.length > 0) {
+          newExpanded[node.id] = true;
+          traverse(node.children);
         }
       });
     };
-    traverse(treeData);
-    setExpandedNodes(initialExpanded);
-  }, [treeData]);
+    traverse(filteredData);
+    setExpandedNodes(newExpanded);
+  }, [searchQuery, filteredData]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -83,7 +111,7 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
   };
 
   const renderTreeNode = (node, depth = 0) => {
-    const isExpanded = expandedNodes[node.id] !== false;
+    const isExpanded = !!expandedNodes[node.id];
     const isSelected = multi 
       ? (Array.isArray(value) && value.includes(node.id)) 
       : value === node.id;
@@ -131,12 +159,12 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
         }}
       >
         {depth > 0 && (
-          <div style={{ position: 'absolute', left: '-12px', top: '50%', width: '12px', height: '1px', backgroundColor: '#cbd5e1' }} />
+          <div style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '-12px', top: '50%', width: '12px', height: '1px', backgroundColor: '#cbd5e1' }} />
         )}
 
         {node.type === 'feature' && (
           multi ? (
-            <div className={`select-checkbox ${isSelected ? 'checked' : ''}`} style={{ margin: '0 4px 0 0' }}>
+            <div className={`select-checkbox ${isSelected ? 'checked' : ''}`} style={{ margin: isRTL ? '0 0 0 4px' : '0 4px 0 0' }}>
               {isSelected && <Check size={8} color="white" strokeWidth={4} />}
             </div>
           ) : (
@@ -166,7 +194,6 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
         >
           {node.title}
         </span>
-        
         {(node.type === 'root-group' || node.type === 'group') && (
           <button
             onClick={(e) => toggleExpand(node.id, e)}
@@ -179,10 +206,10 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
               justifyContent: 'center',
               padding: '4px',
               color: '#64748b',
-              margin: '0 0 0 auto'
+              margin: isRTL ? '0 auto 0 0' : '0 0 0 auto'
             }}
           >
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {isExpanded ? <ChevronDown size={14} /> : (isRTL ? <ChevronLeft size={14} /> : <ChevronRight size={14} />)}
           </button>
         )}
       </div>
@@ -199,8 +226,8 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
         }}>
           {rowContent}
           {hasChildren && isExpanded && (
-            <div style={{ position: 'relative', paddingTop: '2px', paddingLeft: '16px', marginLeft: '12px' }}>
-              <div style={{ position: 'absolute', left: '4px', top: '0', bottom: '12px', width: '1px', backgroundColor: '#cbd5e1' }} />
+            <div style={{ position: 'relative', paddingTop: '2px', [isRTL ? 'paddingRight' : 'paddingLeft']: '16px', [isRTL ? 'marginRight' : 'marginLeft']: '12px' }}>
+              <div style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '4px', top: '0', bottom: '12px', width: '1px', backgroundColor: '#cbd5e1' }} />
               {node.children.map(child => renderTreeNode(child, depth + 1))}
             </div>
           )}
@@ -212,8 +239,8 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
       <React.Fragment key={node.id}>
         {rowContent}
         {hasChildren && isExpanded && (
-          <div style={{ position: 'relative', paddingTop: '2px', paddingLeft: '16px', marginLeft: '12px' }}>
-            <div style={{ position: 'absolute', left: '4px', top: '0', bottom: '12px', width: '1px', backgroundColor: '#cbd5e1' }} />
+          <div style={{ position: 'relative', paddingTop: '2px', [isRTL ? 'paddingRight' : 'paddingLeft']: '16px', [isRTL ? 'marginRight' : 'marginLeft']: '12px' }}>
+            <div style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '4px', top: '0', bottom: '12px', width: '1px', backgroundColor: '#cbd5e1' }} />
             {node.children.map(child => renderTreeNode(child, depth + 1))}
           </div>
         )}
@@ -242,14 +269,34 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
           style={{ 
             width: '100%',
             maxWidth: 'none',
-            maxHeight: '300px', 
-            overflowY: 'auto',
             border: '1px solid #e2e8f0',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            zIndex: 9999
+            zIndex: 9999,
+            direction: isRTL ? 'rtl' : 'ltr',
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
-          <div className="options-list" style={{ maxHeight: '280px', padding: '8px' }}>
+          <div style={{ padding: '8px 8px 0', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'white' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input 
+                type="text" 
+                placeholder={t('Search') + '...'} 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: isRTL ? '6px 28px 6px 8px' : '6px 8px 6px 28px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          </div>
+          <div className="options-list" style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
             {showAllOption && (
               <div 
                 style={{
@@ -314,11 +361,11 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
               </div>
             )}
 
-            {treeData.length > 0 ? (
-              treeData.map(node => renderTreeNode(node, 0))
+            {filteredData.length > 0 ? (
+              filteredData.map(node => renderTreeNode(node, 0))
             ) : (
               <div className="no-options" style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
-                No layers active
+                {t('noResultsFound') || 'No layers found'}
               </div>
             )}
           </div>

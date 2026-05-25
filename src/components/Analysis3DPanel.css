@@ -118,6 +118,7 @@
   font-weight: 600;
   color: #1a2f4d;
   margin-bottom: 6px;
+  text-transform: capitalize !important;
 }
 
 .unit-select-wrapper {
@@ -251,7 +252,7 @@
   font-size: 11px !important;
   font-weight: 600 !important;
   letter-spacing: 0.5px !important;
-  text-transform: uppercase !important;
+  text-transform: capitalize !important;
   color: #94a3b8 !important;
 }
 

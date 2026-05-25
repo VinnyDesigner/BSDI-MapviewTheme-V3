@@ -20,7 +20,9 @@ const BookmarkPanel = ({
   is3D, 
   setIs3D, 
   currentBasemap, 
-  setCurrentBasemap 
+  setCurrentBasemap,
+  t = (k) => k,
+  lang = 'EN'
 }) => {
   const [bookmarks, setBookmarks] = useState(() => {
     const saved = localStorage.getItem('bsdi-bookmarks');
@@ -104,7 +106,7 @@ const BookmarkPanel = ({
     
     const isDuplicate = bookmarks.some(b => b.title.toLowerCase() === title.trim().toLowerCase());
     if (isDuplicate) {
-      showToast('A bookmark with this name already exists.');
+      showToast(t('bookmarkDuplicateMsg'));
       return;
     }
 
@@ -122,7 +124,7 @@ const BookmarkPanel = ({
     setBookmarks(prev => [newBookmark, ...prev]);
     setTitle('');
     setViewState('list');
-    showToast('Bookmark added successfully');
+    showToast(t('bookmarkAddedMsg'));
   };
 
   const handleUpdateMapState = async (id) => {
@@ -134,7 +136,7 @@ const BookmarkPanel = ({
         ? { ...b, ...stateData, updatedAt: new Date().toISOString() }
         : b
     ));
-    showToast('Map state updated');
+    showToast(t('bookmarkUpdatedMsg'));
   };
 
   const handleSaveInlineEdit = () => {
@@ -142,7 +144,7 @@ const BookmarkPanel = ({
 
     const isDuplicate = bookmarks.some(b => b.id !== editingId && b.title.toLowerCase() === editTitle.trim().toLowerCase());
     if (isDuplicate) {
-      showToast('A bookmark with this name already exists.');
+      showToast(t('bookmarkDuplicateMsg'));
       return;
     }
 
@@ -156,7 +158,7 @@ const BookmarkPanel = ({
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this bookmark?')) {
+    if (window.confirm(t('bookmarkDeleteConfirm'))) {
       setBookmarks(prev => prev.filter(b => b.id !== id));
       if (editingId === id) {
         setEditingId(null);
@@ -203,13 +205,13 @@ const BookmarkPanel = ({
       <div className="bookmark-form-container">
         <div className="bookmark-form-body">
           <div className="form-group">
-            <label>Title</label>
+            <label>{t('bookmarkTitleLabel')}</label>
             <input 
               type="text" 
               className="tool-input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter the title"
+              placeholder={t('bookmarkTitlePlaceholder')}
               maxLength={50}
             />
           </div>
@@ -217,20 +219,20 @@ const BookmarkPanel = ({
           {isCapturing && (
             <div className="capture-loading">
               <div className="spinner"></div>
-              <span>Capturing map state...</span>
+              <span>{t('bookmarkCapturing')}</span>
             </div>
           )}
 
           <div className="form-actions">
             <button className="secondary-btn" onClick={() => setViewState('list')} disabled={isCapturing}>
-              Cancel
+              {t('bookmarkCancelBtn')}
             </button>
             <button 
               className="primary-btn" 
               onClick={handleAddSubmit}
               disabled={isInvalid || isCapturing}
             >
-              Add
+              {t('bookmarkAddBtn')}
             </button>
           </div>
         </div>
@@ -247,10 +249,10 @@ const BookmarkPanel = ({
             <div className="empty-icon-wrapper">
               <Bookmark size={32} />
             </div>
-            <h3 className="empty-title">No Bookmarks</h3>
-            <p className="empty-desc">Add bookmarks to your map and they will appear here.</p>
+            <h3 className="empty-title">{t('bookmarkEmptyTitle')}</h3>
+            <p className="empty-desc">{t('bookmarkEmptyDesc')}</p>
             <button className="primary-btn add-first-btn" onClick={() => { setTitle(''); setViewState('add'); }}>
-              + Add Bookmark
+              {t('bookmarkAddFirst')}
             </button>
           </div>
         </div>
@@ -306,7 +308,7 @@ const BookmarkPanel = ({
                         e.stopPropagation();
                         handleUpdateMapState(bookmark.id);
                       }}
-                      title="Update to current map state"
+                      title={t('bookmarkUpdateTitle')}
                       disabled={isCapturing}
                     >
                       <RefreshCw size={14} className={isCapturing ? 'spinning' : ''} />
@@ -341,7 +343,7 @@ const BookmarkPanel = ({
                         setEditingId(bookmark.id);
                         setEditTitle(bookmark.title);
                       }}
-                      title="Edit Bookmark"
+                      title={t('bookmarkEditTitle')}
                     >
                       <Pencil size={14} />
                     </button>
@@ -351,7 +353,7 @@ const BookmarkPanel = ({
                         e.stopPropagation();
                         handleDelete(bookmark.id);
                       }}
-                      title="Delete Bookmark"
+                      title={t('bookmarkDeleteTitle')}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -364,7 +366,7 @@ const BookmarkPanel = ({
 
         <div className="bookmark-footer">
           <button className="primary-btn" onClick={() => { setTitle(''); setViewState('add'); }}>
-            + Add Bookmark
+            {t('bookmarkAddMore')}
           </button>
         </div>
       </div>
@@ -372,7 +374,7 @@ const BookmarkPanel = ({
   };
 
   return (
-    <div className="bookmark-panel-wrapper">
+    <div className="bookmark-panel-wrapper" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
       {toastMessage && (
         <div className="bookmark-toast">
           {toastMessage}

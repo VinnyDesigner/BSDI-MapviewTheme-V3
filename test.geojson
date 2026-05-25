@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Manama Point 1",
+        "category": "Capital"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [50.58, 26.22]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Manama Point 2",
+        "category": "Central"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [50.59, 26.21]
+      }
+    }
+  ]
+}

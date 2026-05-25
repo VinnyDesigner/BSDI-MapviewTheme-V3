@@ -62,6 +62,7 @@ const ArcGISMap = ({
   basemap, is3D, swipeMode = 'vertical', onSwipePositionChange,
   activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart,
   onRequestData, onDataRequestAOIChange, dataRequestDrawingTool,
+  dataRequestStep,
   isSplitView
 }) => {
   const map2DDiv = useRef(null);
@@ -257,77 +258,278 @@ const ArcGISMap = ({
   }, [is3D]);
 
   // 4. Split / Swipe
-  const swipeBasemapLayersRef = useRef({ left: [], right: [] });
+  const swipeManagedLayersRef = useRef([]);
+  const swipeOriginalsHiddenRef = useRef({});
+
   useEffect(() => {
+    let isCancelled = false;
     const view = viewRef.current;
-    if (!view) return;
+    if (!view || !view.map) return;
 
-    if (isSplitMode) {
-      const leftLayer = layersRef.current[splitLayers.left];
-      const rightLayer = layersRef.current[splitLayers.right];
+    const getOriginalVisibility = (pId, subId = null) => {
+      if (subId !== null) return !!layerVisibility[`${pId}_sub_${subId}`];
+      return !!layerVisibility[pId];
+    };
 
-      if (leftLayer && rightLayer) {
-        leftLayer.visible = true;
-        rightLayer.visible = true;
-        Object.keys(layersRef.current).forEach(id => {
-          if (id !== splitLayers.left && id !== splitLayers.right) {
-            layersRef.current[id].visible = false;
-          }
+    const syncSublayerVis = (layer, pId, subIds, hideSelection) => {
+      if (layer.type === 'map-image') {
+        layer.load().then(() => {
+          if (!layer.allSublayers) return;
+          layer.allSublayers.forEach(sub => {
+             if (!sub.sublayers) {
+               const isSelected = subIds === null || subIds.includes(sub.id);
+               if (isSelected && hideSelection) {
+                  sub.visible = false;
+               } else {
+                  sub.visible = getOriginalVisibility(pId, sub.id);
+               }
+             }
+          });
         });
-        
-        view.when(() => {
-          if (view.destroyed || !isSplitMode) return;
-          if (swipeRef.current) {
-            view.ui.remove(swipeRef.current);
-            swipeRef.current.destroy();
-            swipeRef.current = null;
-          }
-          
-          // Delay initialization on mobile so panel animations finish and dimensions are correct
-          const delay = window.innerWidth <= 768 ? 400 : 0;
-          setTimeout(() => {
-            if (view.destroyed || !isSplitMode) return;
-            const swipe = new Swipe({
-              view: view,
-              leadingLayers: [leftLayer],
-              trailingLayers: [rightLayer],
-              direction: swipeMode,
-              position: 50
-            });
-            view.ui.add(swipe);
-            swipeRef.current = swipe;
-            
-            swipe.watch("position", (val) => {
-              if (onSwipePositionChange) {
-                onSwipePositionChange({
-                  position: val,
-                  viewWidth: view.width,
-                  viewHeight: view.height
-                });
-              }
-            });
-
-            if (onSwipePositionChange) {
-              onSwipePositionChange({
-                position: 50,
-                viewWidth: view.width,
-                viewHeight: view.height
-              });
-            }
-
-            // Force map to recalculate its bounds
-            view.resize();
-          }, delay);
-        });
+      } else {
+         layer.visible = hideSelection ? false : getOriginalVisibility(pId);
       }
-    } else {
+    };
+
+    if (!isSplitMode) {
       if (swipeRef.current) {
         view.ui.remove(swipeRef.current);
         swipeRef.current.destroy();
         swipeRef.current = null;
       }
+      
+      // Destroy clones
+      if (swipeManagedLayersRef.current.length > 0) {
+        view.map.removeMany(swipeManagedLayersRef.current);
+        swipeManagedLayersRef.current = [];
+      }
+      
+      // Restore original visibility based on layerVisibility state
+      Object.entries(swipeOriginalsHiddenRef.current).forEach(([pId, data]) => {
+         const layer = view.map.findLayerById(pId) || (is3D ? layers3DRef.current[pId] : layersRef.current[pId]);
+         if (layer) syncSublayerVis(layer, pId, data.subIds, false);
+      });
+      swipeOriginalsHiddenRef.current = {};
+
+      if (view.map.basemap) {
+        view.map.basemap.baseLayers.forEach(l => l.visible = true);
+        view.map.basemap.referenceLayers.forEach(l => l.visible = true);
+      }
+      return;
     }
-  }, [isSplitMode, splitLayers, swipeMode, is3D]);
+
+    const parseLayerSelection = (selectedIds) => {
+      const parsed = {};
+      if (!Array.isArray(selectedIds)) return parsed;
+      selectedIds.forEach(id => {
+        if (!id) return;
+        if (id.includes('_sub_')) {
+          const [pId, subId] = id.split('_sub_');
+          if (!parsed[pId]) parsed[pId] = { config: layersConfig.find(l => l.id === pId), subIds: [] };
+          else if (parsed[pId].subIds === null) parsed[pId].subIds = [];
+          parsed[pId].subIds.push(Number(subId));
+        } else {
+          if (!parsed[id]) parsed[id] = { config: layersConfig.find(l => l.id === id), subIds: null };
+          else parsed[id].subIds = null;
+        }
+      });
+      return parsed;
+    };
+
+    const leftParsed = parseLayerSelection(splitLayers.left);
+    const rightParsed = parseLayerSelection(splitLayers.right);
+
+    // Merge them to find all originals we need to hide
+    const allSelected = {};
+    Object.entries(leftParsed).forEach(([pId, data]) => {
+      if (!allSelected[pId]) allSelected[pId] = { config: data.config, subIds: data.subIds === null ? null : [...data.subIds] };
+      else if (allSelected[pId].subIds !== null) {
+         if (data.subIds === null) allSelected[pId].subIds = null;
+         else data.subIds.forEach(s => { if (!allSelected[pId].subIds.includes(s)) allSelected[pId].subIds.push(s); });
+      }
+    });
+    Object.entries(rightParsed).forEach(([pId, data]) => {
+      if (!allSelected[pId]) allSelected[pId] = { config: data.config, subIds: data.subIds === null ? null : [...data.subIds] };
+      else if (allSelected[pId].subIds !== null) {
+         if (data.subIds === null) allSelected[pId].subIds = null;
+         else data.subIds.forEach(s => { if (!allSelected[pId].subIds.includes(s)) allSelected[pId].subIds.push(s); });
+      }
+    });
+
+    // 1. Restore anything in swipeOriginalsHiddenRef that is NO LONGER selected
+    Object.entries(swipeOriginalsHiddenRef.current).forEach(([pId, data]) => {
+       const layer = view.map.findLayerById(pId) || (is3D ? layers3DRef.current[pId] : layersRef.current[pId]);
+       if (layer) {
+         if (!allSelected[pId]) {
+            syncSublayerVis(layer, pId, data.subIds, false);
+         } else if (data.subIds !== null && allSelected[pId].subIds !== null) {
+            // Restore only sublayers that were deselected
+            const toRestore = data.subIds.filter(s => !allSelected[pId].subIds.includes(s));
+            if (toRestore.length > 0) {
+               layer.load().then(() => {
+                 if (!layer.allSublayers) return;
+                 layer.allSublayers.forEach(sub => {
+                   if (!sub.sublayers && toRestore.includes(sub.id)) {
+                      sub.visible = getOriginalVisibility(pId, sub.id);
+                   }
+                 });
+               });
+            }
+         } else if (data.subIds === null && allSelected[pId].subIds !== null) {
+            syncSublayerVis(layer, pId, null, false);
+            // The subsequent hide pass will re-hide the ones that are still selected
+         }
+       }
+    });
+    swipeOriginalsHiddenRef.current = allSelected;
+
+    // 2. Hide the selected ones in the original layers so they don't render outside the swipe area
+    Object.entries(allSelected).forEach(([pId, data]) => {
+      const layer = view.map.findLayerById(pId) || (is3D ? layers3DRef.current[pId] : layersRef.current[pId]);
+      if (layer) syncSublayerVis(layer, pId, data.subIds, true);
+    });
+
+    // 3. Create or update clones for Swipe
+    const processSide = (parsedLayers, side) => {
+      const clones = [];
+      Object.entries(parsedLayers).forEach(([layerId, data]) => {
+        const { config, subIds } = data;
+        if (!config) return;
+        
+        const targetId = `${layerId}_swipe_${side}`;
+        let layer = view.map.findLayerById(targetId);
+        
+        if (!layer) {
+          if (config.type === 'tile') {
+            layer = new TileLayer({ id: targetId, url: config.url, title: config.title });
+          } else if (config.type === 'map-image') {
+            layer = new MapImageLayer({ id: targetId, url: config.url, title: config.title });
+          } else {
+            let layerUrl = config.url;
+            if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
+              layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
+            }
+            layer = new FeatureLayer({ id: targetId, url: layerUrl, title: config.title });
+          }
+          view.map.add(layer);
+          swipeManagedLayersRef.current.push(layer);
+        }
+        
+        layer.visible = true;
+        
+        if (layer.type === 'map-image') {
+          layer.load().then(() => {
+            if (!layer.allSublayers) return;
+            layer.allSublayers.forEach(sub => {
+              if (!sub.sublayers) {
+                sub.visible = subIds === null ? true : subIds.includes(sub.id);
+              } else {
+                sub.visible = true; // Keep groups visible
+              }
+            });
+          });
+        }
+        
+        clones.push(layer);
+      });
+      return clones;
+    };
+
+    const leftClones = processSide(leftParsed, 'left');
+    const rightClones = processSide(rightParsed, 'right');
+
+    // Remove any clones that are no longer needed
+    const neededCloneIds = [...leftClones, ...rightClones].map(l => l.id);
+    const toRemove = swipeManagedLayersRef.current.filter(l => !neededCloneIds.includes(l.id));
+    if (toRemove.length > 0) {
+       view.map.removeMany(toRemove);
+       swipeManagedLayersRef.current = swipeManagedLayersRef.current.filter(l => neededCloneIds.includes(l.id));
+    }
+
+    // 4. Update Swipe Widget with Basemaps
+    const setupSwipe = async () => {
+      if (isCancelled || view.destroyed || !isSplitMode) return;
+
+      let finalLeftClones = [...leftClones];
+      let finalRightClones = [...rightClones];
+
+      try {
+        const leftBm = Basemap.fromId(splitBasemaps?.left || 'streets-navigation-vector');
+        const rightBm = Basemap.fromId(splitBasemaps?.right || 'satellite');
+        await Promise.all([leftBm.load(), rightBm.load()]);
+        
+        if (isCancelled || view.destroyed || !isSplitMode) return;
+
+        const getBMLayers = (bm, side) => {
+          const layers = [...bm.baseLayers.toArray(), ...bm.referenceLayers.toArray()];
+          // Give them a unique ID suffix so they don't collide if both sides use the same basemap
+          layers.forEach((l, i) => {
+            l.id = `swipe_bm_${side}_${l.id || i}_${Date.now()}`;
+          });
+          return layers;
+        };
+
+        const leftBmClones = getBMLayers(leftBm, 'left');
+        const rightBmClones = getBMLayers(rightBm, 'right');
+
+        finalLeftClones = [...leftBmClones, ...leftClones];
+        finalRightClones = [...rightBmClones, ...rightClones];
+
+        view.map.addMany(rightBmClones, 0);
+        view.map.addMany(leftBmClones, 0);
+
+        swipeManagedLayersRef.current.push(...leftBmClones, ...rightBmClones);
+
+        if (view.map.basemap) {
+          view.map.basemap.baseLayers.forEach(l => l.visible = false);
+          view.map.basemap.referenceLayers.forEach(l => l.visible = false);
+        }
+      } catch(err) {
+        console.warn("[Swipe] Error loading basemaps:", err);
+      }
+
+      if (swipeRef.current) {
+        view.ui.remove(swipeRef.current);
+        swipeRef.current.destroy();
+        swipeRef.current = null;
+      }
+      
+      const swipe = new Swipe({
+        view: view,
+        leadingLayers: finalLeftClones,
+        trailingLayers: finalRightClones,
+        direction: swipeMode,
+        position: 50
+      });
+      
+      view.ui.add(swipe);
+      swipeRef.current = swipe;
+
+      swipe.watch("position", (val) => {
+        if (onSwipePositionChange) {
+          onSwipePositionChange({
+            position: val,
+            viewWidth: view.width,
+            viewHeight: view.height
+          });
+        }
+      });
+
+      if (onSwipePositionChange) {
+        onSwipePositionChange({
+          position: 50,
+          viewWidth: view.width,
+          viewHeight: view.height
+        });
+      }
+    };
+
+    view.when(() => setupSwipe());
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isSplitMode, splitLayers, splitBasemaps, swipeMode]);
 
   // 4b. Time Compare Swipe
   useEffect(() => {
@@ -529,57 +731,102 @@ const ArcGISMap = ({
   }, [isSplitView, timelapseSettings?.fromYear, timelapseSettings?.toYear, timelapseSettings?.layerId, timelapseSettings?.timeField, swipeMode, is3D]);
 
   // ============================================================
-  // BLEND TOOL FUNCTIONALITY (IMAGERY COMPARED TO BASEMAP)
+  // BLEND TOOL FUNCTIONALITY (ACTUAL GIS LAYER BLENDING)
   // ============================================================
-  const overlayBasemapRef = useRef(null);
+  const prevOverlayLayerIdRef = useRef(null);
+  const originalBlendStatesRef = useRef({});
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || activeTool !== 'blend') {
-      if (overlayBasemapRef.current) {
-        view.map.removeMany(overlayBasemapRef.current);
-        overlayBasemapRef.current = null;
-      }
-      return;
-    }
+    if (!view || !view.map) return;
 
-    const { overlayLayerId, blendMode, opacity } = blendSettings;
-
-    const applyBlend = async () => {
-      // 1. Clean up previous overlay
-      if (overlayBasemapRef.current) {
-        view.map.removeMany(overlayBasemapRef.current);
-        overlayBasemapRef.current = null;
-      }
-
-      // 2. Add new overlay
-      if (overlayLayerId) {
-        try {
-          const tempBasemap = new Basemap({ portalItem: { id: overlayLayerId } });
-          // If it's a standard ID, Basemap.fromId might be better, but we'll try direct id first
-          // or use the standard IDs from layersConfig/basemaps
-          const bm = Basemap.fromId(overlayLayerId) || new Basemap({ portalItem: { id: overlayLayerId } });
-          
-          await bm.load();
-          const layers = bm.baseLayers.toArray();
-          
-          layers.forEach(layer => {
-            layer.blendMode = blendMode || 'normal';
-            layer.opacity = opacity !== undefined ? opacity : 1;
-            view.map.add(layer);
-          });
-
-          overlayBasemapRef.current = layers;
-          if (view.requestRender) view.requestRender();
-          console.log(`[Blend] Applied overlay basemap ${overlayLayerId}: ${blendMode} | ${opacity}`);
-        } catch (err) {
-          console.error(`[Blend] Failed to load overlay basemap ${overlayLayerId}:`, err);
+    // Helper to restore a specific layer's original state
+    const restoreLayer = (id) => {
+      const state = originalBlendStatesRef.current[id];
+      if (state) {
+        let layer = view.map.findLayerById(state.parentId || id);
+        if (layer) {
+          layer.blendMode = state.blendMode;
+          layer.opacity = state.opacity;
         }
+        delete originalBlendStatesRef.current[id];
       }
     };
 
-    applyBlend();
-  }, [blendSettings, activeTool]);
+    // 1. Cleanup when tool is deactivated
+    if (activeTool !== 'blend') {
+       Object.keys(originalBlendStatesRef.current).forEach(id => restoreLayer(id));
+       prevOverlayLayerIdRef.current = null;
+       return;
+    }
+
+    const { overlayLayerId, blendMode, opacity, baseLayerId } = blendSettings;
+    
+    console.log(`[Blend] Basemap applied: ${baseLayerId || basemap}`);
+
+    // 2. If overlay layer changed, restore the old one
+    if (prevOverlayLayerIdRef.current && prevOverlayLayerIdRef.current !== overlayLayerId) {
+      restoreLayer(prevOverlayLayerIdRef.current);
+    }
+    prevOverlayLayerIdRef.current = overlayLayerId;
+
+    // 3. Apply blend to selected overlay layer
+    if (overlayLayerId) {
+      console.log(`[Blend] Selected overlay layer: ${overlayLayerId}`);
+      console.log(`[Blend] Blend mode: ${blendMode}`);
+      console.log(`[Blend] Opacity: ${opacity}`);
+
+      let targetLayer = null;
+      let parentLayer = null;
+
+      // Handle sublayers from MapImageLayer
+      if (overlayLayerId.includes('_sub_')) {
+        const [pId, subIdRaw] = overlayLayerId.split('_sub_');
+        parentLayer = view.map.findLayerById(pId);
+        if (parentLayer) {
+           targetLayer = parentLayer; // blendMode applies to the parent MapImageLayer
+           parentLayer.visible = true; // Ensure parent is visible
+           
+           const subId = Number(subIdRaw);
+           const sub = typeof parentLayer.findSublayerById === 'function' 
+                        ? parentLayer.findSublayerById(subId) 
+                        : (parentLayer.sublayers ? parentLayer.sublayers.find(s => s.id === subId || s.id === subIdRaw) : null);
+           
+           if (sub) sub.visible = true; // Ensure sublayer is visible
+        }
+      } else {
+        targetLayer = view.map.findLayerById(overlayLayerId);
+        if (targetLayer) {
+          targetLayer.visible = true;
+        }
+      }
+
+      if (targetLayer) {
+        // Save original state if we haven't modified this layer yet
+        if (!originalBlendStatesRef.current[overlayLayerId]) {
+           originalBlendStatesRef.current[overlayLayerId] = {
+             parentId: parentLayer ? parentLayer.id : null,
+             blendMode: targetLayer.blendMode || 'normal',
+             opacity: targetLayer.opacity !== undefined ? targetLayer.opacity : 1
+           };
+        }
+
+        // Apply new blend settings dynamically
+        targetLayer.blendMode = blendMode || 'normal';
+        targetLayer.opacity = opacity !== undefined ? opacity : 1;
+
+        // Bring the overlay layer to the very top so it renders above the basemap and other layers
+        view.map.reorder(targetLayer, view.map.layers.length - 1);
+        
+        if (view.requestRender) view.requestRender();
+      } else {
+        console.warn(`[Blend] Overlay layer '${overlayLayerId}' not found on the map.`);
+      }
+    } else {
+      // If no overlay is selected (e.g. after Reset button is clicked), restore all affected layers
+      Object.keys(originalBlendStatesRef.current).forEach(id => restoreLayer(id));
+    }
+  }, [blendSettings, activeTool, basemap]);
 
   // ============================================================
   // TEMPORAL FILTER ENGINE — True ArcGIS Time-Slider Behavior
@@ -974,6 +1221,343 @@ const ArcGISMap = ({
   }, [arcadeSettings?.lastRun]);
 
 
+  // ── Spatial Analysis Engine ──────────────────────────────────────────────
+  const spatialGraphicsLayer = useRef(new GraphicsLayer({ id: 'spatial-analysis-layer' }));
+  
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || activeTool !== 'spatial_analysis') {
+      if (spatialGraphicsLayer.current) spatialGraphicsLayer.current.removeAll();
+      return;
+    }
+
+    if (!view.map.findLayerById('spatial-analysis-layer')) {
+      view.map.add(spatialGraphicsLayer.current);
+    }
+  }, [activeTool]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !spatialSettings?.lastRun || activeTool !== 'spatial_analysis') return;
+
+    const runAnalysis = async () => {
+      const { subTool, layerId, bufferDistance, bufferUnit, lastRun } = spatialSettings;
+      if (!layerId || !lastRun) return;
+
+      try {
+        const unitMap = { 'meters': 'meters', 'kilometers': 'kilometers', 'miles': 'miles' };
+
+        const resolveLayer = async (lId) => {
+          if (!lId) return null;
+          let tLayer;
+          let tTitle = "Result";
+          if (lId.includes('_sub_')) {
+            const [parentId, subId] = lId.split('_sub_');
+            const parent = view.map.findLayerById(parentId);
+            if (parent && parent.type === 'map-image') {
+              const sub = parent.allSublayers?.find(s => s.id === parseInt(subId));
+              tTitle = sub ? sub.title : tTitle;
+              tLayer = new FeatureLayer({ url: `${parent.url}/${subId}` });
+              await tLayer.load();
+            }
+          } else {
+            tLayer = view.map.findLayerById(lId);
+            if (tLayer) tTitle = tLayer.title || tTitle;
+          }
+          return { layer: tLayer, title: tTitle };
+        };
+
+        const targetInfo = await resolveLayer(layerId);
+        if (!targetInfo || !targetInfo.layer) {
+          console.warn('Spatial Analysis: Target layer not found', layerId);
+          return;
+        }
+        const targetLayer = targetInfo.layer;
+        const title = targetInfo.title;
+
+        let secondaryLayer = null;
+        let secondaryTitle = "";
+        if (['Select by Location', 'Overlay (Intersect)'].includes(subTool)) {
+          const secInfo = await resolveLayer(spatialSettings.secondaryLayerId);
+          if (!secInfo || !secInfo.layer) {
+            console.warn('Spatial Analysis: Secondary layer required but not found');
+            return;
+          }
+          secondaryLayer = secInfo.layer;
+          secondaryTitle = secInfo.title;
+        }
+
+        if (subTool === 'Buffer Analysis') {
+          const query = targetLayer.createQuery();
+          query.where = '1=1';
+          query.outSpatialReference = view.spatialReference;
+          query.returnGeometry = true;
+          query.num = 200; // Limit for performance
+          
+          const results = await targetLayer.queryFeatures(query);
+          const features = results.features;
+          if (features.length === 0) return;
+
+          const geometries = features.map(f => f.geometry);
+          const unit = unitMap[bufferUnit] || 'meters';
+          
+          const bufferedGeometries = geometryEngine.buffer(geometries, bufferDistance, unit);
+          
+          let fullExtent = null;
+          const fillSymbol = { type: "simple-fill", color: [38, 143, 255, 0.4], outline: { color: [38, 143, 255, 1], width: 2, style: "dash" } };
+
+          bufferedGeometries.forEach((geom) => {
+            if (!geom) return;
+            const graphic = new Graphic({
+              geometry: geom, symbol: fillSymbol,
+              attributes: { title: `${bufferDistance} ${unit} Buffer`, runId: lastRun }
+            });
+            spatialGraphicsLayer.current.add(graphic);
+            if (fullExtent) fullExtent = fullExtent.union(geom.extent);
+            else fullExtent = geom.extent.clone();
+          });
+
+          if (fullExtent) view.goTo({ target: fullExtent.expand(1.2) });
+          if (typeof onSpatialResult === 'function') {
+             onSpatialResult({ id: lastRun, title: `${title} - Buffer`, count: features.length, distance: bufferDistance, unit: unit });
+          }
+        } 
+        else if (subTool === 'Select by Location' || subTool === 'Overlay (Intersect)') {
+          const secQuery = secondaryLayer.createQuery();
+          secQuery.where = '1=1';
+          secQuery.returnGeometry = true;
+          secQuery.outSpatialReference = view.spatialReference;
+          const secResults = await secondaryLayer.queryFeatures(secQuery);
+          if (!secResults || secResults.features.length === 0) return;
+          
+          const secGeometries = secResults.features.map(f => f.geometry).filter(Boolean);
+          if (secGeometries.length === 0) return;
+          
+          let unionedSecGeometry = secGeometries[0];
+          if (secGeometries.length > 1) {
+            unionedSecGeometry = geometryEngine.union(secGeometries);
+          }
+          
+          if (!unionedSecGeometry) return;
+
+          const tQuery = targetLayer.createQuery();
+          tQuery.where = '1=1';
+          tQuery.returnGeometry = true;
+          tQuery.outSpatialReference = view.spatialReference;
+          
+          // For Select by Location, we can do the heavy lifting on the server if supported
+          if (subTool === 'Select by Location') {
+             tQuery.geometry = unionedSecGeometry;
+             tQuery.spatialRelationship = 'intersects';
+          }
+          
+          const tResults = await targetLayer.queryFeatures(tQuery);
+          if (!tResults || tResults.features.length === 0) {
+            if (typeof onSpatialResult === 'function') {
+               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle} (No Match)`, count: 0 });
+            }
+            return;
+          }
+
+          let fullExtent = null;
+          let resultCount = 0;
+          const color = subTool === 'Select by Location' ? [255, 193, 7] : [40, 167, 69];
+          const fillSymbol = { type: "simple-fill", color: [color[0], color[1], color[2], 0.4], outline: { color: [color[0], color[1], color[2], 1], width: 2 } };
+          const pointSymbol = { type: "simple-marker", color: [color[0], color[1], color[2], 0.8], size: 8, outline: { color: [color[0], color[1], color[2], 1], width: 1 } };
+          const lineSymbol = { type: "simple-line", color: [color[0], color[1], color[2], 1], width: 3 };
+
+          tResults.features.forEach(f => {
+            if (!f.geometry) return;
+            let resultGeom = null;
+            if (subTool === 'Select by Location') {
+              resultGeom = f.geometry; // Already filtered by server
+            } else {
+              resultGeom = geometryEngine.intersect(f.geometry, unionedSecGeometry);
+            }
+
+            if (resultGeom) {
+               resultCount++;
+               let symbol = fillSymbol;
+               if (resultGeom.type === 'point' || resultGeom.type === 'multipoint') symbol = pointSymbol;
+               else if (resultGeom.type === 'polyline') symbol = lineSymbol;
+               
+               const graphic = new Graphic({
+                 geometry: resultGeom, symbol: symbol,
+                 attributes: { ...f.attributes, title: `${subTool} Result`, runId: lastRun }
+               });
+               spatialGraphicsLayer.current.add(graphic);
+               
+               if (fullExtent && resultGeom.extent) fullExtent = fullExtent.union(resultGeom.extent);
+               else if (resultGeom.extent) fullExtent = resultGeom.extent.clone();
+            }
+          });
+
+          if (resultCount > 0) {
+            if (fullExtent) view.goTo({ target: fullExtent.expand(1.2) });
+            if (typeof onSpatialResult === 'function') {
+               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle}`, count: resultCount });
+            }
+          } else {
+            if (typeof onSpatialResult === 'function') {
+               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle} (No Overlap)`, count: 0 });
+            }
+          }
+        }
+        else if (subTool === 'Heatmap Density') {
+          const query = targetLayer.createQuery();
+          query.where = '1=1';
+          query.outSpatialReference = view.spatialReference;
+          query.returnGeometry = true;
+          const results = await targetLayer.queryFeatures(query);
+          const features = results.features;
+          if (features.length === 0) return;
+
+          // Only points make sense for heatmaps
+          const pointFeatures = features.filter(f => f.geometry && (f.geometry.type === 'point' || f.geometry.type === 'multipoint'));
+          if (pointFeatures.length === 0) {
+            console.warn("Heatmap requires point features.");
+            return;
+          }
+
+          // Add invisible graphics so export works
+          pointFeatures.forEach(f => {
+             const graphic = new Graphic({
+               geometry: f.geometry,
+               symbol: { type: "simple-marker", color: [0,0,0,0], outline: { width: 0 } },
+               attributes: { ...f.attributes, title: `Heatmap Point`, runId: lastRun }
+             });
+             graphic.visible = false;
+             spatialGraphicsLayer.current.add(graphic);
+          });
+
+          // Create actual FeatureLayer for heatmap renderer
+          const heatmapRenderer = {
+            type: "heatmap",
+            colorStops: [
+              { color: "rgba(63, 40, 102, 0)", ratio: 0 },
+              { color: "#472b77", ratio: 0.083 },
+              { color: "#4e2d87", ratio: 0.166 },
+              { color: "#563098", ratio: 0.25 },
+              { color: "#5d32a8", ratio: 0.333 },
+              { color: "#6735be", ratio: 0.416 },
+              { color: "#7139d4", ratio: 0.5 },
+              { color: "#7b3ce9", ratio: 0.583 },
+              { color: "#853fff", ratio: 0.666 },
+              { color: "#a46fbf", ratio: 0.75 },
+              { color: "#c29f80", ratio: 0.833 },
+              { color: "#e0cf40", ratio: 0.916 },
+              { color: "#ffff00", ratio: 1 }
+            ],
+            maxPixelIntensity: 100,
+            minPixelIntensity: 0
+          };
+
+          const heatmapLayer = new FeatureLayer({
+            id: `heatmap-${lastRun}`,
+            title: `Heatmap: ${title}`,
+            source: pointFeatures.map((f, i) => new Graphic({ geometry: f.geometry, attributes: { ObjectID: i } })),
+            objectIdField: "ObjectID",
+            geometryType: "point",
+            spatialReference: view.spatialReference,
+            fields: [{ name: "ObjectID", alias: "ObjectID", type: "oid" }],
+            renderer: heatmapRenderer
+          });
+
+          view.map.add(heatmapLayer);
+          
+          let fullExtent = null;
+          pointFeatures.forEach(f => {
+            if (fullExtent) fullExtent = fullExtent.union(f.geometry.extent || f.geometry);
+            else fullExtent = (f.geometry.extent || f.geometry).clone();
+          });
+          
+          if (fullExtent) {
+            // Point extents are null, so we must calculate an extent around points
+            const xs = pointFeatures.map(f => f.geometry.x);
+            const ys = pointFeatures.map(f => f.geometry.y);
+            fullExtent = {
+              xmin: Math.min(...xs), ymin: Math.min(...ys),
+              xmax: Math.max(...xs), ymax: Math.max(...ys),
+              spatialReference: view.spatialReference
+            };
+            view.goTo({ target: fullExtent });
+          }
+
+          if (typeof onSpatialResult === 'function') {
+             onSpatialResult({ id: lastRun, title: `${title} - Heatmap`, count: pointFeatures.length });
+          }
+        }
+        else if (subTool === 'Proximity (Nearest)') {
+           view.cursor = 'crosshair';
+           view.once('click', async (event) => {
+             view.cursor = 'default';
+             const clickGeom = event.mapPoint;
+
+             const query = targetLayer.createQuery();
+             query.where = '1=1';
+             query.returnGeometry = true;
+             query.outSpatialReference = view.spatialReference;
+             const results = await targetLayer.queryFeatures(query);
+             const features = results.features;
+             if (features.length === 0) return;
+
+             let nearestDist = Infinity;
+             let nearestFeature = null;
+
+             features.forEach(f => {
+               if (!f.geometry) return;
+               const dist = geometryEngine.distance(clickGeom, f.geometry, "meters");
+               if (dist < nearestDist) {
+                 nearestDist = dist;
+                 nearestFeature = f;
+               }
+             });
+
+             if (nearestFeature) {
+               const centerX = nearestFeature.geometry.extent ? nearestFeature.geometry.extent.center.x : (nearestFeature.geometry.x || nearestFeature.geometry.longitude);
+               const centerY = nearestFeature.geometry.extent ? nearestFeature.geometry.extent.center.y : (nearestFeature.geometry.y || nearestFeature.geometry.latitude);
+               const lineGeom = {
+                 type: "polyline",
+                 paths: [[[clickGeom.x, clickGeom.y], [centerX, centerY]]],
+                 spatialReference: view.spatialReference
+               };
+
+               const lineGraphic = new Graphic({
+                 geometry: lineGeom,
+                 symbol: { type: "simple-line", color: [220, 53, 69, 1], width: 2, style: "dash" },
+                 attributes: { title: "Distance Line", runId: lastRun }
+               });
+
+               const featureGraphic = new Graphic({
+                 geometry: nearestFeature.geometry,
+                 symbol: { type: "simple-fill", color: [220, 53, 69, 0.4], outline: { color: [220, 53, 69, 1], width: 2 } },
+                 attributes: { ...nearestFeature.attributes, title: `Nearest Feature`, runId: lastRun }
+               });
+               
+               if (nearestFeature.geometry.type === 'point' || nearestFeature.geometry.type === 'multipoint') {
+                 featureGraphic.symbol = { type: "simple-marker", color: [220, 53, 69, 0.8], size: 10, outline: { color: [220, 53, 69, 1], width: 1 } };
+               } else if (nearestFeature.geometry.type === 'polyline') {
+                 featureGraphic.symbol = { type: "simple-line", color: [220, 53, 69, 1], width: 3 };
+               }
+
+               spatialGraphicsLayer.current.addMany([lineGraphic, featureGraphic]);
+               view.goTo([featureGraphic, lineGraphic]);
+
+               if (typeof onSpatialResult === 'function') {
+                  onSpatialResult({ id: lastRun, title: `${title} - Nearest`, count: 1, distanceResult: `${nearestDist.toFixed(2)} m` });
+               }
+             }
+           });
+        }
+      } catch (err) {
+        console.error('Spatial Analysis run error:', err);
+      }
+    };
+    
+    runAnalysis();
+  }, [spatialSettings?.lastRun]);
+
+
   // Identify Logic
   const identifyGraphicsLayer = useRef(new GraphicsLayer({ id: 'identify-highlights' }));
   const sketchLayer = useRef(new GraphicsLayer({ id: 'identify-sketch-layer' }));
@@ -1033,7 +1617,7 @@ const ArcGISMap = ({
       const results = { total: 0, grouped: {} };
       identifyGraphicsLayer.current.removeAll();
 
-      // Determine which layers to query
+      // ── 1. Build list of configured service layers to query ──────────
       const layersToQuery = [];
       layersConfig.forEach(config => {
         const layer = layersRef.current[config.id];
@@ -1050,7 +1634,6 @@ const ArcGISMap = ({
             });
           }
         } else {
-          // Specific layer selected
           if (identifySettings.selectedLayerId === config.id && layer.type === 'feature') {
             layersToQuery.push({ layer, title: config.title, config });
           } else if (layer.type === 'map-image' && identifySettings.selectedLayerId.startsWith(config.id)) {
@@ -1064,70 +1647,142 @@ const ArcGISMap = ({
         }
       });
 
+      // ── 2. Scan for uploaded client-side layers ───────────────────────
+      // System layers that should never be queried
+      const SYSTEM_IDS = new Set([
+        'identify-highlights', 'identify-sketch-layer',
+        'data-request-aoi-layer', 'data-request-final-layer',
+        'graphics-layer-draw', 'graphicsLayer'
+      ]);
+      const uploadedGraphicsLayers = []; // GraphicsLayer (Excel) — queried with geometryEngine
+
+      view.map.allLayers.forEach(layer => {
+        if (SYSTEM_IDS.has(layer.id)) return;
+        if (!layer.id?.startsWith('uploaded-')) return;
+
+        // Respect visibility
+        const isVisible = Object.prototype.hasOwnProperty.call(layerVisibility, layer.id)
+          ? layerVisibility[layer.id]
+          : layer.visible;
+        if (!isVisible) return;
+
+        const queryAll = identifySettings.selectedLayerId === 'all';
+        const isTargeted = identifySettings.selectedLayerId === layer.id;
+        if (!queryAll && !isTargeted) return;
+
+        if (layer.type === 'graphics') {
+          uploadedGraphicsLayers.push(layer);
+        } else if (layer.type === 'geojson' || layer.type === 'csv') {
+          // GeoJSONLayer / CSVLayer support queryFeatures natively
+          layersToQuery.push({
+            layer,
+            title: layer.title || layer.id,
+            isUploaded: true,
+            config: { id: layer.id, url: null }
+          });
+        }
+      });
+
+      // ── 3. Execute queryFeatures on all collected layers ─────────────
       await Promise.all(layersToQuery.map(async (item) => {
         try {
           let response;
           let fieldsInfo = [];
-          
+
           if (!item.layer.queryFeatures) {
-            // It is a Sublayer (from MapImageLayer). Query via a temporary FeatureLayer.
+            // MapImageLayer sublayer → query via temp FeatureLayer
             const url = `${item.config.url}/${item.layer.id}`;
             const tempLayer = new FeatureLayer({ url });
             await tempLayer.load();
-            response = await tempLayer.queryFeatures({ 
-              geometry, 
-              spatialRelationship: 'intersects', 
-              outFields: ['*'], 
-              returnGeometry: true 
+            response = await tempLayer.queryFeatures({
+              geometry,
+              spatialRelationship: 'intersects',
+              outFields: ['*'],
+              returnGeometry: true
             });
-            fieldsInfo = tempLayer.fields ? tempLayer.fields.map(field => ({
-              name: field.name,
-              alias: field.alias || field.name,
-              type: field.type
+            fieldsInfo = tempLayer.fields ? tempLayer.fields.map(f => ({
+              name: f.name, alias: f.alias || f.name, type: f.type
             })) : [];
           } else {
-            // Standard FeatureLayer
-            response = await item.layer.queryFeatures({ 
-              geometry, 
-              spatialRelationship: 'intersects', 
-              outFields: ['*'], 
-              returnGeometry: true 
+            response = await item.layer.queryFeatures({
+              geometry,
+              spatialRelationship: 'intersects',
+              outFields: ['*'],
+              returnGeometry: true
             });
-            fieldsInfo = item.layer.fields ? item.layer.fields.map(field => ({
-              name: field.name,
-              alias: field.alias || field.name,
-              type: field.type
+            fieldsInfo = item.layer.fields ? item.layer.fields.map(f => ({
+              name: f.name, alias: f.alias || f.name, type: f.type
             })) : [];
           }
 
           if (response.features.length > 0) {
             results.total += response.features.length;
-            results.grouped[item.title] = response.features.map(f => ({ 
+            results.grouped[item.title] = response.features.map(f => ({
               attributes: f.attributes,
               geometry: f.geometry,
               layerId: item.config.id,
               layerTitle: item.title,
-              displayField: item.layer.displayField || 'OBJECTID',
+              displayField: item.layer.displayField || Object.keys(f.attributes || {})[0] || 'Feature',
               fields: fieldsInfo
             }));
 
             response.features.forEach(f => {
-              const highlightSymbol = f.geometry.type === 'point' 
-                ? { type: "simple-marker", style: "circle", color: [0, 255, 255, 0.4], outline: { color: "cyan", width: 2 } }
-                : { type: "simple-fill", color: [0, 255, 255, 0.1], outline: { color: "cyan", width: 2 } };
-
+              const isPoint = f.geometry?.type === 'point';
               identifyGraphicsLayer.current.add(new Graphic({
                 geometry: f.geometry,
-                symbol: highlightSymbol
+                symbol: isPoint
+                  ? { type: 'simple-marker', style: 'circle', color: [0, 255, 255, 0.4], outline: { color: 'cyan', width: 2 } }
+                  : { type: 'simple-fill', color: [0, 255, 255, 0.1], outline: { color: 'cyan', width: 2 } }
               }));
             });
           }
         } catch (err) {
-          console.warn(`Query failed for layer ${item.title}:`, err);
+          console.warn(`[Identify] Query failed for "${item.title}":`, err.message);
         }
       }));
+
+      // ── 4. Spatial match for GraphicsLayer (Excel uploads) ───────────
+      for (const glayer of uploadedGraphicsLayers) {
+        const matched = [];
+        glayer.graphics.forEach(g => {
+          if (!g.geometry || g.visible === false) return;
+          try {
+            if (
+              geometryEngine.intersects(geometry, g.geometry) ||
+              geometryEngine.contains(geometry, g.geometry)
+            ) {
+              matched.push(g);
+            }
+          } catch (_) {}
+        });
+
+        if (matched.length > 0) {
+          const layerTitle = glayer.title || glayer.id;
+          results.total += matched.length;
+          const sampleAttrs = matched[0].attributes || {};
+          const fieldsInfo = Object.keys(sampleAttrs).map(k => ({ name: k, alias: k, type: 'string' }));
+
+          results.grouped[layerTitle] = matched.map(g => ({
+            attributes: g.attributes || {},
+            geometry: g.geometry,
+            layerId: glayer.id,
+            layerTitle,
+            displayField: Object.keys(g.attributes || {})[0] || 'Feature',
+            fields: fieldsInfo
+          }));
+
+          matched.forEach(g => {
+            identifyGraphicsLayer.current.add(new Graphic({
+              geometry: g.geometry,
+              symbol: { type: 'simple-marker', style: 'circle', color: [0, 255, 255, 0.4], outline: { color: 'cyan', width: 2 } }
+            }));
+          });
+        }
+      }
+
       onIdentifyResults(results);
     };
+
 
     performQueryRef.current = performQuery;
 
@@ -1152,42 +1807,149 @@ const ArcGISMap = ({
 
   useEffect(() => {
     const view = viewRef.current;
+
+    console.log('[DataRequest] Effect run →', { activeTool, dataRequestStep, dataRequestDrawingTool, hasView: !!view });
+
+    // Cancel and bail when not in data_request mode
     if (!view || activeTool !== 'data_request') {
-      if (dataRequestSketchVM.current) dataRequestSketchVM.current.cancel();
+      console.log('[DataRequest] Bailing – not active or no view');
+      if (dataRequestSketchVM.current) {
+        try { dataRequestSketchVM.current.cancel(); } catch (e) {}
+      }
       return;
     }
 
-    // Ensure graphics layers are added to the map
+    // Ensure graphics layers are on the map
     if (!view.map.findLayerById('data-request-aoi-layer')) {
       view.map.add(dataRequestLayer.current);
+      console.log('[DataRequest] AOI layer added to map');
     }
     if (!view.map.findLayerById('data-request-final-layer')) {
       view.map.add(dataRequestFinalLayer.current);
     }
 
+    // Wait for a specific tool to be selected before starting
+    if (dataRequestStep !== 'drawing' || !dataRequestDrawingTool) {
+      console.log('[DataRequest] Waiting for tool selection (step=' + dataRequestStep + ', tool=' + dataRequestDrawingTool + ')');
+      if (dataRequestSketchVM.current) {
+        try { dataRequestSketchVM.current.cancel(); } catch (e) {}
+      }
+      return;
+    }
+
+    const capturedTool = dataRequestDrawingTool;
+    console.log('[DataRequest] ✅ Starting sketch, tool:', capturedTool);
+
+    const getIntersectingLayers = async (geometry) => {
+      const intersecting = [];
+      for (const config of layersConfig) {
+        const layer = layersRef.current[config.id];
+        if (!layer) continue;
+        try {
+          if (layer.type === 'feature') {
+            const q = layer.createQuery();
+            q.geometry = geometry;
+            q.spatialRelationship = 'intersects';
+            const count = await layer.queryFeatureCount(q);
+            if (count > 0) intersecting.push({ id: config.id, title: config.title });
+          } else if (layer.type === 'map-image' && layer.allSublayers) {
+            let hit = false;
+            for (const sub of layer.allSublayers.toArray()) {
+              if (sub.sublayers) continue;
+              try {
+                const q = sub.createQuery();
+                q.geometry = geometry;
+                q.spatialRelationship = 'intersects';
+                const count = await sub.queryFeatureCount(q);
+                if (count > 0) {
+                  intersecting.push({ id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` });
+                  hit = true;
+                }
+              } catch (e) {
+                if (sub.fullExtent && geometryEngine.intersects(geometry, sub.fullExtent)) {
+                  intersecting.push({ id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` });
+                  hit = true;
+                }
+              }
+            }
+            if (!hit && layer.fullExtent && geometryEngine.intersects(geometry, layer.fullExtent)) {
+              intersecting.push({ id: config.id, title: config.title });
+            }
+          }
+        } catch (err) {
+          console.warn(`[DataRequest] ${config.title}:`, err);
+        }
+      }
+      try {
+        view.map.allLayers.forEach(ul => {
+          if (!ul.id?.startsWith('uploaded-')) return;
+          if (ul.type === 'graphics') {
+            let h = false;
+            ul.graphics.forEach(g => { if (g.geometry && geometryEngine.intersects(geometry, g.geometry)) h = true; });
+            if (h) intersecting.push({ id: ul.id, title: ul.title || ul.id });
+          }
+        });
+      } catch (e) { /* ignore */ }
+      return intersecting;
+    };
+
+    // ── Mirror Identify pattern: create-once / reuse ──────────────────────────
+    const fillSymbol = {
+      type: 'simple-fill',
+      color: [223, 38, 28, 0.1],
+      outline: { color: '#df261c', width: 2, style: 'dash' }
+    };
+
     if (!dataRequestSketchVM.current) {
+      console.log('[DataRequest] Creating SketchViewModel for first time');
       dataRequestSketchVM.current = new SketchViewModel({
-        view: view,
+        view,
         layer: dataRequestLayer.current,
-        polygonSymbol: { type: "simple-fill", color: [223, 38, 28, 0.1], outline: { color: "#df261c", width: 2, style: "dash" } }
+        updateOnGraphicClick: false,
+        polygonSymbol: fillSymbol,
+        rectangleSymbol: fillSymbol,
+        circleSymbol: fillSymbol
       });
-      dataRequestSketchVM.current.on('create', (event) => {
+
+      dataRequestSketchVM.current.on('create', async (event) => {
+        console.log('[DataRequest] create event state:', event.state);
         if (event.state === 'complete') {
           const geometry = event.graphic.geometry;
-          onDataRequestAOIChange(geometry, [], true);
-          dataRequestFinalLayer.current.add(event.graphic.clone());
           dataRequestLayer.current.removeAll();
+          const finalGraphic = event.graphic.clone();
+          finalGraphic.symbol = {
+            type: 'simple-fill',
+            color: [223, 38, 28, 0.15],
+            outline: { color: '#df261c', width: 2 }
+          };
+          dataRequestFinalLayer.current.removeAll();
+          dataRequestFinalLayer.current.add(finalGraphic);
+          view.cursor = 'default';
+          const layers = await getIntersectingLayers(geometry);
+          console.log('[DataRequest] Intersecting layers found:', layers.length, layers);
+          onDataRequestAOIChange(geometry, layers, true);
         }
       });
     } else {
+      console.log('[DataRequest] Reusing existing SketchViewModel');
       dataRequestSketchVM.current.view = view;
     }
-    dataRequestSketchVM.current.create(dataRequestDrawingTool || 'polygon');
+
+    dataRequestLayer.current.removeAll();
+    view.cursor = 'crosshair'; // Visual feedback identical to Identify tool
+
+    console.log('[DataRequest] Calling create() | VM state before:', dataRequestSketchVM.current.state);
+    dataRequestSketchVM.current.create(capturedTool);
+    console.log('[DataRequest] create() called | VM state after:', dataRequestSketchVM.current.state);
 
     return () => {
-      if (dataRequestSketchVM.current) dataRequestSketchVM.current.cancel();
+      console.log('[DataRequest] Cleanup – cancelling VM');
+      if (dataRequestSketchVM.current) {
+        try { dataRequestSketchVM.current.cancel(); } catch (e) {}
+      }
+      view.cursor = 'default';
     };
-  }, [activeTool, dataRequestDrawingTool]);
+  }, [activeTool, dataRequestDrawingTool, dataRequestStep]);
 
   return (
     <div style={{ height: '100%', width: '100%', position: 'relative' }}>

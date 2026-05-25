@@ -163,6 +163,11 @@
   pointer-events: none;
 }
 
+[dir="rtl"] .select-arrow {
+  right: auto;
+  left: 12px;
+}
+
 /* Results Card */
 .results-card {
   background: white;

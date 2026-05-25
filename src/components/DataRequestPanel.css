@@ -433,3 +433,34 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── RTL Style Support for Arabic Mode ── */
+.data-request-panel.rtl {
+  text-align: right;
+}
+
+.data-request-panel.rtl .form-group label {
+  text-align: right;
+}
+
+.data-request-panel.rtl .instruction-text {
+  text-align: right;
+}
+
+.data-request-panel.rtl .history-card-desc {
+  text-align: right;
+}
+
+.data-request-panel.rtl .step-footer-right {
+  flex-direction: row;
+  justify-content: flex-end; /* Aligns buttons to the left side in RTL */
+}
+
+.data-request-panel.rtl .dataset-item {
+  flex-direction: row;
+}
+
+.data-request-panel.rtl .form-input,
+.data-request-panel.rtl .tool-textarea {
+  text-align: right;
+}

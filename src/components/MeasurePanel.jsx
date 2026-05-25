@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { 
   Ruler, 
   Square, 
@@ -33,6 +34,7 @@ const DISTANCE_UNITS = [
 ];
 
 const MeasurePanel = ({ view }) => {
+  const { t, lang } = useLanguage();
   const [activeMode, setActiveMode] = useState(null); // 'area', 'distance'
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [results, setResults] = useState(null);
@@ -175,7 +177,7 @@ const MeasurePanel = ({ view }) => {
   };
 
   return (
-    <div className="measure-panel-wrapper">
+    <div className="measure-panel-wrapper" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
       {/* Fixed Header Tools */}
       <div className="measure-header-tools">
         <div className="measure-mode-grid">
@@ -184,21 +186,21 @@ const MeasurePanel = ({ view }) => {
             onClick={() => handleModeChange('area')}
           >
             <div className="card-icon"><Square size={20} /></div>
-            <span>Area</span>
+            <span>{t('measureArea')}</span>
           </button>
           <button 
             className={`measure-card ${activeMode === 'distance' ? 'active' : ''}`}
             onClick={() => handleModeChange('distance')}
           >
             <div className="card-icon"><Ruler size={20} /></div>
-            <span>Distance</span>
+            <span>{t('measureDistance')}</span>
           </button>
           <button 
             className="measure-card reset"
             onClick={() => handleModeChange('reset')}
           >
             <div className="card-icon"><RotateCcw size={20} /></div>
-            <span>Reset</span>
+            <span>{t('measureReset')}</span>
           </button>
         </div>
       </div>
@@ -214,12 +216,13 @@ const MeasurePanel = ({ view }) => {
             >
               {/* Coordinate System */}
               <div className="measure-section">
-                <label className="section-label">Coordinate System</label>
+                <label className="section-label">{t('measureCoordSystem')}</label>
                 <div className="unit-select-wrapper">
                   <select 
                     className="measure-select"
                     value={wkid}
                     onChange={(e) => setWkid(e.target.value)}
+                    dir="ltr"
                   >
                     <option value="4326">WKID: 4326 Lat Long</option>
                     <option value="20439">WKID: 20439 UTM 39N</option>
@@ -232,7 +235,7 @@ const MeasurePanel = ({ view }) => {
 
               {/* Unit Selection */}
               <div className="measure-section">
-                <label className="section-label">{activeMode === 'area' ? 'Area Unit' : 'Distance Unit'}</label>
+                <label className="section-label">{activeMode === 'area' ? t('measureAreaUnit') : t('measureDistUnit')}</label>
                 <div className="unit-select-wrapper">
                   <select 
                     className="measure-select"
@@ -243,6 +246,7 @@ const MeasurePanel = ({ view }) => {
                         calculateMeasurements(graphicsLayerRef.current.graphics.getItemAt(0));
                       }
                     }}
+                    dir="ltr"
                   >
                     {(activeMode === 'area' ? AREA_UNITS : DISTANCE_UNITS).map(u => (
                       <option key={u.id} value={u.unit}>{u.label}</option>
@@ -254,20 +258,20 @@ const MeasurePanel = ({ view }) => {
 
               {/* Results Display */}
               <div className="results-card">
-                <span className="section-label">Results</span>
+                <span className="section-label">{t('measureResults')}</span>
                 <div className="results-list">
                   {activeMode === 'area' ? (
                     <>
                       <div className="result-item">
-                        <span className="res-label">Area</span>
-                        <span className="res-value">
+                        <span className="res-label">{t('measureArea')}</span>
+                        <span className="res-value" dir="ltr">
                           {results ? results.area.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'} 
                           <span className="res-unit"> {getUnitShortLabel(selectedUnit)}²</span>
                         </span>
                       </div>
                       <div className="result-item">
-                        <span className="res-label">Perimeter</span>
-                        <span className="res-value">
+                        <span className="res-label">{t('measurePerimeter')}</span>
+                        <span className="res-value" dir="ltr">
                           {results ? results.perimeter.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'} 
                           <span className="res-unit"> m</span>
                         </span>
@@ -275,8 +279,8 @@ const MeasurePanel = ({ view }) => {
                     </>
                   ) : (
                     <div className="result-item">
-                      <span className="res-label">Total Distance</span>
-                      <span className="res-value">
+                      <span className="res-label">{t('measureTotalDist')}</span>
+                      <span className="res-value" dir="ltr">
                         {results ? results.distance.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'} 
                         <span className="res-unit"> {getUnitShortLabel(selectedUnit)}</span>
                       </span>
@@ -300,7 +304,7 @@ const MeasurePanel = ({ view }) => {
               className="measure-footer-content"
             >
               <button className="new-measure-btn" onClick={handleNewMeasurement}>
-                New Measurement
+                {t('measureNew')}
               </button>
             </motion.div>
           )}

@@ -316,6 +316,11 @@
   padding: 0 12px !important;
 }
 
+[dir="rtl"] .tool-select {
+  background-position: left 12px center !important;
+  padding: 0 12px 0 40px !important;
+}
+
 .tool-select:focus, .tool-input:focus {
   outline: none !important;
   border: none !important;
@@ -717,7 +722,7 @@
 
 /* Identify Tool Styles */
 .identify-modes-grid {
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .identify-mode-card {
@@ -1134,7 +1139,7 @@
 
 .split-basemap-popup {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   right: 0;
   margin-top: 8px;
   width: 180px;
@@ -1144,7 +1149,7 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
   padding: 6px;
   z-index: 100;
-  animation: slideDownFade 0.2s ease-out;
+  animation: slideUpFade 0.2s ease-out;
 }
 
 @keyframes slideDownFade {
@@ -2758,4 +2763,27 @@
 .layer-tree-container.drag-over > .layer-card,
 .tree-row.drag-over {
   background: rgba(30, 60, 114, 0.04);
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* RTL Overrides for Layer Panel */
+[dir="rtl"] .layer-card-main,
+[dir="rtl"] .tree-row {
+  padding-right: 8px !important;
+  padding-left: 36px !important;
+}
+
+[dir="rtl"] .layer-card-more,
+[dir="rtl"] .tree-row .layer-card-more {
+  right: auto !important;
+  left: 6px !important;
+}
+
+[dir="rtl"] .layer-row-content {
+  padding-right: 0 !important;
+  padding-left: 10px !important;
 }

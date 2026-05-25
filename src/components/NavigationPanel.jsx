@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { 
   Navigation as NavIcon, 
   MapPin, 
@@ -25,6 +26,7 @@ import * as projection from '@arcgis/core/geometry/projectionUtils';
 import './NavigationPanel.css';
 
 const NavigationPanel = ({ view }) => {
+  const { t, lang } = useLanguage();
   const [scaleValue, setScaleValue] = useState('');
   const [isCapturing, setIsCapturing] = useState(false);
   const [manualLat, setManualLat] = useState('');
@@ -116,7 +118,7 @@ const NavigationPanel = ({ view }) => {
     const rawValue = scaleValue.replace('1:', '').trim();
     const scale = parseFloat(rawValue);
     if (isNaN(scale) || scale <= 0) {
-      setError('Please enter a valid positive scale value.');
+      setError(t('navInvalidScale'));
       return;
     }
     setError('');
@@ -149,22 +151,23 @@ const NavigationPanel = ({ view }) => {
   const systems = ['WGS84', 'Web Mercator', 'UTM 39N', 'EPSG:20439'];
 
   return (
-    <div className="nav-panel-wrapper">
+    <div className="nav-panel-wrapper" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
       <div className="nav-content-scroll">
         {/* Section 1: Zoom to Scale */}
         <div className="nav-card-section">
           <div className="section-header">
             <Maximize size={16} className="section-icon" />
-            <h3 className="section-title">Zoom to Scale</h3>
+            <h3 className="section-title">{t('navZoomToScale')}</h3>
           </div>
           
           <div className="scale-input-row">
             <input 
               type="text" 
               className="tool-input scale-input-field"
-              placeholder="e.g. 1000 or 1:1000"
+              placeholder={t('navScalePlaceholder')}
               value={scaleValue}
               onChange={(e) => setScaleValue(e.target.value)}
+              dir="ltr"
             />
             <button 
               className="zoom-icon-btn" 
@@ -190,13 +193,13 @@ const NavigationPanel = ({ view }) => {
         <div className="nav-card-section">
           <div className="section-header">
             <MapPin size={16} className="section-icon" />
-            <h3 className="section-title">Go to XY</h3>
+            <h3 className="section-title">{t('navGoToXY')}</h3>
           </div>
           
           <div className="xy-form-container">
             {/* Top Row: Dropdown + Capture */}
             <div className="xy-top-row">
-              <div className="custom-dropdown-container">
+              <div className="custom-dropdown-container" dir="ltr">
                 <button 
                   className="dropdown-trigger"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -233,14 +236,14 @@ const NavigationPanel = ({ view }) => {
               <button 
                 className={`compact-capture-btn ${isCapturing ? 'active' : ''}`}
                 onClick={() => setIsCapturing(!isCapturing)}
-                title="Capture coordinates from map"
+                title={t('navCapture')}
               >
                 {isCapturing ? (
                   <Target size={18} className="animate-pulse" />
                 ) : (
                   <MousePointer2 size={18} />
                 )}
-                <span>Capture</span>
+                <span>{t('navCapture')}</span>
               </button>
             </div>
 
@@ -256,7 +259,7 @@ const NavigationPanel = ({ view }) => {
                   className="coordinate-table-card"
                 >
                   <div className="table-header">
-                    <span className="table-title">Coordinate System</span>
+                    <span className="table-title">{t('navCoordSystem')}</span>
                     <button 
                       className={`header-copy-btn ${isCopied ? 'success' : ''}`} 
                       onClick={handleCopy}
@@ -267,12 +270,12 @@ const NavigationPanel = ({ view }) => {
                   </div>
                   <div className="table-body">
                     <div className="table-row">
-                      <span className="row-label">Latitude</span>
-                      <span className="row-value">{manualLat}</span>
+                      <span className="row-label">{t('navLatitude')}</span>
+                      <span className="row-value" dir="ltr">{manualLat}</span>
                     </div>
                     <div className="table-row">
-                      <span className="row-label">Longitude</span>
-                      <span className="row-value">{manualLng}</span>
+                      <span className="row-label">{t('navLongitude')}</span>
+                      <span className="row-value" dir="ltr">{manualLng}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -285,7 +288,7 @@ const NavigationPanel = ({ view }) => {
       {/* Footer Actions */}
       <div className="nav-footer">
         <button className="clear-all-btn" onClick={handleClearAll}>
-          <RotateCcw size={16} /> Clear All
+          <RotateCcw size={16} /> {t('navClearAll')}
         </button>
       </div>
     </div>
