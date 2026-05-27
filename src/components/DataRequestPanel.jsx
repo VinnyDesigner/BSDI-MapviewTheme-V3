@@ -35,7 +35,8 @@ const DataRequestPanel = ({
   lastRequestRef,
   onRequestSubmit,
   requestHistory = [],
-  onReset
+  onReset,
+  isCheckingIntersecting = false
 }) => {
   const { t, lang } = useLanguage();
   const isRtl = lang === 'AR';
@@ -183,9 +184,30 @@ const DataRequestPanel = ({
                       flexDirection: 'column',
                       gap: '4px'
                     }}>
-                      {intersectingLayers.length === 0 ? (
+                      {isCheckingIntersecting ? (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '24px 12px',
+                          gap: '12px'
+                        }}>
+                          <div className="req-spinner" style={{
+                            width: '28px',
+                            height: '28px',
+                            border: '3px solid #cbd5e1',
+                            borderTop: '3px solid #df261c',
+                            borderRadius: '50%',
+                            animation: 'req-spin 0.8s linear infinite'
+                          }} />
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e3c72' }}>
+                            {t('dataRequestChecking')}
+                          </span>
+                        </div>
+                      ) : intersectingLayers.length === 0 ? (
                         <span style={{ fontSize: '12px', color: '#64748b', padding: '8px', textAlign: 'center' }}>
-                          {t('dataRequestNoIntersect')}
+                          {t('dataRequestNoIntersectFound')}
                         </span>
                       ) : (
                         intersectingLayers.map(layer => (
@@ -257,8 +279,21 @@ const DataRequestPanel = ({
                   <button type="button" className="secondary-btn" onClick={() => setStep('drawing')}>
                     {t('dataRequestRedraw')}
                   </button>
-                  <button type="submit" className="primary-btn" disabled={selectedLayers.length === 0}>
-                    {t('dataRequestSubmit')}
+                   <button type="submit" className="primary-btn" disabled={selectedLayers.length === 0 || isCheckingIntersecting}>
+                    {isCheckingIntersecting ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="req-spinner-mini" style={{
+                          width: '12px',
+                          height: '12px',
+                          border: '2px solid #cbd5e1',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'req-spin 0.8s linear infinite',
+                          display: 'inline-block'
+                        }} />
+                        {t('gpLoading') || 'Loading...'}
+                      </span>
+                    ) : t('dataRequestSubmit')}
                   </button>
                 </div>
               </form>

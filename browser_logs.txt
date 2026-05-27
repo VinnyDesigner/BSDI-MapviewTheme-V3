@@ -3203,3 +3203,555 @@ Canceled: Canceled
 [6:40:43 pm] [LOG] [DataRequest] Bailing – not active or no view
 [6:40:43 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
 [6:40:43 pm] [LOG] Cleanup: MeasurePanel
+[6:43:26 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[6:43:26 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:43:26 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:43:26 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:43:26 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[6:43:26 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[6:43:26 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[6:43:27 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[6:43:27 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[6:43:27 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[6:43:28 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[6:43:40 pm] [LOG] [DataRequest] Bailing – not active or no view
+[6:43:40 pm] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:43:41 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:43:41 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[6:43:41 pm] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[6:43:41 pm] [LOG] [DataRequest] Bailing – not active or no view
+[10:10:47 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:10:47 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:10:47 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:10:47 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:10:47 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:10:47 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:10:47 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:10:47 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:10:47 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:10:47 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:10:48 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:10:48 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:10:48 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:10:49 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:10:49 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:10:49 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:10:49 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:10:49 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:10:49 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:10:49 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:10:49 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:10:49 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:10:49 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:10:49 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:10:50 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:10:50 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:10:50 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:10:50 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:10:50 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:10:51 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:10:51 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:10:51 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:10:51 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:10:51 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:11:01 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:01 am] [LOG] [DataRequest] Effect run → {"activeTool":"add_data","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:05 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:05 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:13 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:11:13 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:13 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:13 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:13 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:13 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:13 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:13 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:11:13 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:11:13 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:11:13 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:11:13 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:11:13 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:11:14 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:11:14 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:11:14 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:11:14 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:11:16 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:4255:53)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:4215:62)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:5569:16)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:6140:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:851:66)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8429:92)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8325:37)
+    at renderRootSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8309:6)
+    at performWorkOnRoot (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[10:11:16 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:4255:53)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:4215:62)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:5569:16)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:6140:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:851:66)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8429:92)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8325:37)
+    at renderRootSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:8309:6)
+    at performWorkOnRoot (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=c32754fe:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5174/src/geoprocessing/GPPanel.jsx?t=1779711331984:55:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5174/node_modules/.vite/deps/framer-motion.js?v=c32754fe:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5174/node_modules/.vite/deps/framer-motion.js?v=c32754fe:8619:23)\n    at PopChild (http://localhost:5174/node_modules/.vite/deps/framer-motion.js?v=c32754fe:8645:21)\n    at PresenceChild (http://localhost:5174/node_modules/.vite/deps/framer-motion.js?v=c32754fe:8701:24)\n    at AnimatePresence (http://localhost:5174/node_modules/.vite/deps/framer-motion.js?v=c32754fe:8870:26)\n    at SidePanel (http://localhost:5174/src/components/SidePanel.jsx?t=1779711331984:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5174/src/App.jsx?t=1779714555929:78:38)\n    at LanguageProvider (http://localhost:5174/src/context/LanguageContext.jsx?t=1779711331984:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5174/src/main.jsx?t=1779714555929:9:3)"}
+[10:11:21 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:11:21 am] [ERROR] You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it.
+[10:11:22 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:22 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:22 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:22 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:22 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:22 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:11:22 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:22 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:22 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:22 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:22 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:11:22 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:22 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:11:22 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:11:23 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:11:23 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:11:23 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:11:23 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:11:23 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:11:23 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:11:23 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:11:23 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:11:23 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:11:24 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:11:24 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:11:24 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:11:25 am] [LOG] [DataRequest] Effect run → {"activeTool":"layers","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:25 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:30 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:11:30 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:30 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:30 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:30 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:30 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:30 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:30 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:11:30 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:11:30 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:11:30 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:11:30 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:11:30 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:11:30 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:11:30 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:11:31 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:11:31 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:11:32 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:32 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:32 am] [LOG] [DataRequest] Effect run → {"activeTool":"time_compare","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:32 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:33 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:11:33 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:33 am] [LOG] [DataRequest] Effect run → {"activeTool":"split","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:34 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:34 am] [LOG] [DataRequest] Effect run → {"activeTool":"split_view","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:35 am] [LOG] [Blend] Basemap applied: streets
+[10:11:35 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:35 am] [LOG] [DataRequest] Effect run → {"activeTool":"blend","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:37 am] [LOG] [DataRequest] Effect run → {"activeTool":"arcade","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:37 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:37 am] [LOG] [DataRequest] Effect run → {"activeTool":"spatial_analysis","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:37 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:40 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:40 am] [LOG] [DataRequest] Effect run → {"activeTool":"navigation","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:41 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:41 am] [LOG] [DataRequest] Effect run → {"activeTool":"measure","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:41 am] [LOG] Cleanup: MeasurePanel
+[10:11:42 am] [LOG] Cleanup: MeasurePanel
+[10:11:42 am] [LOG] [DataRequest] Effect run → {"activeTool":"draw","dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:11:42 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:42 am] [LOG] Cleanup: DrawPanel
+[10:11:46 am] [LOG] Cleanup: DrawPanel
+[10:11:46 am] [LOG] [DataRequest] Waiting for tool selection (step=drawing, tool=null)
+[10:11:46 am] [LOG] [DataRequest] Effect run → {"activeTool":"data_request","dataRequestStep":"drawing","dataRequestDrawingTool":null,"hasView":true}
+[10:11:46 am] [LOG] [DataRequest] AOI layer added to map
+[10:11:47 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:47 am] [LOG] [DataRequest] Effect run → {"activeTool":"add_data","dataRequestStep":"drawing","dataRequestDrawingTool":null,"hasView":true}
+[10:11:48 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:48 am] [LOG] [DataRequest] Effect run → {"activeTool":"print","dataRequestStep":"drawing","dataRequestDrawingTool":null,"hasView":true}
+[10:11:49 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:11:49 am] [LOG] [DataRequest] Effect run → {"activeTool":"bookmark","dataRequestStep":"drawing","dataRequestDrawingTool":null,"hasView":true}
+[10:11:50 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[10:11:50 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5173/src/geoprocessing/GPPanel.jsx?t=1779711331982:55:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8619:23)\n    at PopChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8645:21)\n    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8701:24)\n    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8870:26)\n    at SidePanel (http://localhost:5173/src/components/SidePanel.jsx?t=1779711331982:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5173/src/App.jsx?t=1779714555929:78:38)\n    at LanguageProvider (http://localhost:5173/src/context/LanguageContext.jsx?t=1779711331982:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5173/src/main.jsx?t=1779714555929:9:3)"}
+[10:11:50 am] [ERROR] Error fetching metadata for Service 2: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+SyntaxError: Unexpected end of JSON input
+    at fetchMapServerData (http://localhost:5173/src/App.jsx?t=1779714555929:395:46)
+[10:37:26 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[10:37:26 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:37:26 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:37:26 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:37:26 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[10:37:26 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[10:37:26 am] [LOG] [DataRequest] Bailing – not active or no view
+[10:37:26 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[10:37:26 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[10:37:26 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[10:37:26 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[10:37:26 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[10:37:26 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[10:37:26 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[10:37:26 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[10:37:26 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[10:37:27 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[10:37:28 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[10:37:28 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5173/src/geoprocessing/GPPanel.jsx?t=1779711331982:55:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8619:23)\n    at PopChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8645:21)\n    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8701:24)\n    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8870:26)\n    at SidePanel (http://localhost:5173/src/components/SidePanel.jsx?t=1779711331982:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5173/src/App.jsx?t=1779714555929:78:38)\n    at LanguageProvider (http://localhost:5173/src/context/LanguageContext.jsx?t=1779711331982:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5173/src/main.jsx?t=1779714555929:9:3)"}
+[11:08:36 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[11:08:36 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:08:36 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:08:36 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:08:36 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:08:36 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:08:36 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:08:36 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[11:08:36 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[11:08:36 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[11:08:36 am] [ERROR] Error fetching metadata for Sample Data 1: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+SyntaxError: Unexpected end of JSON input
+    at fetchMapServerData (http://localhost:5173/src/App.jsx?t=1779773836069:392:42)
+[11:08:36 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[11:08:37 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[11:08:37 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[11:08:37 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[11:08:37 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[11:08:37 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[11:08:38 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[11:08:40 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[11:08:40 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5173/src/geoprocessing/GPPanel.jsx?t=1779711331982:55:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8619:23)\n    at PopChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8645:21)\n    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8701:24)\n    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8870:26)\n    at SidePanel (http://localhost:5173/src/components/SidePanel.jsx?t=1779773836069:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5173/src/App.jsx?t=1779773836069:78:38)\n    at LanguageProvider (http://localhost:5173/src/context/LanguageContext.jsx?t=1779711331982:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5173/src/main.jsx?t=1779773836069:9:3)"}
+[11:08:49 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[11:08:50 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:08:50 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:08:50 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:08:50 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:08:50 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:08:50 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:08:50 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[11:08:50 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[11:08:50 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[11:08:50 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[11:08:50 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[11:08:50 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[11:08:50 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[11:08:50 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[11:08:50 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[11:08:50 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[11:08:51 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[11:08:51 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5173/src/geoprocessing/GPPanel.jsx?t=1779711331982:55:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8619:23)\n    at PopChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8645:21)\n    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8701:24)\n    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8870:26)\n    at SidePanel (http://localhost:5173/src/components/SidePanel.jsx?t=1779773836069:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5173/src/App.jsx?t=1779773836069:78:38)\n    at LanguageProvider (http://localhost:5173/src/context/LanguageContext.jsx?t=1779711331982:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5173/src/main.jsx?t=1779773836069:9:3)"}
+[11:10:21 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[11:10:21 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:10:21 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:10:21 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:10:21 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:10:21 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:10:21 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:10:21 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[11:10:21 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[11:10:21 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[11:10:21 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[11:10:21 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[11:10:21 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[11:10:21 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[11:10:21 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[11:10:21 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[11:10:21 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[11:10:25 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[11:10:25 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4255:53)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:4215:62)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:5569:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:6140:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:851:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8429:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8325:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:8309:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=2f9fcd7e:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5173/src/geoprocessing/GPPanel.jsx?t=1779773993260:156:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8619:23)\n    at PopChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8645:21)\n    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8701:24)\n    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=2f9fcd7e:8870:26)\n    at SidePanel (http://localhost:5173/src/components/SidePanel.jsx?t=1779773836069:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5173/src/App.jsx?t=1779773993260:78:38)\n    at LanguageProvider (http://localhost:5173/src/context/LanguageContext.jsx?t=1779711331982:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5173/src/main.jsx?t=1779773993260:9:3)"}
+[11:10:53 am] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[11:10:53 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:10:53 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:10:53 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:10:53 am] [LOG] [Temporal] 🧹 All temporal filters cleared
+[11:10:53 am] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[11:10:53 am] [LOG] [DataRequest] Bailing – not active or no view
+[11:10:53 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[11:10:53 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[11:10:53 am] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[11:10:54 am] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[11:10:54 am] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[11:10:54 am] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[11:10:54 am] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[11:10:54 am] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[11:10:54 am] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[11:10:54 am] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[11:10:55 am] [ERROR] Global Error Caught: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:4255:53)
+    at renderWithHooks (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:4215:62)
+    at updateFunctionComponent (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:5569:16)
+    at beginWork (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:6140:20)
+    at runWithFiberInDEV (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:851:66)
+    at performUnitOfWork (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8429:92)
+    at workLoopSync (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8325:37)
+    at renderRootSync (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8309:6)
+    at performWorkOnRoot (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:9067:4) {"componentStack":"\n    at GPPanel (http://localhost:5175/src/geoprocessing/GPPanel.jsx:156:20)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at MotionDOMComponent (http://localhost:5175/node_modules/.vite/deps/framer-motion.js?v=514ac95a:9751:35)\n    at div (<anonymous>)\n    at PopChildMeasure (http://localhost:5175/node_modules/.vite/deps/framer-motion.js?v=514ac95a:8619:23)\n    at PopChild (http://localhost:5175/node_modules/.vite/deps/framer-motion.js?v=514ac95a:8645:21)\n    at PresenceChild (http://localhost:5175/node_modules/.vite/deps/framer-motion.js?v=514ac95a:8701:24)\n    at AnimatePresence (http://localhost:5175/node_modules/.vite/deps/framer-motion.js?v=514ac95a:8870:26)\n    at SidePanel (http://localhost:5175/src/components/SidePanel.jsx:9:22)\n    at div (<anonymous>)\n    at div (<anonymous>)\n    at AppInner (http://localhost:5175/src/App.jsx:78:38)\n    at LanguageProvider (http://localhost:5175/src/context/LanguageContext.jsx:8:36)\n    at App (<anonymous>)\n    at GlobalErrorBoundary (http://localhost:5175/src/main.jsx:9:3)"}
+[11:10:55 am] [ERROR] %o
+
+%s
+
+%s
+ Too many re-renders. React limits the number of renders to prevent an infinite loop.
+Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.
+    at renderWithHooksAgain (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:4255:53)
+    at renderWithHooks (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:4215:62)
+    at updateFunctionComponent (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:5569:16)
+    at beginWork (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:6140:20)
+    at runWithFiberInDEV (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:851:66)
+    at performUnitOfWork (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8429:92)
+    at workLoopSync (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8325:37)
+    at renderRootSync (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:8309:6)
+    at performWorkOnRoot (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:7994:27)
+    at performSyncWorkOnRoot (http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=cf699e21:9067:4) The above error occurred in the <GPPanel> component. React will try to recreate this component tree from scratch using the error boundary you provided, GlobalErrorBoundary.
+[3:09:12 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[3:09:12 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[3:09:12 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[3:09:12 pm] [LOG] [DataRequest] Bailing – not active or no view
+[3:09:12 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[3:09:12 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[3:09:12 pm] [LOG] [DataRequest] Bailing – not active or no view
+[3:09:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[3:09:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[3:09:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[3:09:12 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.
+[3:09:12 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[3:09:12 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[3:09:12 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[3:09:12 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[3:09:12 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[3:09:12 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[8:56:12 pm] [WARN] [@arcgis/core/geometry/geometryEngine] 🛑 DEPRECATED - Module: @arcgis/core/geometry/geometryEngine
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1PiGTm1 for more details.
+[8:56:12 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[8:56:12 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[8:56:12 pm] [LOG] [DataRequest] Bailing – not active or no view
+[8:56:12 pm] [LOG] [Temporal] 🧹 All temporal filters cleared
+[8:56:12 pm] [LOG] [DataRequest] Effect run → {"activeTool":null,"dataRequestStep":"intro","dataRequestDrawingTool":null,"hasView":true}
+[8:56:12 pm] [LOG] [DataRequest] Bailing – not active or no view
+[8:56:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer -> /arcgis-proxy/server/rest/services/SampleData1/MapServer
+[8:56:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer -> /arcgis-proxy/server/rest/services/Service2/MapServer
+[8:56:12 pm] [LOG] [ArcGIS Request] https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer -> /arcgis-proxy/server/rest/services/Service3/MapServer
+[8:56:12 pm] [LOG] [ArcGIS] Layer [sample-data-1] loaded. SR: 102100
+[8:56:13 pm] [LOG] [ArcGIS] Layer [service-3] loaded. SR: 20439
+[8:56:13 pm] [LOG] [ArcGIS] Layer [service-2] loaded. SR: 102100
+[8:56:13 pm] [LOG] [ArcGIS] Layer [sample-data-time-mil1] loaded. SR: 102100
+[8:56:13 pm] [LOG] [ArcGIS] Layer [gov-time-date] loaded. SR: 20439
+[8:56:13 pm] [LOG] [ArcGIS] Layer [bsdi-test-1] loaded. SR: 20439
+[8:56:16 pm] [WARN] [@arcgis/core/views/MapView] 🛑 DEPRECATED - Function: `watch` is deprecated in favor of reactiveUtils.watch()
+	🛠️ Replacement: reactiveUtils.watch
+	⚙️ Version: 4.32
+	🔗 See https://arcg.is/1vaqf42#watch for more details.

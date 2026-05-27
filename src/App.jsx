@@ -178,10 +178,13 @@ function AppInner() {
 
   const [labelConfigModal, setLabelConfigModal] = useState(null); // { layerId: string, subId?: number }
 
-  // Fetch MapServer data for dynamic layers
+  // Fetch MapServer data for dynamic layers and FeatureServer sublayers
   useEffect(() => {
     const fetchMapServerData = async () => {
-      const dynamicLayers = layersConfig.filter(l => l.type === 'map-image');
+      const dynamicLayers = layersConfig.filter(l => 
+        l.type === 'map-image' || 
+        (l.url && (l.url.toLowerCase().includes('featureserver') || l.url.toLowerCase().includes('mapserver')))
+      );
       const dataUpdates = {};
 
       const getProxyUrl = (url) => {
@@ -189,7 +192,9 @@ function AppInner() {
           if (url.includes("https://gis9.smartgeoapps.com")) {
             return url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
           }
-
+          if (url.includes("https://gis12.smartgeoapps.com")) {
+            return url.replace("https://gis12.smartgeoapps.com", "/arcgis-proxy-gis12");
+          }
         }
         return url;
       };
@@ -200,9 +205,16 @@ function AppInner() {
           const metaResponse = await fetch(`${getProxyUrl(layer.url)}?f=pjson`);
           const metaData = await metaResponse.json();
           
-          // Fetch legend data
-          const legendResponse = await fetch(`${getProxyUrl(layer.url)}/legend?f=pjson`);
-          const legendData = await legendResponse.json();
+          // Fetch legend data (gracefully fallback if FeatureServer does not have `/legend` endpoint)
+          let legendData = null;
+          try {
+            const legendResponse = await fetch(`${getProxyUrl(layer.url)}/legend?f=pjson`);
+            if (legendResponse.ok) {
+              legendData = await legendResponse.json();
+            }
+          } catch (legendErr) {
+            console.warn(`Legend fetch omitted or failed for ${layer.title}:`, legendErr.message);
+          }
 
           dataUpdates[layer.id] = {
             metadata: metaData,
@@ -216,7 +228,7 @@ function AppInner() {
               metaData.layers.forEach(sub => {
                 const subKey = `${layer.id}_sub_${sub.id}`;
                 if (newVis[subKey] === undefined) {
-                  newVis[subKey] = sub.defaultVisibility || false;
+                  newVis[subKey] = false;
                 }
               });
               return newVis;
@@ -328,6 +340,8 @@ function AppInner() {
   const [lastRequestRef, setLastRequestRef] = useState('');
   const [activeDrawingTool, setActiveDrawingTool] = useState(null);
 
+  const [isCheckingIntersecting, setIsCheckingIntersecting] = useState(false);
+
   const handleRequestSubmit = (request) => {
     const ref = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
     const finalRequest = { ...request, reference: ref };
@@ -348,11 +362,15 @@ function AppInner() {
     }
   }, [approvedLayerIds]);
 
-  const handleDataRequestAOIChange = useCallback((geometry, layers, isComplete) => {
+  const handleDataRequestAOIChange = useCallback((geometry, layers, isComplete, checkingState = false) => {
     setRequestAOI(geometry);
-    setIntersectingLayers(layers);
+    if (layers) setIntersectingLayers(layers);
+    setIsCheckingIntersecting(checkingState);
     if (isComplete) {
-      setDataRequestStep('selection');
+      if (layers) {
+        setSelectedLayersForRequest(layers.map(l => l.id));
+      }
+      setDataRequestStep('form');
       setActiveDrawingTool(null);
     }
   }, []);
@@ -376,12 +394,15 @@ function AppInner() {
 
     let target;
     if (subId !== null) {
-      const parent = view.map.findLayerById(layerId);
-      if (parent) {
-        if (typeof parent.findSublayerById === 'function') {
-          target = parent.findSublayerById(Number(subId));
-        } else if (parent.sublayers) {
-          target = parent.sublayers.find(s => s.id === subId || s.id === parseInt(subId));
+      target = view.map.findLayerById(fullId);
+      if (!target) {
+        const parent = view.map.findLayerById(layerId);
+        if (parent) {
+          if (typeof parent.findSublayerById === 'function') {
+            target = parent.findSublayerById(Number(subId));
+          } else if (parent.sublayers) {
+            target = parent.sublayers.find(s => s.id === subId || s.id === parseInt(subId));
+          }
         }
       }
     } else {
@@ -1020,7 +1041,8 @@ function AppInner() {
       timeCompareTab,
       setTimeCompareTab,
       timelapseSettings,
-      setTimelapseSettings
+      setTimelapseSettings,
+      isCheckingIntersecting
     };
 
     return <PanelComponent {...allCollectedProps} />;
@@ -1079,15 +1101,7 @@ function AppInner() {
           basemap={currentBasemap}
           swipeMode={swipeMode}
           onSwipePositionChange={handleSwipePosition}
-          onDataRequestAOIChange={(geometry, layers, isComplete) => {
-            setRequestAOI(geometry);
-            setIntersectingLayers(layers);
-            if (isComplete) {
-              setSelectedLayersForRequest(layers.map(l => l.id));
-              setDataRequestStep('form');
-              setActiveDrawingTool(null);
-            }
-          }}
+          onDataRequestAOIChange={handleDataRequestAOIChange}
           dataRequestDrawingTool={activeDrawingTool}
           dataRequestStep={dataRequestStep}
         />

@@ -36,7 +36,7 @@ const PrintPanel = ({ view, t, lang }) => {
   const [title, setTitle] = useState('');
   const [template, setTemplate] = useState('');
   const [showPrintArea, setShowPrintArea] = useState(false);
-  const [format, setFormat] = useState('PNG');
+  const [format, setFormat] = useState('PDF');
   const [multiPage, setMultiPage] = useState(false);
   
   // Advanced State
@@ -60,6 +60,10 @@ const PrintPanel = ({ view, t, lang }) => {
   const [manualExtent, setManualExtent] = useState(null);
   const sketchVMRef = React.useRef(null);
   const boundaryGraphicRef = React.useRef(null);
+  const isPrintingRef = React.useRef(isPrinting);
+  React.useEffect(() => {
+    isPrintingRef.current = isPrinting;
+  }, [isPrinting]);
 
   // Audit Logger
   const logPrintActivity = (details) => {
@@ -93,6 +97,8 @@ const PrintPanel = ({ view, t, lang }) => {
   }, [view, template, scale, multiPage, manualExtent]);
 
   const updatePrintExtent = React.useCallback((grid) => {
+    if (isPrintingRef.current) return;
+
     // 1. Clear individual pages (always updated)
     printLayer.removeAll();
 
@@ -178,8 +184,8 @@ const PrintPanel = ({ view, t, lang }) => {
         },
         symbol: {
           type: "simple-fill",
-          color: [223, 38, 28, 0],
-          outline: { color: [223, 38, 28, 1], width: 2 }
+          color: [0, 255, 255, 0.25], // semi-transparent cyan fill
+          outline: { color: [223, 38, 28, 1], width: 2 } // orange/red outline
         }
       });
       boundaryGraphicRef.current = boundaryGraphic;
@@ -292,15 +298,64 @@ const PrintPanel = ({ view, t, lang }) => {
     }
   };
 
+  const formatDateStr = (date) => {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   const handlePrint = async () => {
     if (!view) return;
     setIsPrinting(true);
+    const printTitle = title?.trim() || 'Map Print';
+    const formattedDate = formatDateStr(new Date());
+    const pdfFilename = `${printTitle.replace(/\s+/g, '_')}_${formattedDate}.pdf`;
 
     try {
-      // Use proxy directly to prevent any interceptor mismatch
+      const originalExtent = view.extent ? view.extent.clone() : null;
+
+      // 3D SceneView Printing Flow (via screenshot and PDF conversion)
+      if (view.type === "3d") {
+        console.log("[Print Tool] 3D view detected, capturing high-resolution screenshot...");
+        const screenshot = await view.takeScreenshot({
+          format: 'png',
+          width: view.width * 2,
+          height: view.height * 2
+        });
+
+        // Convert screenshot to PDF using pdf-lib
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage([view.width, view.height]);
+        const pngImage = await pdfDoc.embedPng(screenshot.dataUrl);
+        page.drawImage(pngImage, {
+          x: 0,
+          y: 0,
+          width: view.width,
+          height: view.height
+        });
+        const pdfBytes = await pdfDoc.save();
+        const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const exportUrl = URL.createObjectURL(pdfBlob);
+
+        const generatedItem = {
+          id: crypto.randomUUID(),
+          name: pdfFilename,
+          format: 'PDF',
+          url: exportUrl,
+          date: new Date().toLocaleString(),
+          pages: 1
+        };
+
+        setExportsList(prev => [generatedItem, ...prev]);
+        setActiveTab('exports');
+        logPrintActivity({ title: printTitle, status: 'SUCCESS' });
+        return;
+      }
+
+      // 2D MapView Printing Flow
       const printUrl = "/arcgis-proxy/server/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
-      const originalExtent = view.extent.clone();
-      
       const pagesToPrint = [];
       
       if (multiPage && printLayer.graphics.length > 0) {
@@ -371,10 +426,10 @@ const PrintPanel = ({ view, t, lang }) => {
           layout = 'MAP_ONLY';
         }
 
-        const actualFormat = format.toLowerCase() === 'png' ? 'png32' : format.toLowerCase();
+        const actualFormat = 'pdf'; // Strictly enforce PDF export on rest print services
         
         const layoutOpts = {
-          titleText: pagesToPrint.length > 1 ? `${title} - Page ${page.pageNumber}` : title,
+          titleText: pagesToPrint.length > 1 ? `${printTitle} - Page ${page.pageNumber}` : printTitle,
           authorText: author,
           copyrightText: copyright
         };
@@ -405,27 +460,66 @@ const PrintPanel = ({ view, t, lang }) => {
           outSpatialReference: wkid ? new SpatialReference({ wkid: parseInt(wkid, 10) }) : view.spatialReference
         });
 
-        // Call the print service
-        const result = await print.execute(printUrl, params);
+        // Call the print service with robust fallbacks
+        let result;
+        try {
+          console.log(`[Print Tool] Attempting print execution with primary service: ${printUrl}`);
+          result = await print.execute(printUrl, params);
+        } catch (serviceErr) {
+          console.warn("[Print Tool] Primary print service failed. Details:", serviceErr);
+          const fallbackUrl = "https://utility.arcgisonline.com/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
+          try {
+            console.log(`[Print Tool] Attempting print execution with fallback Esri utility service: ${fallbackUrl}`);
+            result = await print.execute(fallbackUrl, params);
+          } catch (fallbackErr) {
+            console.warn("[Print Tool] Secondary print service failed. Details:", fallbackErr);
+            const tertiaryUrl = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task";
+            try {
+              console.log(`[Print Tool] Attempting print execution with sampleserver6 service: ${tertiaryUrl}`);
+              result = await print.execute(tertiaryUrl, params);
+            } catch (finalErr) {
+              console.warn("[Print Tool] All remote print servers failed. Falling back to high-resolution client-side capture...", finalErr);
+              
+              // Local client-side screenshot fallback to guarantee printing succeeds
+              const screenshot = await view.takeScreenshot({
+                format: 'png',
+                width: view.width * 2,
+                height: view.height * 2
+              });
 
-        if (format === 'PDF' && pagesToPrint.length > 1) {
-          pdfUrls.push(result.url);
-        } else {
-          const pageTitle = pagesToPrint.length > 1 ? `${title || 'Map_Export'}_Page_${page.pageNumber}` : (title || 'Map_Export');
-          
-          generatedExports.push({
-            id: crypto.randomUUID(),
-            name: `${pageTitle}.${actualFormat.replace('png32', 'png')}`,
-            format: format,
-            url: result.url,
-            date: new Date().toLocaleString(),
-            pages: 1
-          });
+              const pdfDoc = await PDFDocument.create();
+              const page = pdfDoc.addPage([view.width, view.height]);
+              const pngImage = await pdfDoc.embedPng(screenshot.dataUrl);
+              page.drawImage(pngImage, {
+                x: 0, y: 0,
+                width: view.width, height: view.height
+              });
+              const pdfBytes = await pdfDoc.save();
+              const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+              const exportUrl = URL.createObjectURL(pdfBlob);
+
+              result = {
+                url: exportUrl,
+                localCapture: true
+              };
+            }
+          }
         }
+
+        pdfUrls.push(result.url);
       }
 
-      // Merge PDFs if necessary
-      if (format === 'PDF' && pdfUrls.length > 1) {
+      // Compile single or multiple PDF urls into the combined PDF output
+      if (pdfUrls.length === 1) {
+        generatedExports.push({
+          id: crypto.randomUUID(),
+          name: pdfFilename,
+          format: 'PDF',
+          url: pdfUrls[0],
+          date: new Date().toLocaleString(),
+          pages: 1
+        });
+      } else if (pdfUrls.length > 1) {
         try {
           const mergedPdf = await PDFDocument.create();
           for (const url of pdfUrls) {
@@ -443,8 +537,8 @@ const PrintPanel = ({ view, t, lang }) => {
           
           generatedExports.push({
             id: crypto.randomUUID(),
-            name: `${title || 'Map_Export_Combined'}.pdf`,
-            format: format,
+            name: pdfFilename,
+            format: 'PDF',
             url: mergedUrl,
             date: new Date().toLocaleString(),
             pages: pdfUrls.length
@@ -455,8 +549,8 @@ const PrintPanel = ({ view, t, lang }) => {
           pdfUrls.forEach((url, idx) => {
             generatedExports.push({
               id: crypto.randomUUID(),
-              name: `${title || 'Map_Export'}_Page_${idx + 1}.pdf`,
-              format: format,
+              name: `${printTitle.replace(/\s+/g, '_')}_${formattedDate}_Page_${idx + 1}.pdf`,
+              format: 'PDF',
               url: url,
               date: new Date().toLocaleString(),
               pages: 1
@@ -467,7 +561,9 @@ const PrintPanel = ({ view, t, lang }) => {
 
       try {
         // Restore view extent
-        await view.goTo(originalExtent, { animate: false });
+        if (originalExtent) {
+          await view.goTo(originalExtent, { animate: false });
+        }
       } catch (e) {
         // Ignore interruption
       }
@@ -483,7 +579,7 @@ const PrintPanel = ({ view, t, lang }) => {
         title,
         template,
         scale,
-        format,
+        format: 'PDF',
         dpi,
         wkid: wkid || view.spatialReference.wkid,
         layers: view.map.layers.filter(l => l.visible).map(l => l.title).toArray(),
@@ -491,10 +587,11 @@ const PrintPanel = ({ view, t, lang }) => {
       };
 
       logPrintActivity({ ...auditDetails, status: 'SUCCESS' });
+
     } catch (err) {
-      console.error("Print generation failed", err);
-      logPrintActivity({ title, status: 'FAILED', error: err.message });
-      alert("Failed to generate print");
+      console.error("[Print Tool] Print generation failed", err);
+      logPrintActivity({ title, status: 'FAILED', error: err.message || err.toString() });
+      alert(`Print Generation Failed: ${err.message || 'Unknown error. Please check operational layer layers and connection.'}`);
     } finally {
       setIsPrinting(false);
     }
@@ -502,8 +599,8 @@ const PrintPanel = ({ view, t, lang }) => {
 
   const handleDownload = async (exportItem) => {
     try {
-      // If it's a data URL (from takeScreenshot), we can use it directly
-      if (exportItem.url.startsWith('data:')) {
+      // If it's a data URL or blob URL, download it directly without a redundant fetch
+      if (exportItem.url.startsWith('data:') || exportItem.url.startsWith('blob:')) {
         const link = document.createElement('a');
         link.href = exportItem.url;
         link.download = exportItem.name;
@@ -545,13 +642,15 @@ const PrintPanel = ({ view, t, lang }) => {
       <div className="print-tabs">
         <button 
           className={`print-tab ${activeTab === 'layout' ? 'active' : ''}`}
-          onClick={() => setActiveTab('layout')}
+          onClick={() => !isPrinting && setActiveTab('layout')}
+          disabled={isPrinting}
         >
           {t('printLayoutTab')}
         </button>
         <button 
           className={`print-tab ${activeTab === 'exports' ? 'active' : ''}`}
-          onClick={() => setActiveTab('exports')}
+          onClick={() => !isPrinting && setActiveTab('exports')}
+          disabled={isPrinting}
         >
           {t('printExportsTab')} {exportsList.length > 0 && <span className="export-badge">{exportsList.length}</span>}
         </button>
@@ -560,7 +659,7 @@ const PrintPanel = ({ view, t, lang }) => {
       {/* Content */}
       <div className="print-content-scroll">
         {activeTab === 'layout' ? (
-          <div className="print-layout-form">
+          <fieldset disabled={isPrinting} className="print-layout-form" style={{ border: 'none', padding: 0, margin: 0 }}>
             <div className="form-group">
               <label>{t('printTitleLabel')}</label>
               <input 
@@ -781,14 +880,14 @@ const PrintPanel = ({ view, t, lang }) => {
               )}
             </div>
 
-          </div>
+          </fieldset>
         ) : (
           <div className="print-exports-list">
             {exportsList.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-card">
                   <div className="empty-icon-wrapper">
-                    <FileImage size={32} />
+                    <FileText size={32} color="#df261c" />
                   </div>
                   <h3 className="empty-title">{t('printNoExportsTitle')}</h3>
                   <p className="empty-desc">{t('printNoExportsDesc')}</p>
@@ -798,7 +897,7 @@ const PrintPanel = ({ view, t, lang }) => {
               exportsList.map(item => (
                 <div key={item.id} className="export-item">
                   <div className="export-icon">
-                    {item.format === 'PDF' ? <FileText size={20} color="#df261c" /> : <FileImage size={20} color="#1e3c72" />}
+                    <FileText size={20} color="#df261c" />
                   </div>
                   <div className="export-info">
                     <span className="export-name" title={item.name}>{item.name}</span>
@@ -834,13 +933,14 @@ const PrintPanel = ({ view, t, lang }) => {
                 boundaryGraphicRef.current = null;
                 if (sketchVMRef.current) sketchVMRef.current.cancel();
               }}
+              disabled={isPrinting}
             >
               {t('cancelBtn')}
             </button>
             <button 
               className="primary-btn" 
               onClick={handlePrint}
-              disabled={isPrinting || !title.trim()}
+              disabled={isPrinting}
             >
               {isPrinting ? (
                 <span className="flex-center gap-2">

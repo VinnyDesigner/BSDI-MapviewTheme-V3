@@ -75,10 +75,29 @@ export function buildGeoJSON(features, spatialRef) {
   const epsg = resolveEpsg(spatialRef);
   const crs  = buildCrsObject(epsg);
 
+  // Validate and filter features to ensure they have valid, finite coordinates
+  const validFeatures = (features || []).filter(feat => {
+    if (!feat || typeof feat !== 'object') return false;
+    if (feat.type !== 'Feature') return false;
+    if (!feat.geometry || !feat.geometry.coordinates) return false;
+    
+    const coords = feat.geometry.coordinates;
+    if (Array.isArray(coords)) {
+      if (coords.length === 0) return false;
+      const checkCoords = (c) => {
+        if (typeof c === 'number') return isFinite(c);
+        if (Array.isArray(c)) return c.every(checkCoords);
+        return false;
+      };
+      return checkCoords(coords);
+    }
+    return false;
+  });
+
   return {
     type: 'FeatureCollection',
     crs,
-    features,
+    features: validFeatures,
   };
 }
 

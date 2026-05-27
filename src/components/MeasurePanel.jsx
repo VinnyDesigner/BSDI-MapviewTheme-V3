@@ -43,6 +43,11 @@ const MeasurePanel = ({ view }) => {
   const graphicsLayerRef = useRef(null);
   const labelLayerRef = useRef(null);
   const sketchVMRef = useRef(null);
+  const selectedUnitRef = useRef(selectedUnit);
+
+  useEffect(() => {
+    selectedUnitRef.current = selectedUnit;
+  }, [selectedUnit]);
 
   // Initialize Layers and SketchVM
   useEffect(() => {
@@ -90,36 +95,58 @@ const MeasurePanel = ({ view }) => {
     };
   }, [view]);
 
+  const getCorrespondingDistanceUnit = (areaUnit, perimeterInMeters) => {
+    if (areaUnit === 'square-meters') return 'meters';
+    if (areaUnit === 'square-kilometers') return 'kilometers';
+    if (areaUnit === 'square-miles') return 'miles';
+    if (areaUnit === 'square-feet') return 'feet';
+    if (areaUnit === 'hectares') {
+      if (perimeterInMeters && perimeterInMeters > 5000) {
+        return 'kilometers';
+      }
+      return 'meters';
+    }
+    return 'meters';
+  };
+
   const calculateMeasurements = (graphic) => {
     if (!graphic.geometry) return;
     const geometry = graphic.geometry;
     const labels = [];
+    const currentUnit = selectedUnitRef.current || (activeMode === 'area' ? 'square-meters' : 'meters');
 
     if (geometry.type === "polyline") {
-      const totalDist = geometryEngine.geodesicLength(geometry, selectedUnit || 'meters');
+      const totalDist = geometryEngine.geodesicLength(geometry, currentUnit);
       setResults({ distance: totalDist });
       
       // Add label at the end point
       const lastPath = geometry.paths[0];
       const lastPoint = geometry.getPoint(0, lastPath.length - 1);
-      labels.push(createLabelGraphic(lastPoint, `${totalDist.toFixed(2)} ${getUnitShortLabel(selectedUnit || 'meters')}`));
+      labels.push(createLabelGraphic(lastPoint, `${totalDist.toFixed(2)} ${getUnitShortLabel(currentUnit)}`));
     } 
     else if (geometry.type === "polygon") {
-      const area = geometryEngine.geodesicArea(geometry, selectedUnit || 'square-meters');
-      const perimeter = geometryEngine.geodesicLength(geometry, 'meters'); // Always show perimeter in meters or fixed unit?
+      const area = geometryEngine.geodesicArea(geometry, currentUnit);
+      const perimeterInMeters = geometryEngine.geodesicLength(geometry, 'meters');
+      const distUnit = getCorrespondingDistanceUnit(currentUnit, perimeterInMeters);
+      const perimeter = geometryEngine.geodesicLength(geometry, distUnit);
       
       setResults({ 
         area: Math.abs(area), 
-        perimeter: perimeter 
+        perimeter: perimeter,
+        perimeterUnit: distUnit
       });
 
       // Add label at centroid
-      labels.push(createLabelGraphic(geometry.centroid, `${Math.abs(area).toFixed(2)} ${getUnitShortLabel(selectedUnit || 'square-meters')}`));
+      const areaLabel = `${Math.abs(area).toFixed(2)} ${getUnitShortLabel(currentUnit)}${currentUnit === 'hectares' ? '' : '²'}`;
+      const periLabel = `${perimeter.toFixed(2)} ${getUnitShortLabel(distUnit)}`;
+      labels.push(createLabelGraphic(geometry.centroid, `${areaLabel}\nPerimeter: ${periLabel}`));
     }
 
     // Update Label Layer
-    labelLayerRef.current.removeAll();
-    labelLayerRef.current.addMany(labels);
+    if (labelLayerRef.current) {
+      labelLayerRef.current.removeAll();
+      labelLayerRef.current.addMany(labels);
+    }
   };
 
   const createLabelGraphic = (point, text) => {
@@ -138,6 +165,18 @@ const MeasurePanel = ({ view }) => {
   };
 
   const getUnitShortLabel = (unit) => {
+    if (unit === 'square-meters') return 'm';
+    if (unit === 'square-kilometers') return 'km';
+    if (unit === 'square-miles') return 'mi';
+    if (unit === 'square-feet') return 'ft';
+    if (unit === 'hectares') return 'ha';
+    
+    if (unit === 'meters') return 'm';
+    if (unit === 'kilometers') return 'km';
+    if (unit === 'miles') return 'mi';
+    if (unit === 'feet') return 'ft';
+    if (unit === 'nautical-miles') return 'nm';
+
     const allUnits = [...AREA_UNITS, ...DISTANCE_UNITS];
     const found = allUnits.find(u => u.unit === unit);
     return found ? found.label.replace('Sq. ', '').replace('Square ', '') : unit;
@@ -155,7 +194,9 @@ const MeasurePanel = ({ view }) => {
     graphicsLayerRef.current.removeAll();
 
     const tool = mode === 'area' ? 'polygon' : 'polyline';
-    setSelectedUnit(mode === 'area' ? 'square-meters' : 'meters');
+    const initialUnit = mode === 'area' ? 'square-meters' : 'meters';
+    setSelectedUnit(initialUnit);
+    selectedUnitRef.current = initialUnit;
     
     sketchVMRef.current.create(tool);
   };
@@ -241,8 +282,10 @@ const MeasurePanel = ({ view }) => {
                     className="measure-select"
                     value={selectedUnit}
                     onChange={(e) => {
-                      setSelectedUnit(e.target.value);
-                      if (graphicsLayerRef.current.graphics.length > 0) {
+                      const newUnit = e.target.value;
+                      setSelectedUnit(newUnit);
+                      selectedUnitRef.current = newUnit;
+                      if (graphicsLayerRef.current && graphicsLayerRef.current.graphics.length > 0) {
                         calculateMeasurements(graphicsLayerRef.current.graphics.getItemAt(0));
                       }
                     }}
@@ -266,14 +309,14 @@ const MeasurePanel = ({ view }) => {
                         <span className="res-label">{t('measureArea')}</span>
                         <span className="res-value" dir="ltr">
                           {results ? results.area.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'} 
-                          <span className="res-unit"> {getUnitShortLabel(selectedUnit)}²</span>
+                          <span className="res-unit"> {getUnitShortLabel(selectedUnit)}{selectedUnit === 'hectares' ? '' : '²'}</span>
                         </span>
                       </div>
                       <div className="result-item">
                         <span className="res-label">{t('measurePerimeter')}</span>
                         <span className="res-value" dir="ltr">
                           {results ? results.perimeter.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'} 
-                          <span className="res-unit"> m</span>
+                          <span className="res-unit"> {results && results.perimeterUnit ? getUnitShortLabel(results.perimeterUnit) : 'm'}</span>
                         </span>
                       </div>
                     </>

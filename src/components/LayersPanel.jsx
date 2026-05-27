@@ -505,8 +505,7 @@ export const LayersPanel = ({
 
     if (!layerMenuTriggerRect) return null;
 
-    const layer = layersConfig.find(l => l.id === id);
-    const isMapServer = layer && layer.type === 'map-image';
+    const isMapServer = layer && (layer.type === 'map-image' || (layer.url && layer.url.toLowerCase().includes('featureserver')));
 
     let hierarchyType = 'feature';
     if (subId === null) {
@@ -707,19 +706,19 @@ export const LayersPanel = ({
 
       <div className="layer-list" style={{ flex: 1, overflowY: 'auto', padding: '4px' }} onClick={() => setActiveLayerMenu(null)} onScroll={() => setActiveLayerMenu(null)}>
         {filteredLayers.map(layer => {
-          const isMapServer = layer.type === 'map-image';
+          const isMapServer = layer.type === 'map-image' || (layer.url && layer.url.toLowerCase().includes('featureserver'));
           const isExpanded = treeExpanded[layer.id];
           const mapData = dynamicMapServerData[layer.id];
 
           return (
             <div 
               key={layer.id}
-              className={`layer-tree-container ${dragOverId === layer.id ? `drag-over drag-insert-${dragInsertPositionState}` : ''}`}
+              className={`layer-item layer-tree-container ${dragOverId === layer.id ? `drag-over drag-insert-${dragInsertPositionState}` : ''}`}
               onDragOver={(e) => handleDragOver(e, layer.id)}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
             >
-              <div className={`layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
+              <div className={`layer-row layer-card ${layerVisibility[layer.id] ? 'active' : ''} ${isExpanded ? 'tree-active' : ''}`} style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                 <div className="layer-card-main" style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
                   <div className="layer-row-content">
                     <span 

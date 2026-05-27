@@ -62,7 +62,11 @@ const DrawPanel = ({ view }) => {
     markerStyle: 'circle',
     lineStyle: 'solid',
     fillStyle: 'solid',
-    outlineStyle: 'solid'
+    outlineStyle: 'solid',
+    fontFamily: 'Inter',
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    backgroundColor: 'transparent'
   });
 
   const graphicsLayerRef = useRef(null);
@@ -171,6 +175,25 @@ const DrawPanel = ({ view }) => {
     }
   }, [styleConfig.snapping]);
 
+  // Sync SketchViewModel symbols with styleConfig
+  useEffect(() => {
+    if (!sketchVMRef.current) return;
+    
+    const pointSym = getSymbolForStyle(styleConfig, 'point');
+    const textSym = getSymbolForStyle(styleConfig, 'text');
+    const polylineSym = getSymbolForStyle(styleConfig, 'polyline');
+    const polygonSym = getSymbolForStyle(styleConfig, 'polygon');
+    
+    if (activeDrawTool === 'text') {
+      sketchVMRef.current.pointSymbol = textSym;
+    } else {
+      sketchVMRef.current.pointSymbol = pointSym;
+    }
+    
+    sketchVMRef.current.polylineSymbol = polylineSym;
+    sketchVMRef.current.polygonSymbol = polygonSym;
+  }, [styleConfig, activeDrawTool]);
+
   // Sync visibility
   useEffect(() => {
     if (graphicsLayerRef.current) {
@@ -178,57 +201,86 @@ const DrawPanel = ({ view }) => {
     }
   }, [isHidden]);
 
-  const applyStyleToGraphic = (graphic, style) => {
-    const type = graphic.geometry.type;
-    const colorArr = hexToRgb(style.color, style.opacity);
-    const outlineColorArr = hexToRgb(style.outlineColor, 1);
-    const lineColorArr = hexToRgb(style.color, style.opacity);
+  const PIN_PATH = "M20,4 C14,4 9,9 9,15 C9,23.5 20,36 20,36 C20,36 31,23.5 31,15 C31,9 26,4 20,4 Z M20,19 C17.8,19 16,17.2 16,15 C16,12.8 17.8,11 20,11 C22.2,11 24,12.8 24,15 C24,17.2 22.2,19 20,19 Z";
+  const STAR_PATH = "M20,4 L24.5,13.5 L35,15 L27.5,22.5 L29.3,33 L20,28 L10.7,33 L12.5,22.5 L5,15 L15.5,13.5 Z";
 
-    if (type === 'point') {
-      if (style.type === 'text') {
-        graphic.symbol = {
-          type: "text",
-          color: style.color,
-          text: style.name || "Text Label",
-          font: {
-            size: style.size,
-            family: "Inter",
-            weight: "bold"
-          },
-          haloColor: style.outlineColor,
-          haloSize: style.outlineWidth
-        };
-      } else {
-        graphic.symbol = {
-          type: "simple-marker",
-          style: style.markerStyle || "circle",
-          color: colorArr,
-          size: `${style.size}px`,
-          outline: {
-            color: outlineColorArr,
-            width: style.outlineWidth,
-            style: style.outlineStyle || "solid"
-          }
-        };
+  const getSymbolForStyle = (style, toolType) => {
+    const markerStyle = style.markerStyle || 'circle';
+    const sizeVal = style.size || 12;
+    const colorArr = hexToRgb(style.color || '#df261c', style.opacity !== undefined ? style.opacity : 0.8);
+    const outlineColorArr = hexToRgb(style.outlineColor || '#df261c', 1);
+    const outlineWidthVal = style.outlineWidth !== undefined ? style.outlineWidth : 2;
+    const outlineStyleVal = style.outlineStyle || 'solid';
+
+    if (toolType === 'point') {
+      let symStyle = markerStyle;
+      let pathString = undefined;
+      if (markerStyle === 'pin') {
+        symStyle = 'path';
+        pathString = PIN_PATH;
+      } else if (markerStyle === 'star') {
+        symStyle = 'path';
+        pathString = STAR_PATH;
       }
-    } else if (type === 'polyline') {
-      graphic.symbol = {
+
+      return {
+        type: "simple-marker",
+        style: symStyle,
+        path: pathString,
+        color: colorArr,
+        size: `${sizeVal}px`,
+        outline: {
+          color: outlineColorArr,
+          width: outlineWidthVal,
+          style: outlineStyleVal
+        }
+      };
+    } else if (toolType === 'text') {
+      return {
+        type: "text",
+        color: style.color || '#df261c',
+        text: style.name || "Text Label",
+        font: {
+          size: `${sizeVal}px`,
+          family: style.fontFamily || "Inter",
+          weight: style.fontWeight || "normal",
+          style: style.fontStyle || "normal"
+        },
+        haloColor: style.outlineColor || '#ffffff',
+        haloSize: outlineWidthVal || 0,
+        backgroundColor: style.backgroundColor || 'transparent'
+      };
+    } else if (toolType === 'polyline' || toolType === 'polyline-freehand') {
+      return {
         type: "simple-line",
-        color: lineColorArr,
-        width: style.outlineWidth,
+        color: colorArr,
+        width: outlineWidthVal,
         style: style.lineStyle || "solid"
       };
-    } else if (type === 'polygon' || type === 'extent' || type === 'circle') {
-      graphic.symbol = {
+    } else if (toolType === 'polygon' || toolType === 'circle' || toolType === 'rectangle') {
+      return {
         type: "simple-fill",
         color: colorArr,
         style: style.fillStyle || "solid",
         outline: {
           color: outlineColorArr,
-          width: style.outlineWidth,
-          style: style.outlineStyle || "solid"
+          width: outlineWidthVal,
+          style: outlineStyleVal
         }
       };
+    }
+    return null;
+  };
+
+  const applyStyleToGraphic = (graphic, style) => {
+    const geomType = graphic.geometry.type;
+    let toolType = geomType;
+    if (geomType === 'point' && style.type === 'text') {
+      toolType = 'text';
+    }
+    const symbol = getSymbolForStyle(style, toolType);
+    if (symbol) {
+      graphic.symbol = symbol;
     }
   };
 
@@ -250,6 +302,11 @@ const DrawPanel = ({ view }) => {
       let arcgisTool = toolId;
       if (toolId === 'polyline-freehand') arcgisTool = 'polyline';
       if (toolId === 'text') arcgisTool = 'point';
+      
+      // Set dynamic style type for style panels
+      setStyleConfig(prev => ({ ...prev, type: toolId }));
+      setDrawStep('config');
+      setSelectedGraphic(null);
       
       sketchVMRef.current.create(arcgisTool, {
         mode: (toolId === 'polygon' || toolId === 'polyline' || toolId === 'text' || toolId === 'point') ? 'click' : 'hybrid'
@@ -428,7 +485,24 @@ const DrawPanel = ({ view }) => {
                           );
                         }
                         if (type === 'text') {
-                          return <span style={{ color: styleConfig.color, fontSize: `${styleConfig.size}px`, fontWeight: 'bold', textShadow: `0 0 ${styleConfig.outlineWidth}px ${styleConfig.outlineColor}` }}>{styleConfig.name || 'Text'}</span>;
+                          const textBg = styleConfig.backgroundColor === 'transparent' ? 'transparent' : styleConfig.backgroundColor;
+                          const textWeight = styleConfig.fontWeight || 'normal';
+                          const textStyle = styleConfig.fontStyle || 'normal';
+                          return (
+                            <span style={{ 
+                              color: styleConfig.color, 
+                              fontSize: `${Math.min(24, styleConfig.size)}px`, 
+                              fontFamily: styleConfig.fontFamily || 'Inter',
+                              fontWeight: textWeight, 
+                              fontStyle: textStyle,
+                              backgroundColor: textBg,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              textShadow: styleConfig.outlineWidth > 0 ? `0 0 ${styleConfig.outlineWidth}px ${styleConfig.outlineColor}` : 'none'
+                            }}>
+                              {styleConfig.name || 'Text'}
+                            </span>
+                          );
                         }
                         if (type === 'polygon' || type === 'circle' || type === 'rectangle') {
                           let outlineDasharray = "none";
@@ -509,8 +583,7 @@ const DrawPanel = ({ view }) => {
                                 />
                               </svg>
                             );
-                          } else {
-                            // diamond
+                          } else if (styleConfig.markerStyle === 'diamond') {
                             const side = Math.min(36, styleConfig.size);
                             const p1 = "20," + (20 - side/2);
                             const p2 = (20 + side/2) + ",20";
@@ -523,6 +596,54 @@ const DrawPanel = ({ view }) => {
                                   fill={styleConfig.color} 
                                   fillOpacity={styleConfig.opacity}
                                   stroke={styleConfig.outlineColor} 
+                                  strokeWidth={styleConfig.outlineWidth}
+                                  strokeDasharray={outlineDasharray}
+                                />
+                              </svg>
+                            );
+                          } else if (styleConfig.markerStyle === 'cross') {
+                            return (
+                              <svg width="40" height="40" style={{ display: 'block', margin: 'auto' }}>
+                                <path 
+                                  d="M20,6 L20,34 M6,20 L34,20" 
+                                  stroke={styleConfig.outlineColor} 
+                                  strokeWidth={styleConfig.outlineWidth}
+                                  strokeDasharray={outlineDasharray}
+                                />
+                              </svg>
+                            );
+                          } else if (styleConfig.markerStyle === 'x') {
+                            return (
+                              <svg width="40" height="40" style={{ display: 'block', margin: 'auto' }}>
+                                <path 
+                                  d="M8,8 L32,32 M32,8 L8,32" 
+                                  stroke={styleConfig.outlineColor} 
+                                  strokeWidth={styleConfig.outlineWidth}
+                                  strokeDasharray={outlineDasharray}
+                                />
+                              </svg>
+                            );
+                          } else if (styleConfig.markerStyle === 'pin') {
+                            return (
+                              <svg width="40" height="40" viewBox="0 0 40 40" style={{ display: 'block', margin: 'auto' }}>
+                                <path 
+                                  d="M20,4 C14,4 9,9 9,15 C9,23.5 20,36 20,36 C20,36 31,23.5 31,15 C31,9 26,4 20,4 Z M20,19 C17.8,19 16,17.2 16,15 C16,12.8 17.8,11 20,11 C22.2,11 24,12.8 24,15 C24,17.2 22.2,19 20,19 Z"
+                                  fill={styleConfig.color}
+                                  fillOpacity={styleConfig.opacity}
+                                  stroke={styleConfig.outlineColor}
+                                  strokeWidth={styleConfig.outlineWidth}
+                                  strokeDasharray={outlineDasharray}
+                                />
+                              </svg>
+                            );
+                          } else if (styleConfig.markerStyle === 'star') {
+                            return (
+                              <svg width="40" height="40" viewBox="0 0 40 40" style={{ display: 'block', margin: 'auto' }}>
+                                <path 
+                                  d="M20,4 L24.5,13.5 L35,15 L27.5,22.5 L29.3,33 L20,28 L10.7,33 L12.5,22.5 L5,15 L15.5,13.5 Z"
+                                  fill={styleConfig.color}
+                                  fillOpacity={styleConfig.opacity}
+                                  stroke={styleConfig.outlineColor}
                                   strokeWidth={styleConfig.outlineWidth}
                                   strokeDasharray={outlineDasharray}
                                 />
@@ -550,6 +671,10 @@ const DrawPanel = ({ view }) => {
                                 <option value="square">{t('drawMarkerShapeSquare')}</option>
                                 <option value="triangle">{t('drawMarkerShapeTriangle')}</option>
                                 <option value="diamond">{t('drawMarkerShapeDiamond')}</option>
+                                <option value="cross">{t('drawMarkerShapeCross')}</option>
+                                <option value="x">{t('drawMarkerShapeX')}</option>
+                                <option value="pin">{t('drawMarkerShapePin')}</option>
+                                <option value="star">{t('drawMarkerShapeStar')}</option>
                               </select>
                             </div>
                             <div className="property-group">
@@ -563,33 +688,36 @@ const DrawPanel = ({ view }) => {
                             </div>
                           </div>
 
-                          <div className="form-row">
-                            <div className="property-group">
-                              <label>{t('drawFillColorLabel')}</label>
-                              <input 
-                                type="color" 
-                                className="color-input" 
-                                style={{ width: '100%', height: '40px' }} 
-                                value={styleConfig.color} 
-                                onChange={(e) => handleUpdateStyle({ color: e.target.value })} 
-                              />
-                            </div>
-                            <div className="property-group">
-                              <label>{t('drawTransparencyLabel')}</label>
-                              <div className="property-control" style={{ height: '40px' }}>
+                          {styleConfig.markerStyle !== 'cross' && styleConfig.markerStyle !== 'x' && (
+                            <div className="form-row">
+                              <div className="property-group">
+                                <label>{t('drawFillColorLabel')}</label>
                                 <input 
-                                  type="range" 
-                                  className="slider-control" 
-                                  min="0" 
-                                  max="1" 
-                                  step="0.01" 
-                                  value={styleConfig.opacity} 
-                                  onChange={(e) => handleUpdateStyle({ opacity: Number(e.target.value) })} 
+                                  type="color" 
+                                  className="color-input" 
+                                  style={{ width: '100%', height: '40px' }} 
+                                  value={styleConfig.color} 
+                                  onChange={(e) => handleUpdateStyle({ color: e.target.value })} 
                                 />
-                                <span style={{ fontSize: '11px' }}>{Math.round(styleConfig.opacity * 100)}%</span>
+                              </div>
+                              <div className="property-group">
+                                <label>{t('drawTransparencyLabel')}</label>
+                                <div className="property-control" style={{ height: '40px' }}>
+                                  <input 
+                                    type="range" 
+                                    className="slider-control" 
+                                    min="0" 
+                                    max="1" 
+                                    step="0.01" 
+                                    value={styleConfig.opacity} 
+                                    onChange={(e) => handleUpdateStyle({ opacity: Number(e.target.value) })} 
+                                    style={{ width: '100%' }}
+                                  />
+                                  <span style={{ fontSize: '11px' }}>{Math.round(styleConfig.opacity * 100)}%</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
 
                           <div className="form-row">
                             <div className="property-group">
@@ -665,6 +793,7 @@ const DrawPanel = ({ view }) => {
                                   step="0.01" 
                                   value={styleConfig.opacity} 
                                   onChange={(e) => handleUpdateStyle({ opacity: Number(e.target.value) })} 
+                                  style={{ width: '100%' }}
                                 />
                                 <span style={{ fontSize: '11px' }}>{Math.round(styleConfig.opacity * 100)}%</span>
                               </div>
@@ -698,6 +827,7 @@ const DrawPanel = ({ view }) => {
                                   step="0.01" 
                                   value={styleConfig.opacity} 
                                   onChange={(e) => handleUpdateStyle({ opacity: Number(e.target.value) })} 
+                                  style={{ width: '100%' }}
                                 />
                                 <span style={{ fontSize: '11px' }}>{Math.round(styleConfig.opacity * 100)}%</span>
                               </div>
@@ -758,6 +888,24 @@ const DrawPanel = ({ view }) => {
                               />
                             </div>
                             <div className="property-group">
+                              <label>{t('drawFontFamilyLabel')}</label>
+                              <select 
+                                className="tool-select" 
+                                value={styleConfig.fontFamily || 'Inter'} 
+                                onChange={(e) => handleUpdateStyle({ fontFamily: e.target.value })}
+                              >
+                                <option value="Inter">Inter</option>
+                                <option value="Arial">Arial</option>
+                                <option value="Times New Roman">Times New Roman</option>
+                                <option value="Courier New">Courier New</option>
+                                <option value="Georgia">Georgia</option>
+                                <option value="Trebuchet MS">Trebuchet MS</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="form-row">
+                            <div className="property-group">
                               <label>{t('drawLabelColorLabel')}</label>
                               <input 
                                 type="color" 
@@ -766,6 +914,49 @@ const DrawPanel = ({ view }) => {
                                 value={styleConfig.color} 
                                 onChange={(e) => handleUpdateStyle({ color: e.target.value })} 
                               />
+                            </div>
+                            <div className="property-group">
+                              <label>{t('drawBackgroundColorLabel')}</label>
+                              <input 
+                                type="color" 
+                                className="color-input" 
+                                style={{ width: '100%', height: '40px' }} 
+                                value={styleConfig.backgroundColor === 'transparent' ? '#ffffff' : styleConfig.backgroundColor} 
+                                onChange={(e) => handleUpdateStyle({ backgroundColor: e.target.value })} 
+                              />
+                              <label className="checkbox-label" style={{ marginTop: '4px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={styleConfig.backgroundColor === 'transparent'} 
+                                  onChange={(e) => handleUpdateStyle({ backgroundColor: e.target.checked ? 'transparent' : '#ffffff' })} 
+                                />
+                                Transparent Background
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="form-row">
+                            <div className="property-group">
+                              <label>{t('drawFontWeightLabel')}</label>
+                              <select 
+                                className="tool-select" 
+                                value={styleConfig.fontWeight || 'normal'} 
+                                onChange={(e) => handleUpdateStyle({ fontWeight: e.target.value })}
+                              >
+                                <option value="normal">{t('drawFontWeightNormal')}</option>
+                                <option value="bold">{t('drawFontWeightBold')}</option>
+                              </select>
+                            </div>
+                            <div className="property-group">
+                              <label>{t('drawFontStyleLabel')}</label>
+                              <select 
+                                className="tool-select" 
+                                value={styleConfig.fontStyle || 'normal'} 
+                                onChange={(e) => handleUpdateStyle({ fontStyle: e.target.value })}
+                              >
+                                <option value="normal">{t('drawFontStyleNormal')}</option>
+                                <option value="italic">{t('drawFontStyleItalic')}</option>
+                              </select>
                             </div>
                           </div>
 
@@ -822,15 +1013,202 @@ const DrawPanel = ({ view }) => {
                           <td>
                             <div className="symbol-micro-preview">
                               {(() => {
-                                const style = d.style;
-                                const type = d.type;
-                                if (type === 'polyline' || type === 'polyline-freehand') {
-                                  return <div style={{ width: '16px', height: '0px', borderTop: `2px dashed ${style.color}` }} />;
+                               const style = d.style || {};
+                                let type = d.type || (d.graphic && d.graphic.geometry ? d.graphic.geometry.type : 'point');
+                                if (type === 'polyline-freehand') type = 'polyline';
+
+                                const color = style.color || '#df261c';
+                                const outlineColor = style.outlineColor || color || '#df261c';
+                                const outlineWidth = style.outlineWidth !== undefined ? style.outlineWidth : 2;
+                                
+                                if (type === 'polyline') {
+                                  let strokeDasharray = "none";
+                                  if (style.lineStyle === 'dash') strokeDasharray = "3,2";
+                                  else if (style.lineStyle === 'dot') strokeDasharray = "1,1";
+                                  else if (style.lineStyle === 'dash-dot') strokeDasharray = "4,2,1,2";
+                                  
+                                  return (
+                                    <svg width="24" height="12" style={{ display: 'block' }}>
+                                      <line 
+                                        x1="0" 
+                                        y1="6" 
+                                        x2="24" 
+                                        y2="6" 
+                                        stroke={color} 
+                                        strokeWidth={Math.max(2, Math.min(4, outlineWidth))} 
+                                        strokeDasharray={strokeDasharray}
+                                        opacity={1}
+                                      />
+                                    </svg>
+                                  );
                                 }
+                                
                                 if (type === 'text') {
-                                  return <span style={{ color: style.color, fontSize: '10px', fontWeight: 'bold' }}>T</span>;
+                                  const textBg = style.backgroundColor === 'transparent' ? 'transparent' : (style.backgroundColor || 'transparent');
+                                  const textWeight = style.fontWeight || 'normal';
+                                  const textStyle = style.fontStyle || 'normal';
+                                  return (
+                                    <span style={{ 
+                                      color: color, 
+                                      fontSize: '11px', 
+                                      fontFamily: style.fontFamily || 'Inter',
+                                      fontWeight: textWeight, 
+                                      fontStyle: textStyle,
+                                      backgroundColor: textBg,
+                                      padding: '1px 3px',
+                                      borderRadius: '2px',
+                                      border: outlineWidth > 0 ? `1px solid ${outlineColor}` : 'none'
+                                    }}>
+                                      T
+                                    </span>
+                                  );
                                 }
-                                return <div style={{ width: '12px', height: '12px', backgroundColor: style.color, opacity: 0.8, border: `1px solid ${style.outlineColor}`, borderRadius: type === 'point' ? '50%' : '2px' }} />;
+                                
+                                if (type === 'polygon' || type === 'circle' || type === 'rectangle' || type === 'extent') {
+                                  let outlineDasharray = "none";
+                                  if (style.outlineStyle === 'dash') outlineDasharray = "3,2";
+                                  else if (style.outlineStyle === 'dot') outlineDasharray = "1,1";
+                                  else if (style.outlineStyle === 'dash-dot') outlineDasharray = "4,2,1,2";
+                                  
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <rect 
+                                        x="1.5" 
+                                        y="1.5" 
+                                        width="13" 
+                                        height="13" 
+                                        fill={color} 
+                                        fillOpacity={style.opacity !== undefined ? Math.max(0.2, style.opacity) : 0.8}
+                                        stroke={outlineColor} 
+                                        strokeWidth={Math.max(1, Math.min(2, outlineWidth))} 
+                                        strokeDasharray={outlineDasharray}
+                                        rx={type === 'circle' ? '6.5' : '1'}
+                                        ry={type === 'circle' ? '6.5' : '1'}
+                                      />
+                                    </svg>
+                                  );
+                                }
+                                
+                                // Default / Point Marker fallback
+                                let outlineDasharray = "none";
+                                if (style.outlineStyle === 'dash') outlineDasharray = "2,1";
+                                else if (style.outlineStyle === 'dot') outlineDasharray = "1,1";
+                                
+                                const marker = style.markerStyle || 'circle';
+                                const opacity = style.opacity !== undefined ? Math.max(0.3, style.opacity) : 0.8;
+                                
+                                if (marker === 'circle') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <circle 
+                                        cx="8" 
+                                        cy="8" 
+                                        r="6.5" 
+                                        fill={color} 
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'} 
+                                        strokeWidth={Math.max(1, Math.min(2, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'square') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <rect 
+                                        x="2" 
+                                        y="2" 
+                                        width="12" 
+                                        height="12" 
+                                        fill={color} 
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'} 
+                                        strokeWidth={Math.max(1, Math.min(2, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'triangle') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <polygon 
+                                        points="8,2 2,14 14,14"
+                                        fill={color} 
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'} 
+                                        strokeWidth={Math.max(1, Math.min(2, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'diamond') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <polygon 
+                                        points="8,2 14,8 8,14 2,8"
+                                        fill={color} 
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'} 
+                                        strokeWidth={Math.max(1, Math.min(2, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'cross') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <path 
+                                        d="M8,2 L8,14 M2,8 L14,8" 
+                                        stroke={outlineColor || '#df261c'} 
+                                        strokeWidth={Math.max(2, Math.min(3, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'x') {
+                                  return (
+                                    <svg width="16" height="16" style={{ display: 'block' }}>
+                                      <path 
+                                        d="M3,3 L13,13 M13,3 L3,13" 
+                                        stroke={outlineColor || '#df261c'} 
+                                        strokeWidth={Math.max(2, Math.min(3, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'pin') {
+                                  return (
+                                    <svg width="16" height="16" viewBox="0 0 40 40" style={{ display: 'block' }}>
+                                      <path 
+                                        d="M20,4 C14,4 9,9 9,15 C9,23.5 20,36 20,36 C20,36 31,23.5 31,15 C31,9 26,4 20,4 Z M20,19 C17.8,19 16,17.2 16,15 C16,12.8 17.8,11 20,11 C22.2,11 24,12.8 24,15 C24,17.2 22.2,19 20,19 Z"
+                                        fill={color}
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'}
+                                        strokeWidth={Math.max(2, Math.min(4, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                } else if (marker === 'star') {
+                                  return (
+                                    <svg width="16" height="16" viewBox="0 0 40 40" style={{ display: 'block' }}>
+                                      <path 
+                                        d="M20,4 L24.5,13.5 L35,15 L27.5,22.5 L29.3,33 L20,28 L10.7,33 L12.5,22.5 L5,15 L15.5,13.5 Z"
+                                        fill={color}
+                                        fillOpacity={opacity}
+                                        stroke={outlineColor || '#ffffff'}
+                                        strokeWidth={Math.max(2, Math.min(4, outlineWidth))}
+                                        strokeDasharray={outlineDasharray}
+                                      />
+                                    </svg>
+                                  );
+                                }
+                                
+                                return (
+                                  <svg width="16" height="16" style={{ display: 'block' }}>
+                                    <circle cx="8" cy="8" r="6" fill={color} opacity="1" />
+                                  </svg>
+                                );
                               })()}
                             </div>
                           </td>

@@ -295,7 +295,7 @@ const AddDataPanel = ({
       if (!geojson.type) throw new Error('File does not appear to be a valid GeoJSON object.');
       
       if (geojson.crs && geojson.crs.properties && geojson.crs.properties.name) {
-        const match = geojson.crs.properties.name.match(/EPSG::(\d+)/);
+        const match = geojson.crs.properties.name.match(/EPSG::?(\d+)/i);
         if (match) {
           srWkid = parseInt(match[1], 10);
         }
@@ -327,7 +327,7 @@ const AddDataPanel = ({
     // CRS detection
     let sourceWkid = srWkid || 4326;
     if (geojson.crs?.properties?.name) {
-       const match = geojson.crs.properties.name.match(/EPSG::(\d+)/);
+       const match = geojson.crs.properties.name.match(/EPSG::?(\d+)/i);
        if (match) sourceWkid = parseInt(match[1], 10);
     }
     const sourceSR = new SpatialReference({ wkid: sourceWkid });
@@ -406,15 +406,24 @@ const AddDataPanel = ({
 
     const symbol = createSymbol(geomType, defaultColor);
 
+    const fields = [
+      { name: "ObjectID", alias: "ObjectID", type: "oid" }
+    ];
+    if (graphics.length > 0 && graphics[0].attributes) {
+      Object.keys(graphics[0].attributes).forEach(key => {
+        if (key !== "ObjectID") {
+          fields.push({ name: key, alias: key, type: "string" });
+        }
+      });
+    }
+
     const layer = new FeatureLayer({
       id: childLayerId,
       title: `${parentTitle} — ${subTitle}`,
       source: graphics,
       geometryType: geomType,
       objectIdField: "ObjectID",
-      fields: [
-        { name: "ObjectID", alias: "ObjectID", type: "oid" }
-      ],
+      fields: fields,
       renderer: {
         type: 'simple',
         symbol
@@ -422,15 +431,6 @@ const AddDataPanel = ({
       spatialReference: mapSR,
       visible: true
     });
-
-    // Extract other fields from properties if available
-    if (graphics.length > 0 && graphics[0].attributes) {
-      Object.keys(graphics[0].attributes).forEach(key => {
-        if (key !== "ObjectID") {
-           layer.fields.push({ name: key, alias: key, type: "string" });
-        }
-      });
-    }
 
     console.log('[AddData GeoJSON Import] Layer instance created. Renderer assigned:', layer.renderer?.type);
     console.log('[AddData GeoJSON Import] Renderer object:', layer.renderer);
@@ -532,29 +532,103 @@ const AddDataPanel = ({
     const children = [];
     let totalCount = 0;
 
+    if (!projectOperator.isLoaded()) {
+      await projectOperator.load();
+    }
+    const mapSR = view.spatialReference;
+
     for (let idx = 0; idx < collections.length; idx++) {
       const geojson = collections[idx];
       const subTitle = geojson.fileName || `Layer ${idx + 1}`;
-      const blob = new Blob([JSON.stringify(geojson)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
       const childLayerId = `uploaded-shp-child-${crypto.randomUUID()}`;
       const geomType = getGeometryType(geojson);
       const count = geojson.features?.length || 0;
       totalCount += count;
       const color = LAYER_COLORS[idx % LAYER_COLORS.length];
 
-      const childLayer = new GeoJSONLayer({
-        url,
+      // Detect shapefile CRS
+      let sourceWkid = srWkid || 4326;
+      if (geojson.crs?.properties?.name) {
+         const match = geojson.crs.properties.name.match(/EPSG::(\d+)/);
+         if (match) sourceWkid = parseInt(match[1], 10);
+      }
+      const sourceSR = new SpatialReference({ wkid: sourceWkid });
+
+      const graphics = [];
+      let objectIdCounter = 1;
+
+      for (const feat of (geojson.features || [])) {
+         let geom;
+         const coords = feat.geometry?.coordinates;
+         const type = feat.geometry?.type;
+         if (!coords) continue;
+
+         if (type === 'Point') {
+            geom = new Point({ x: coords[0], y: coords[1], spatialReference: sourceSR });
+         } else if (type === 'LineString') {
+            geom = new Polyline({ paths: [coords], spatialReference: sourceSR });
+         } else if (type === 'MultiLineString') {
+            geom = new Polyline({ paths: coords, spatialReference: sourceSR });
+         } else if (type === 'Polygon') {
+            geom = new Polygon({ rings: coords, spatialReference: sourceSR });
+         } else if (type === 'MultiPolygon') {
+            const allRings = [];
+            coords.forEach(polyRings => allRings.push(...polyRings));
+            geom = new Polygon({ rings: allRings, spatialReference: sourceSR });
+         }
+         
+         if (!geom) continue;
+
+         const isEquivalentSR = (wkid1, wkid2) => {
+            if (wkid1 === wkid2) return true;
+            const wms1 = wkid1 === 102100 || wkid1 === 3857 || wkid1 === 102113 || wkid1 === 900913;
+            const wms2 = wkid2 === 102100 || wkid2 === 3857 || wkid2 === 102113 || wkid2 === 900913;
+            return wms1 && wms2;
+         };
+
+         let projectedGeom = geom;
+         if (sourceSR.wkid && mapSR.wkid && !isEquivalentSR(sourceSR.wkid, mapSR.wkid)) {
+            projectedGeom = projectOperator.execute(geom, mapSR);
+         }
+
+         const attributes = { ...feat.properties, ObjectID: objectIdCounter++ };
+         graphics.push(new Graphic({
+           geometry: projectedGeom,
+           attributes
+         }));
+      }
+
+      const symbol = createSymbol(geomType, color);
+
+      const fields = [
+        { name: "ObjectID", alias: "ObjectID", type: "oid" }
+      ];
+      if (graphics.length > 0 && graphics[0].attributes) {
+        Object.keys(graphics[0].attributes).forEach(key => {
+          if (key !== "ObjectID") {
+            fields.push({ name: key, alias: key, type: "string" });
+          }
+        });
+      }
+
+      const childLayer = new FeatureLayer({
         id: childLayerId,
         title: `${parentTitle} — ${subTitle}`,
-        spatialReference: new SpatialReference({ wkid: srWkid }),
+        source: graphics,
+        geometryType: geomType,
+        objectIdField: "ObjectID",
+        fields: fields,
         renderer: {
           type: 'simple',
-          symbol: createSymbol(geomType, color)
-        }
+          symbol
+        },
+        spatialReference: mapSR,
+        visible: true
       });
 
       view.map.add(childLayer);
+      // Move layer to front so it's not hidden behind older spatial analysis layers
+      view.map.reorder(childLayer, view.map.layers.length - 1);
       registerLayerInPanel(childLayer, childLayerId);
 
       children.push({

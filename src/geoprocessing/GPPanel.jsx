@@ -45,6 +45,38 @@ const RUN_COLOURS = ['#268FFF','#28a745','#ffc107','#dc3545','#6f42c1','#17a2b8'
 let _runColourIdx = 0;
 const nextRunColour = () => RUN_COLOURS[_runColourIdx++ % RUN_COLOURS.length];
 
+// ── Status Banner (must live OUTSIDE GPPanel to avoid infinite re-render) ────────
+const StatusBanner = ({ jobStatus, isRTL }) => {
+  if (!jobStatus) return null;
+  const isWaiting = ['submitting', 'submitted', 'esriJobExecuting', 'esriJobWaiting'].includes(jobStatus.status);
+  const isError   = ['failed', 'esriJobFailed', 'esriJobTimedOut', 'cancelled'].includes(jobStatus.status);
+  const isOk      = jobStatus.status === 'succeeded' || jobStatus.status === 'esriJobSucceeded';
+
+  return (
+    <div className={`status-box ${isOk ? 'success' : isError ? '' : 'waiting'}`}
+      style={{ borderLeft: isError ? '3px solid #dc3545' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isWaiting && <Loader size={13} className="gp-spinner" />}
+        {isOk && <CheckCircle2 size={13} color="#28a745" />}
+        {isError && <AlertCircle size={13} color="#dc3545" />}
+        <span style={{ fontSize: 12, color: isError ? '#dc3545' : undefined }}>
+          {jobStatus.message}
+        </span>
+      </div>
+      {jobStatus.progress != null && isWaiting && (
+        <div style={{ marginTop: 6, height: 4, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: 4,
+            background: 'linear-gradient(90deg,#002D5D,#df261c)',
+            width: `${jobStatus.progress}%`, transition: 'width 0.4s ease',
+            ...(isRTL ? { transform: 'scaleX(-1)', transformOrigin: 'right' } : {})
+          }} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Main Panel component ───────────────────────────────────────────────────────
 
 const GPPanel = ({
@@ -62,6 +94,7 @@ const GPPanel = ({
   const [addUrlOpen, setAddUrlOpen]     = useState(false);
   const [urlFetchState, setUrlFetchState]     = useState(null); // null | 'loading' | 'error' | 'done'
   const [urlFetchError, setUrlFetchError]     = useState('');
+  const [serviceUrlDraft, setServiceUrlDraft] = useState('');
 
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
@@ -168,9 +201,11 @@ const GPPanel = ({
     }
   }, [selectedManifest, paramValues, view, isRunning]);
 
+  const handleCancelRun = useCallback(() => {
     engineRef.current?.cancel();
     setIsRunning(false);
     setJobStatus({ status: 'cancelled', message: t('gpStatusCancelled') });
+  }, [t]);
 
   // ── Result actions ────────────────────────────────────────────────────────
   const handleToggle = (runId) => {
@@ -310,37 +345,7 @@ const GPPanel = ({
     return groups;
   }, [filteredTools]);
 
-  // ── Status banner ─────────────────────────────────────────────────────────
-  const StatusBanner = () => {
-    if (!jobStatus) return null;
-    const isWaiting = ['submitting', 'submitted', 'esriJobExecuting', 'esriJobWaiting'].includes(jobStatus.status);
-    const isError   = ['failed', 'esriJobFailed', 'esriJobTimedOut', 'cancelled'].includes(jobStatus.status);
-    const isOk      = jobStatus.status === 'succeeded' || jobStatus.status === 'esriJobSucceeded';
-
-    return (
-      <div className={`status-box ${isOk ? 'success' : isError ? '' : 'waiting'}`}
-        style={{ borderLeft: isError ? '3px solid #dc3545' : undefined }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {isWaiting && <Loader size={13} className="gp-spinner" />}
-          {isOk && <CheckCircle2 size={13} color="#28a745" />}
-          {isError && <AlertCircle size={13} color="#dc3545" />}
-          <span style={{ fontSize: 12, color: isError ? '#dc3545' : undefined }}>
-            {jobStatus.message}
-          </span>
-        </div>
-        {jobStatus.progress != null && isWaiting && (
-          <div style={{ marginTop: 6, height: 4, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', borderRadius: 4,
-              background: 'linear-gradient(90deg,#002D5D,#df261c)',
-              width: `${jobStatus.progress}%`, transition: 'width 0.4s ease',
-              ...(isRTL ? { transform: 'scaleX(-1)', transformOrigin: 'right' } : {})
-            }} />
-          </div>
-        )}
-      </div>
-    );
-  };
+  // StatusBanner is defined above as a standalone component to prevent infinite re-renders
 
   // ── Validate required params before run ───────────────────────────────────
   const missingRequired = selectedManifest?.parameters
@@ -463,7 +468,7 @@ const GPPanel = ({
             />
 
             {/* Status */}
-            <StatusBanner />
+            <StatusBanner jobStatus={jobStatus} isRTL={isRTL} />
 
             {/* Validation warnings */}
             {missingRequired.length > 0 && !isRunning && (

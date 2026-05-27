@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import shpwrite from '@mapbox/shp-write';
-import { graphicsToGeoJSON } from '../geoprocessing/crsUtils';
+import { graphicsToGeoJSON, esriGeometryToGeoJSON, buildGeoJSON } from '../geoprocessing/crsUtils';
 
 // Import modular feature panel components
 import NavigationPanel from '../components/NavigationPanel';
@@ -83,6 +83,35 @@ export const IdentifyPanel = ({
   setSelectedIdentifyFeature,
   mapView
 }) => {
+  const handleExportFeatures = (featuresList, exportTitle) => {
+    try {
+      if (!featuresList || featuresList.length === 0) {
+        alert("No features to export.");
+        return;
+      }
+
+      const geojsonFeatures = featuresList.map(f => ({
+        type: 'Feature',
+        geometry: esriGeometryToGeoJSON(f.geometry),
+        properties: { ...(f.attributes || {}) }
+      }));
+
+      const firstSR = featuresList[0]?.geometry?.spatialReference || 4326;
+      const geojson = buildGeoJSON(geojsonFeatures, firstSR);
+
+      const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/geo+json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${exportTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}.geojson`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to export GeoJSON:", err);
+      alert("Failed to export GeoJSON: " + err.message);
+    }
+  };
+
   // Recursively build active layer tree structure
   const treeData = React.useMemo(() => {
     const tree = [];
@@ -316,14 +345,24 @@ export const IdentifyPanel = ({
                               <span style={{ fontWeight: 'bold', color: '#1e3c72', fontSize: '13px' }}>
                                 {f.attributes[f.displayField] || 'Feature ' + (i + 1)}
                               </span>
-                              <button 
-                                className="action-icon-btn" 
-                                title="Zoom To"
-                                onClick={() => mapView.goTo({ target: f.geometry, zoom: 15 })}
-                                style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#1e3c72', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
-                              >
-                                <Maximize2 size={12} /> Zoom
-                              </button>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button 
+                                  className="action-icon-btn" 
+                                  title="Zoom To"
+                                  onClick={() => mapView.goTo({ target: f.geometry, zoom: 15 })}
+                                  style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#1e3c72', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
+                                >
+                                  <Maximize2 size={12} /> Zoom
+                                </button>
+                                <button 
+                                  className="action-icon-btn" 
+                                  title="Export Feature as GeoJSON"
+                                  onClick={() => handleExportFeatures([f], f.attributes[f.displayField] || `Feature_${i + 1}`)}
+                                  style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
+                                >
+                                  <Download size={12} /> Export
+                                </button>
+                              </div>
                             </div>
                             <div className="attributes-grid" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               {f.fields && f.fields.length > 0 ? (
@@ -376,14 +415,39 @@ export const IdentifyPanel = ({
             marginRight: '-16px',
             padding: '12px 16px 14px 16px',
             display: 'flex',
-            justifyContent: 'flex-end'
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderTop: '1px solid #f1f5f9',
+            gap: '8px'
           }}>
             <button 
               style={{ 
                 fontSize: '13px',
                 padding: '8px 18px',
                 fontWeight: '600', 
-                color: '#1e3c72',
+                color: 'white',
+                background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
+                border: 'none', 
+                borderRadius: '8px',
+                cursor: 'pointer', 
+                boxShadow: '0 2px 6px rgba(30, 60, 114, 0.2)', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onClick={() => {
+                const allFeatures = Object.values(identifySettings.results.grouped).flat();
+                handleExportFeatures(allFeatures, `Identify_Results_${new Date().toLocaleDateString()}`);
+              }}
+            >
+              <Download size={15} /> Export All (GeoJSON)
+            </button>
+            <button 
+              style={{ 
+                fontSize: '13px',
+                padding: '8px 18px',
+                fontWeight: '600', 
+                color: '#64748b',
                 background: 'white',
                 border: '1px solid #cbd5e1', 
                 borderRadius: '8px',
@@ -1221,8 +1285,8 @@ export const SwipePanel = ({
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>{t('Swipe Direction')}</label>
           <div style={{ display: 'flex', gap: '8px' }}>
             {[
-              { id: 'vertical',   label: `| ${t('Vertical Swipe')}` },
-              { id: 'horizontal', label: `— ${t('Horizontal Swipe')}` }
+              { id: 'vertical',   label: `— ${t('Vertical Swipe')}` },
+              { id: 'horizontal', label: `| ${t('Horizontal Swipe')}` }
             ].map(({ id, label }) => (
               <button
                 key={id}

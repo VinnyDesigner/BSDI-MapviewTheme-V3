@@ -29,6 +29,18 @@ import '@arcgis/core/assets/esri/themes/light/main.css';
 // ─── ArcGIS Request Configuration (Local Development Proxy) ──────────────────
 // Resolves CORS and 504 Gateway Timeout issues by routing requests through 
 // the Vite dev server proxy.
+const getProxyUrl = (url) => {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    if (url.includes("https://gis9.smartgeoapps.com")) {
+      return url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
+    }
+    if (url.includes("https://gis12.smartgeoapps.com")) {
+      return url.replace("https://gis12.smartgeoapps.com", "/arcgis-proxy-gis12");
+    }
+  }
+  return url;
+};
+
 if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis9.smartgeoapps.com")) {
   esriConfig.request.interceptors.push({
     urls: "https://gis9.smartgeoapps.com",
@@ -37,6 +49,25 @@ if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis9.smartgeo
         const originalUrl = params.url;
         params.url = params.url.replace("https://gis9.smartgeoapps.com", "/arcgis-proxy");
         // Ensure no credentials are sent to bypass potential CORS preflight issues
+        params.requestOptions = { ...params.requestOptions, withCredentials: false };
+        console.log(`[ArcGIS Request] ${originalUrl} -> ${params.url}`);
+      }
+    },
+    error: function(error) {
+      if (error.name === "TimeoutError") {
+        console.warn("[ArcGIS] Request timed out. Service might be slow.");
+      }
+    }
+  });
+}
+
+if (!esriConfig.request.interceptors.some(i => i.urls === "https://gis12.smartgeoapps.com")) {
+  esriConfig.request.interceptors.push({
+    urls: "https://gis12.smartgeoapps.com",
+    before: function(params) {
+      if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        const originalUrl = params.url;
+        params.url = params.url.replace("https://gis12.smartgeoapps.com", "/arcgis-proxy-gis12");
         params.requestOptions = { ...params.requestOptions, withCredentials: false };
         console.log(`[ArcGIS Request] ${originalUrl} -> ${params.url}`);
       }
@@ -118,45 +149,93 @@ const ArcGISMap = ({
         refreshInterval: 0
       };
 
-      let layer;
-      if (config.type === 'tile') layer = new TileLayer(commonProps);
-      else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
-      else {
-        let layerUrl = config.url;
-        if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
-          layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
-        }
+      if (config.type === 'tile') {
+        const layer = new TileLayer(commonProps);
+        map.add(layer);
+        layersRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
+      } else if (config.type === 'map-image') {
+        const layer = new MapImageLayer(commonProps);
+        map.add(layer);
+        layersRef.current[config.id] = layer;
+        return layer.load().then(() => {
+          if (layer.allSublayers) {
+            layer.allSublayers.forEach(sub => {
+              const subKey = `${config.id}_sub_${sub.id}`;
+              sub.visible = !!layerVisibility[subKey];
+            });
+          }
+        }).catch(err => {
+          console.error(`[ArcGIS] 2D MapImageLayer [${config.id}] load failed:`, err.message);
+          return null;
+        });
+      } else if (config.url && (config.url.toLowerCase().endsWith('featureserver') || config.url.toLowerCase().endsWith('featureserver/'))) {
+        const cleanUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
+        
+        // Fetch sublayers metadata from FeatureServer
+        return fetch(`${getProxyUrl(cleanUrl)}?f=json`)
+          .then(res => res.json())
+          .then(serviceMeta => {
+            if (serviceMeta && serviceMeta.layers && serviceMeta.layers.length > 0) {
+              console.log(`[ArcGIS] FeatureServer [${config.id}] has ${serviceMeta.layers.length} sublayers.`);
+              const subPromises = serviceMeta.layers.map(sub => {
+                const subId = `${config.id}_sub_${sub.id}`;
+                const subUrl = `${cleanUrl}/${sub.id}`;
+                const subLayer = new FeatureLayer({
+                  id: subId,
+                  url: subUrl,
+                  title: sub.name,
+                  visible: !!layerVisibility[subId],
+                  popupTemplate: { title: "{*}", content: "{*}" }
+                });
+                
+                map.add(subLayer);
+                layersRef.current[subId] = subLayer;
+                return subLayer.load().then(() => {
+                  console.log(`[ArcGIS] FeatureServer Sublayer [${subId}] loaded.`);
+                }).catch(err => {
+                  console.error(`[ArcGIS] FeatureServer Sublayer [${subId}] failed to load:`, err.message);
+                });
+              });
+              return Promise.all(subPromises);
+            } else {
+              // Fallback
+              const fallbackLayer = new FeatureLayer({
+                ...commonProps,
+                url: `${cleanUrl}/0`,
+                popupTemplate: { title: "{*}", content: "{*}" }
+              });
+              map.add(fallbackLayer);
+              layersRef.current[config.id] = fallbackLayer;
+              return fallbackLayer.load();
+            }
+          })
+          .catch(err => {
+            console.error(`[ArcGIS] Failed to fetch FeatureServer metadata for [${config.id}], using fallback:`, err.message);
+            const fallbackLayer = new FeatureLayer({
+              ...commonProps,
+              url: `${cleanUrl}/0`,
+              popupTemplate: { title: "{*}", content: "{*}" }
+            });
+            map.add(fallbackLayer);
+            layersRef.current[config.id] = fallbackLayer;
+            return fallbackLayer.load();
+          });
+      } else {
+        // Standard single FeatureLayer
         const layerProps = { 
           ...commonProps, 
-          url: layerUrl,
+          url: config.url,
           popupTemplate: { title: "{*}", content: "{*}" }
         };
         if (config.renderer) {
           layerProps.renderer = config.renderer;
         }
-        layer = new FeatureLayer(layerProps);
+        const layer = new FeatureLayer(layerProps);
+        map.add(layer);
+        layersRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
       }
-
-      map.add(layer);
-      layersRef.current[config.id] = layer;
-      
-      const loadPromise = layer.load().then(() => {
-        console.log(`[ArcGIS] Layer [${config.id}] loaded. SR:`, layer.spatialReference?.wkid);
-        // Immediate sync once loaded to ensure default visibility is applied
-        if (layer.type === 'map-image' && layer.allSublayers) {
-          layer.allSublayers.forEach(sub => {
-            const subKey = `${config.id}_sub_${sub.id}`;
-            if (layerVisibility[subKey] !== undefined) {
-              sub.visible = !!layerVisibility[subKey];
-            }
-          });
-        }
-      }).catch(err => {
-        console.error(`[ArcGIS] 2D Layer [${config.id}] load failed:`, err.message);
-        return null;
-      });
-
-      return loadPromise;
     });
 
     view.when(() => {
@@ -212,26 +291,72 @@ const ArcGISMap = ({
         elevationInfo: { mode: "relative-to-ground" }
       };
 
-      let layer;
-      if (config.type === 'tile') layer = new TileLayer(commonProps);
-      else if (config.type === 'map-image') layer = new MapImageLayer(commonProps);
-      else {
-        let layerUrl = config.url;
-        if (layerUrl && (layerUrl.toLowerCase().endsWith('featureserver') || layerUrl.toLowerCase().endsWith('featureserver/'))) {
-          layerUrl = layerUrl.endsWith('/') ? `${layerUrl}0` : `${layerUrl}/0`;
-        }
-        layer = new FeatureLayer({
-          ...commonProps,
-          url: layerUrl
-        });
+      if (config.type === 'tile') {
+        const layer = new TileLayer(commonProps);
+        map.add(layer);
+        layers3DRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
+      } else if (config.type === 'map-image') {
+        const layer = new MapImageLayer(commonProps);
+        map.add(layer);
+        layers3DRef.current[config.id] = layer;
+        return layer.load().then(() => {
+          if (layer.allSublayers) {
+            layer.allSublayers.forEach(sub => {
+              const subKey = `${config.id}_sub_${sub.id}`;
+              sub.visible = !!layerVisibility[subKey];
+            });
+          }
+        }).catch(() => null);
+      } else if (config.url && (config.url.toLowerCase().endsWith('featureserver') || config.url.toLowerCase().endsWith('featureserver/'))) {
+        const cleanUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
+        
+        return fetch(`${getProxyUrl(cleanUrl)}?f=json`)
+          .then(res => res.json())
+          .then(serviceMeta => {
+            if (serviceMeta && serviceMeta.layers && serviceMeta.layers.length > 0) {
+              console.log(`[ArcGIS] 3D FeatureServer [${config.id}] has ${serviceMeta.layers.length} sublayers.`);
+              const subPromises = serviceMeta.layers.map(sub => {
+                const subId = `${config.id}_sub_${sub.id}`;
+                const subUrl = `${cleanUrl}/${sub.id}`;
+                const subLayer = new FeatureLayer({
+                  id: subId,
+                  url: subUrl,
+                  title: sub.name,
+                  visible: !!layerVisibility[subId],
+                  elevationInfo: { mode: "relative-to-ground" }
+                });
+                
+                map.add(subLayer);
+                layers3DRef.current[subId] = subLayer;
+                return subLayer.load().catch(() => null);
+              });
+              return Promise.all(subPromises);
+            } else {
+              const fallbackLayer = new FeatureLayer({
+                ...commonProps,
+                url: `${cleanUrl}/0`
+              });
+              map.add(fallbackLayer);
+              layers3DRef.current[config.id] = fallbackLayer;
+              return fallbackLayer.load();
+            }
+          })
+          .catch(() => {
+            const fallbackLayer = new FeatureLayer({
+              ...commonProps,
+              url: `${cleanUrl}/0`
+            });
+            map.add(fallbackLayer);
+            layers3DRef.current[config.id] = fallbackLayer;
+            return fallbackLayer.load();
+          });
+      } else {
+        const layer = new FeatureLayer(commonProps);
+        map.add(layer);
+        layers3DRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
       }
-
-      map.add(layer);
-      layers3DRef.current[config.id] = layer;
-      return layer.load().catch(err => {
-        console.error(`[ArcGIS] 3D Layer [${config.id}] load failed:`, err.message);
-        return null;
-      });
     });
 
     view.when(() => {
@@ -262,6 +387,19 @@ const ArcGISMap = ({
       }
     }
   }, [is3D]);
+
+  // Basemap Synchronization Effect
+  useEffect(() => {
+    if (basemap) {
+      console.log(`[ArcGIS] Syncing basemap: ${basemap}`);
+      if (view2DRef.current && view2DRef.current.map) {
+        view2DRef.current.map.basemap = basemap;
+      }
+      if (view3DRef.current && view3DRef.current.map) {
+        view3DRef.current.map.basemap = basemap;
+      }
+    }
+  }, [basemap]);
 
   // 4. Split / Swipe
   const swipeManagedLayersRef = useRef([]);
@@ -1064,6 +1202,18 @@ const ArcGISMap = ({
           }
         }
       });
+
+      // Sync custom/dynamic layers added to the map directly (e.g. from Add Data or spatial analysis)
+      currentView.map.layers.forEach(layer => {
+        if (layer && layer.id && !activeLayers[layer.id]) {
+          if (layerVisibility[layer.id] !== undefined) {
+            const isVisible = !!layerVisibility[layer.id];
+            if (layer.visible !== isVisible) {
+              layer.visible = isVisible;
+            }
+          }
+        }
+      });
     } catch (err) {
       console.error('Visibility sync error:', err);
     }
@@ -1253,6 +1403,38 @@ const ArcGISMap = ({
       try {
         const unitMap = { 'meters': 'meters', 'kilometers': 'kilometers', 'miles': 'miles' };
 
+        const getGeometryExtent = (geom) => {
+          if (!geom) return null;
+          if (geom.extent) return geom.extent;
+          if (geom.type === 'point') {
+            return {
+              xmin: geom.x, ymin: geom.y,
+              xmax: geom.x, ymax: geom.y,
+              spatialReference: geom.spatialReference || view.spatialReference
+            };
+          }
+          return null;
+        };
+
+        const unionExtents = (extent1, extent2) => {
+          if (!extent1) return extent2 ? (extent2.clone ? extent2.clone() : { ...extent2 }) : null;
+          if (!extent2) return extent1 ? (extent1.clone ? extent1.clone() : { ...extent1 }) : null;
+          
+          if (typeof extent1.union === 'function') {
+            try {
+              return extent1.union(extent2);
+            } catch (_) {}
+          }
+          
+          return {
+            xmin: Math.min(extent1.xmin, extent2.xmin),
+            ymin: Math.min(extent1.ymin, extent2.ymin),
+            xmax: Math.max(extent1.xmax, extent2.xmax),
+            ymax: Math.max(extent1.ymax, extent2.ymax),
+            spatialReference: extent1.spatialReference || extent2.spatialReference
+          };
+        };
+
         const resolveLayer = async (lId) => {
           if (!lId) return null;
           let tLayer;
@@ -1319,11 +1501,16 @@ const ArcGISMap = ({
               attributes: { title: `${bufferDistance} ${unit} Buffer`, runId: lastRun }
             });
             spatialGraphicsLayer.current.add(graphic);
-            if (fullExtent) fullExtent = fullExtent.union(geom.extent);
-            else fullExtent = geom.extent.clone();
+            const geomExtent = getGeometryExtent(geom);
+            if (geomExtent) {
+              fullExtent = unionExtents(fullExtent, geomExtent);
+            }
           });
 
-          if (fullExtent) view.goTo({ target: fullExtent.expand(1.2) });
+          if (fullExtent) {
+            const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
+            view.goTo({ target: ext });
+          }
           if (typeof onSpatialResult === 'function') {
              onSpatialResult({ id: lastRun, title: `${title} - Buffer`, count: features.length, distance: bufferDistance, unit: unit });
           }
@@ -1393,13 +1580,18 @@ const ArcGISMap = ({
                });
                spatialGraphicsLayer.current.add(graphic);
                
-               if (fullExtent && resultGeom.extent) fullExtent = fullExtent.union(resultGeom.extent);
-               else if (resultGeom.extent) fullExtent = resultGeom.extent.clone();
+               const geomExtent = getGeometryExtent(resultGeom);
+               if (geomExtent) {
+                 fullExtent = unionExtents(fullExtent, geomExtent);
+               }
             }
           });
 
           if (resultCount > 0) {
-            if (fullExtent) view.goTo({ target: fullExtent.expand(1.2) });
+            if (fullExtent) {
+              const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
+              view.goTo({ target: ext });
+            }
             if (typeof onSpatialResult === 'function') {
                onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle}`, count: resultCount });
             }
@@ -1472,21 +1664,17 @@ const ArcGISMap = ({
           view.map.add(heatmapLayer);
           
           let fullExtent = null;
-          pointFeatures.forEach(f => {
-            if (fullExtent) fullExtent = fullExtent.union(f.geometry.extent || f.geometry);
-            else fullExtent = (f.geometry.extent || f.geometry).clone();
-          });
-          
-          if (fullExtent) {
-            // Point extents are null, so we must calculate an extent around points
-            const xs = pointFeatures.map(f => f.geometry.x);
-            const ys = pointFeatures.map(f => f.geometry.y);
-            fullExtent = {
-              xmin: Math.min(...xs), ymin: Math.min(...ys),
-              xmax: Math.max(...xs), ymax: Math.max(...ys),
-              spatialReference: view.spatialReference
-            };
-            view.goTo({ target: fullExtent });
+          if (pointFeatures.length > 0) {
+            const xs = pointFeatures.map(f => f.geometry.x).filter(x => typeof x === 'number');
+            const ys = pointFeatures.map(f => f.geometry.y).filter(y => typeof y === 'number');
+            if (xs.length > 0 && ys.length > 0) {
+              fullExtent = {
+                xmin: Math.min(...xs), ymin: Math.min(...ys),
+                xmax: Math.max(...xs), ymax: Math.max(...ys),
+                spatialReference: view.spatialReference
+              };
+              view.goTo({ target: fullExtent });
+            }
           }
 
           if (typeof onSpatialResult === 'function') {
@@ -1847,45 +2035,62 @@ const ArcGISMap = ({
     console.log('[DataRequest] ✅ Starting sketch, tool:', capturedTool);
 
     const getIntersectingLayers = async (geometry) => {
-      const intersecting = [];
-      for (const config of layersConfig) {
+      const promises = layersConfig.map(async (config) => {
         const layer = layersRef.current[config.id];
-        if (!layer) continue;
+        if (!layer) return null;
         try {
           if (layer.type === 'feature') {
             const q = layer.createQuery();
             q.geometry = geometry;
             q.spatialRelationship = 'intersects';
             const count = await layer.queryFeatureCount(q);
-            if (count > 0) intersecting.push({ id: config.id, title: config.title });
+            if (count > 0) return { id: config.id, title: config.title };
           } else if (layer.type === 'map-image' && layer.allSublayers) {
-            let hit = false;
-            for (const sub of layer.allSublayers.toArray()) {
-              if (sub.sublayers) continue;
-              try {
-                const q = sub.createQuery();
-                q.geometry = geometry;
-                q.spatialRelationship = 'intersects';
-                const count = await sub.queryFeatureCount(q);
-                if (count > 0) {
-                  intersecting.push({ id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` });
-                  hit = true;
+            const sublayerPromises = layer.allSublayers.toArray()
+              .filter(sub => !sub.sublayers)
+              .map(async (sub) => {
+                try {
+                  const q = sub.createQuery();
+                  q.geometry = geometry;
+                  q.spatialRelationship = 'intersects';
+                  const count = await sub.queryFeatureCount(q);
+                  if (count > 0) {
+                    return { id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` };
+                  }
+                } catch (e) {
+                  if (sub.fullExtent && geometryEngine.intersects(geometry, sub.fullExtent)) {
+                    return { id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` };
+                  }
                 }
-              } catch (e) {
-                if (sub.fullExtent && geometryEngine.intersects(geometry, sub.fullExtent)) {
-                  intersecting.push({ id: `${config.id}_sub_${sub.id}`, title: `${config.title} - ${sub.title}` });
-                  hit = true;
-                }
-              }
+                return null;
+              });
+            const sublayerResults = await Promise.all(sublayerPromises);
+            const validSublayerResults = sublayerResults.filter(Boolean);
+            if (validSublayerResults.length > 0) {
+              return validSublayerResults; // Return array of sublayers
             }
-            if (!hit && layer.fullExtent && geometryEngine.intersects(geometry, layer.fullExtent)) {
-              intersecting.push({ id: config.id, title: config.title });
+            if (layer.fullExtent && geometryEngine.intersects(geometry, layer.fullExtent)) {
+              return { id: config.id, title: config.title };
             }
           }
         } catch (err) {
           console.warn(`[DataRequest] ${config.title}:`, err);
         }
-      }
+        return null;
+      });
+
+      const results = await Promise.all(promises);
+      const intersecting = [];
+      results.forEach(res => {
+        if (!res) return;
+        if (Array.isArray(res)) {
+          intersecting.push(...res);
+        } else {
+          intersecting.push(res);
+        }
+      });
+
+      // Check uploaded layers
       try {
         view.map.allLayers.forEach(ul => {
           if (!ul.id?.startsWith('uploaded-')) return;
@@ -1896,6 +2101,7 @@ const ArcGISMap = ({
           }
         });
       } catch (e) { /* ignore */ }
+
       return intersecting;
     };
 
@@ -1931,9 +2137,15 @@ const ArcGISMap = ({
           dataRequestFinalLayer.current.removeAll();
           dataRequestFinalLayer.current.add(finalGraphic);
           view.cursor = 'default';
+          
+          // Switch to form step and show loading state instantly
+          onDataRequestAOIChange(geometry, [], true, true);
+          
           const layers = await getIntersectingLayers(geometry);
           console.log('[DataRequest] Intersecting layers found:', layers.length, layers);
-          onDataRequestAOIChange(geometry, layers, true);
+          
+          // Replace loading state with actual matched layers
+          onDataRequestAOIChange(geometry, layers, true, false);
         }
       });
     } else {

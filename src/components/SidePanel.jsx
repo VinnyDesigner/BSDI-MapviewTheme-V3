@@ -31,7 +31,7 @@ const SidePanel = ({ isOpen, title, children, onClose, onMinimize }) => {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="side-panel-container">
+        <div className="side-panel-container" key="side-panel-wrapper">
           <motion.div 
             className={`side-panel ${isMobile ? `snap-${snapState}` : ''}`}
             initial={initialAnim}
