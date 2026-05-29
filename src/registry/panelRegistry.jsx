@@ -267,18 +267,15 @@ export const IdentifyPanel = ({
         <div>
           <div 
             style={{ 
-              position: 'sticky',
-              top: '-16px',
-              zIndex: 10,
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(8px)',
-              marginLeft: '-16px',
-              marginRight: '-16px',
-              padding: '14px 16px 12px 16px',
-              marginBottom: '12px',
-              borderBottom: '1px solid #f1f5f9',
-              display: 'flex', alignItems: 'center',
-              cursor: 'pointer', color: '#1e3c72', fontWeight: 'bold', fontSize: '14px' 
+              display: 'flex', 
+              alignItems: 'center',
+              cursor: 'pointer', 
+              color: '#1e3c72', 
+              fontWeight: 'bold', 
+              fontSize: '14px',
+              marginBottom: '16px',
+              paddingBottom: '8px',
+              borderBottom: '1px solid #f1f5f9'
             }} 
             onClick={() => {
               setIdentifySettings(prev => ({ ...prev, results: null }));
@@ -334,7 +331,7 @@ export const IdentifyPanel = ({
 
                     {isExpanded && (
                       <div className="feature-list no-scrollbar" style={{ 
-                        padding: '12px', maxHeight: '400px', overflowY: 'auto'
+                        padding: '12px', maxHeight: '320px', overflowY: 'auto'
                       }}>
                         {features.map((f, i) => (
                           <div key={i} className="identify-result-card" style={{ 
@@ -354,14 +351,6 @@ export const IdentifyPanel = ({
                                   style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#1e3c72', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
                                 >
                                   <Maximize2 size={12} /> Zoom
-                                </button>
-                                <button 
-                                  className="action-icon-btn" 
-                                  title="Export Feature as GeoJSON"
-                                  onClick={() => handleExportFeatures([f], f.attributes[f.displayField] || `Feature_${i + 1}`)}
-                                  style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
-                                >
-                                  <Download size={12} /> Export
                                 </button>
                               </div>
                             </div>
@@ -408,41 +397,13 @@ export const IdentifyPanel = ({
           </div>
 
           <div style={{ 
-            position: 'sticky',
-            bottom: '-16px',
-            background: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(8px)',
-            marginLeft: '-16px',
-            marginRight: '-16px',
-            padding: '12px 16px 14px 16px',
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             alignItems: 'center',
             borderTop: '1px solid #f1f5f9',
-            gap: '8px'
+            paddingTop: '12px',
+            marginTop: '16px'
           }}>
-            <button 
-              style={{ 
-                fontSize: '13px',
-                padding: '8px 18px',
-                fontWeight: '600', 
-                color: 'white',
-                background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
-                border: 'none', 
-                borderRadius: '8px',
-                cursor: 'pointer', 
-                boxShadow: '0 2px 6px rgba(30, 60, 114, 0.2)', 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              onClick={() => {
-                const allFeatures = Object.values(identifySettings.results.grouped).flat();
-                handleExportFeatures(allFeatures, `Identify_Results_${new Date().toLocaleDateString()}`);
-              }}
-            >
-              <Download size={15} /> Export All (GeoJSON)
-            </button>
             <button 
               style={{ 
                 fontSize: '13px',
