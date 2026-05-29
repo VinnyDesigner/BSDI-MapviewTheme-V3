@@ -172,56 +172,14 @@ const ArcGISMap = ({
         });
       } else if (config.url && (config.url.toLowerCase().endsWith('featureserver') || config.url.toLowerCase().endsWith('featureserver/'))) {
         const cleanUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
-        
-        // Fetch sublayers metadata from FeatureServer
-        return fetch(`${getProxyUrl(cleanUrl)}?f=json`)
-          .then(res => res.json())
-          .then(serviceMeta => {
-            if (serviceMeta && serviceMeta.layers && serviceMeta.layers.length > 0) {
-              console.log(`[ArcGIS] FeatureServer [${config.id}] has ${serviceMeta.layers.length} sublayers.`);
-              const subPromises = serviceMeta.layers.map(sub => {
-                const subId = `${config.id}_sub_${sub.id}`;
-                const subUrl = `${cleanUrl}/${sub.id}`;
-                const subLayer = new FeatureLayer({
-                  id: subId,
-                  url: subUrl,
-                  title: sub.name,
-                  visible: !!layerVisibility[subId],
-                  popupTemplate: { title: "{*}", content: "{*}" }
-                });
-                
-                map.add(subLayer);
-                layersRef.current[subId] = subLayer;
-                return subLayer.load().then(() => {
-                  console.log(`[ArcGIS] FeatureServer Sublayer [${subId}] loaded.`);
-                }).catch(err => {
-                  console.error(`[ArcGIS] FeatureServer Sublayer [${subId}] failed to load:`, err.message);
-                });
-              });
-              return Promise.all(subPromises);
-            } else {
-              // Fallback
-              const fallbackLayer = new FeatureLayer({
-                ...commonProps,
-                url: `${cleanUrl}/0`,
-                popupTemplate: { title: "{*}", content: "{*}" }
-              });
-              map.add(fallbackLayer);
-              layersRef.current[config.id] = fallbackLayer;
-              return fallbackLayer.load();
-            }
-          })
-          .catch(err => {
-            console.error(`[ArcGIS] Failed to fetch FeatureServer metadata for [${config.id}], using fallback:`, err.message);
-            const fallbackLayer = new FeatureLayer({
-              ...commonProps,
-              url: `${cleanUrl}/0`,
-              popupTemplate: { title: "{*}", content: "{*}" }
-            });
-            map.add(fallbackLayer);
-            layersRef.current[config.id] = fallbackLayer;
-            return fallbackLayer.load();
-          });
+        const layer = new FeatureLayer({
+          ...commonProps,
+          url: `${cleanUrl}/0`,
+          popupTemplate: { title: "{*}", content: "{*}" }
+        });
+        map.add(layer);
+        layersRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
       } else {
         // Standard single FeatureLayer
         const layerProps = { 
@@ -320,47 +278,14 @@ const ArcGISMap = ({
         }).catch(() => null);
       } else if (config.url && (config.url.toLowerCase().endsWith('featureserver') || config.url.toLowerCase().endsWith('featureserver/'))) {
         const cleanUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
-        
-        return fetch(`${getProxyUrl(cleanUrl)}?f=json`)
-          .then(res => res.json())
-          .then(serviceMeta => {
-            if (serviceMeta && serviceMeta.layers && serviceMeta.layers.length > 0) {
-              console.log(`[ArcGIS] 3D FeatureServer [${config.id}] has ${serviceMeta.layers.length} sublayers.`);
-              const subPromises = serviceMeta.layers.map(sub => {
-                const subId = `${config.id}_sub_${sub.id}`;
-                const subUrl = `${cleanUrl}/${sub.id}`;
-                const subLayer = new FeatureLayer({
-                  id: subId,
-                  url: subUrl,
-                  title: sub.name,
-                  visible: !!layerVisibility[subId],
-                  elevationInfo: { mode: "relative-to-ground" }
-                });
-                
-                map.add(subLayer);
-                layers3DRef.current[subId] = subLayer;
-                return subLayer.load().catch(() => null);
-              });
-              return Promise.all(subPromises);
-            } else {
-              const fallbackLayer = new FeatureLayer({
-                ...commonProps,
-                url: `${cleanUrl}/0`
-              });
-              map.add(fallbackLayer);
-              layers3DRef.current[config.id] = fallbackLayer;
-              return fallbackLayer.load();
-            }
-          })
-          .catch(() => {
-            const fallbackLayer = new FeatureLayer({
-              ...commonProps,
-              url: `${cleanUrl}/0`
-            });
-            map.add(fallbackLayer);
-            layers3DRef.current[config.id] = fallbackLayer;
-            return fallbackLayer.load();
-          });
+        const layer = new FeatureLayer({
+          ...commonProps,
+          url: `${cleanUrl}/0`,
+          elevationInfo: { mode: "relative-to-ground" }
+        });
+        map.add(layer);
+        layers3DRef.current[config.id] = layer;
+        return layer.load().catch(() => null);
       } else {
         const layer = new FeatureLayer(commonProps);
         map.add(layer);
