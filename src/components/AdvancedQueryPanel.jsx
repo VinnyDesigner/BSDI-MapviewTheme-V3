@@ -691,7 +691,11 @@ const AdvancedQueryPanel = ({
         const data = await res.json();
         
         if (data && data.features) {
+          const sr = data.spatialReference || mapView.spatialReference;
           queryResults = data.features.map(f => {
+            if (f.geometry) {
+              f.geometry.spatialReference = sr;
+            }
             return new Graphic({
               geometry: f.geometry,
               attributes: f.attributes
@@ -827,8 +831,9 @@ const AdvancedQueryPanel = ({
             console.warn("Auto zoom/popup failed:", err);
           });
         } else {
-          mapView.goTo(geometries).catch(err => {
-            console.warn("mapView.goTo collective extent zoom failed:", err);
+          // Zoom to all selected graphics collectively
+          mapView.goTo(nextSelection).catch(err => {
+            console.warn("mapView.goTo collective graphics zoom failed:", err);
           });
         }
       }
