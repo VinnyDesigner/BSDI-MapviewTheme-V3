@@ -264,7 +264,7 @@ export const IdentifyPanel = ({
           </div>
         </>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '460px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '460px', overflow: 'hidden' }}>
           <div 
             style={{ 
               display: 'flex', 
@@ -288,7 +288,7 @@ export const IdentifyPanel = ({
             Results ({identifySettings.results.total || 0})
           </div>
 
-          <div className="no-scrollbar" style={{ flex: '1 1 auto', overflowY: 'auto', maxHeight: '350px' }}>
+          <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
             {(!identifySettings.results.grouped || Object.keys(identifySettings.results.grouped).length === 0) ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
                 No features found at this location.
@@ -403,7 +403,7 @@ export const IdentifyPanel = ({
             alignItems: 'center',
             borderTop: '1px solid #f1f5f9',
             paddingTop: '12px',
-            marginTop: '16px',
+            marginTop: 'auto',
             flexShrink: 0
           }}>
             <button 
