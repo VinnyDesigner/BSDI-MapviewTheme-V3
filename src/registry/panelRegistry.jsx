@@ -237,10 +237,11 @@ export const IdentifyPanel = ({
               onChange={(val) => setIdentifySettings(prev => ({ ...prev, selectedLayerId: val }))}
               treeData={treeData}
               showAllOption={true}
+              placeholder="Select Layer"
             />
           </div>
 
-          <div className="form-group" style={{ marginBottom: '16px' }}>
+          <div className="form-group" style={{ marginBottom: '16px', opacity: identifySettings.selectedLayerId ? 1 : 0.5, pointerEvents: identifySettings.selectedLayerId ? 'auto' : 'none', transition: 'all 0.2s ease' }}>
             <label style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>
               Identify Mode
             </label>
@@ -262,13 +263,21 @@ export const IdentifyPanel = ({
             </div>
           </div>
 
-          <div className="identify-instruction" style={{ textAlign: 'center', padding: '16px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-            <div style={{ marginBottom: '4px', fontWeight: '600', color: '#1e3c72' }}>
-              {identifySettings.mode === 'point' ? 'Map Click Active' : 'Drawing Active'}
-            </div>
-            {identifySettings.mode === 'point' 
-              ? t('identifyHint') 
-              : "Draw an area on the map to query features intersecting it."}
+          <div className="identify-instruction" style={{ textAlign: 'center', padding: '16px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', transition: 'all 0.2s ease' }}>
+            {!identifySettings.selectedLayerId ? (
+              <div style={{ fontWeight: '600', color: '#df261c' }}>
+                Please select a layer to activate the Identify tool.
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: '4px', fontWeight: '600', color: '#1e3c72' }}>
+                  {identifySettings.mode === 'point' ? 'Map Click Active' : 'Drawing Active'}
+                </div>
+                {identifySettings.mode === 'point' 
+                  ? t('identifyHint') 
+                  : "Draw an area on the map to query features intersecting it."}
+              </>
+            )}
           </div>
         </>
       ) : (

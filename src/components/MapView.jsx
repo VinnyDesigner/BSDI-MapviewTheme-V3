@@ -1985,10 +1985,12 @@ const ArcGISMap = ({
     performQueryRef.current = performQuery;
 
     let clickHandler;
-    if (identifySettings.mode === 'point') {
-      clickHandler = view.on('click', (e) => performQuery(e.mapPoint));
-    } else {
-      sketchVM.current.create(identifySettings.mode);
+    if (identifySettings.selectedLayerId) {
+      if (identifySettings.mode === 'point') {
+        clickHandler = view.on('click', (e) => performQuery(e.mapPoint));
+      } else {
+        sketchVM.current.create(identifySettings.mode);
+      }
     }
 
     return () => {

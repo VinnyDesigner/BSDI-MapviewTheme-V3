@@ -322,7 +322,7 @@ function AppInner() {
   // Identify State
   const [identifySettings, setIdentifySettings] = useState({
     mode: 'point', // 'point', 'rectangle', 'polygon'
-    selectedLayerId: 'all',
+    selectedLayerId: null,
     results: null, // { total: number, grouped: { [layerName]: features[] } }
     isQuerying: false
   });
