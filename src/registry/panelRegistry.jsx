@@ -264,7 +264,7 @@ export const IdentifyPanel = ({
           </div>
         </>
       ) : (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '460px', overflow: 'hidden' }}>
           <div 
             style={{ 
               display: 'flex', 
@@ -275,7 +275,8 @@ export const IdentifyPanel = ({
               fontSize: '14px',
               marginBottom: '16px',
               paddingBottom: '8px',
-              borderBottom: '1px solid #f1f5f9'
+              borderBottom: '1px solid #f1f5f9',
+              flexShrink: 0
             }} 
             onClick={() => {
               setIdentifySettings(prev => ({ ...prev, results: null }));
@@ -287,7 +288,7 @@ export const IdentifyPanel = ({
             Results ({identifySettings.results.total || 0})
           </div>
 
-          <div className="no-scrollbar">
+          <div className="no-scrollbar" style={{ flex: '1 1 auto', overflowY: 'auto', maxHeight: '350px' }}>
             {(!identifySettings.results.grouped || Object.keys(identifySettings.results.grouped).length === 0) ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
                 No features found at this location.
@@ -331,7 +332,7 @@ export const IdentifyPanel = ({
 
                     {isExpanded && (
                       <div className="feature-list no-scrollbar" style={{ 
-                        padding: '12px', maxHeight: '320px', overflowY: 'auto'
+                        padding: '12px', maxHeight: '240px', overflowY: 'auto'
                       }}>
                         {features.map((f, i) => (
                           <div key={i} className="identify-result-card" style={{ 
@@ -402,7 +403,8 @@ export const IdentifyPanel = ({
             alignItems: 'center',
             borderTop: '1px solid #f1f5f9',
             paddingTop: '12px',
-            marginTop: '16px'
+            marginTop: '16px',
+            flexShrink: 0
           }}>
             <button 
               style={{ 
