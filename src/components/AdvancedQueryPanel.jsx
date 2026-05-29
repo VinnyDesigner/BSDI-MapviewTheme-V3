@@ -839,14 +839,9 @@ const AdvancedQueryPanel = ({
             }
           }, 150);
 
-          // Zoom to feature and open popup
-          mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).then(() => {
-            mapView.popup.open({
-              features: [feature],
-              location: feature.geometry.type === "point" ? feature.geometry : feature.geometry.extent?.center || feature.geometry
-            });
-          }).catch(err => {
-            console.warn("Auto zoom/popup failed:", err);
+          // Zoom to feature
+          mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).catch(err => {
+            console.warn("Auto zoom failed:", err);
           });
         } else {
           // Zoom to all selected graphics collectively
@@ -1026,13 +1021,8 @@ const AdvancedQueryPanel = ({
       }
     }, 150);
 
-    mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).then(() => {
-      mapView.popup.open({
-        features: [feature],
-        location: feature.geometry.type === "point" ? feature.geometry : feature.geometry.extent?.center || feature.geometry
-      });
-    }).catch(err => {
-      console.warn("mapView.goTo or popup failed:", err);
+    mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).catch(err => {
+      console.warn("mapView.goTo failed:", err);
     });
   };
 

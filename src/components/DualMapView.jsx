@@ -103,7 +103,8 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
               date: new Date("May 15, 2024 10:00:00 UTC")
             }
           },
-          ui: { components: [] }
+          ui: { components: [] },
+          popupEnabled: false
         });
 
         return view;
@@ -117,7 +118,8 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
           map,
           center: [50.55, 26.22],
           zoom: 12,
-          ui: { components: [] }
+          ui: { components: [] },
+          popupEnabled: false
         });
       }
     };

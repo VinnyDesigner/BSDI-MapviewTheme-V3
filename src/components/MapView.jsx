@@ -131,7 +131,8 @@ const ArcGISMap = ({
       map: map,
       center: [50.55, 26.22],
       zoom: 9,
-      ui: { components: [] }
+      ui: { components: [] },
+      popupEnabled: false
     });
 
     view2DRef.current = view;
@@ -273,7 +274,8 @@ const ArcGISMap = ({
         tilt: 65, 
         heading: 35 
       },
-      ui: { components: [] }
+      ui: { components: [] },
+      popupEnabled: false
     });
 
     view3DRef.current = view;
