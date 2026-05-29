@@ -693,9 +693,26 @@ const AdvancedQueryPanel = ({
         
         if (data && data.features) {
           const sr = data.spatialReference || mapView.spatialReference;
+          const restGeomType = data.geometryType || selectedLayerItem.geometryType || '';
+          let typeString = "";
+          const geomLower = restGeomType.toLowerCase();
+          
+          if (geomLower.includes("polygon")) {
+            typeString = "polygon";
+          } else if (geomLower.includes("polyline") || geomLower.includes("line")) {
+            typeString = "polyline";
+          } else if (geomLower.includes("multipoint")) {
+            typeString = "multipoint";
+          } else if (geomLower.includes("point")) {
+            typeString = "point";
+          }
+
           queryResults = data.features.map(f => {
             if (f.geometry) {
               f.geometry.spatialReference = sr;
+              if (typeString) {
+                f.geometry.type = typeString;
+              }
             }
             return new Graphic({
               geometry: f.geometry,
