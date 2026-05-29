@@ -733,7 +733,7 @@ const AdvancedQueryPanel = ({
     setResults(nextSelection);
     mapView.graphics.removeAll();
 
-    // Redraw translucent red highlights for all selected features on map
+    // Redraw clear, highly visible selection highlights for all matched features
     nextSelection.forEach(feature => {
       if (!feature.geometry) return;
       
@@ -745,22 +745,22 @@ const AdvancedQueryPanel = ({
         symbol = {
           type: "simple-marker",
           style: "circle",
-          color: [223, 38, 28, 0.15],
-          size: 14,
-          outline: { color: [223, 38, 28, 0.6], width: 1.5 }
+          color: [223, 38, 28, 0.4],
+          size: 16,
+          outline: { color: [223, 38, 28, 1.0], width: 2 }
         };
       } else if (geomLower.includes('polyline') || geomLower.includes('line')) {
         symbol = {
           type: "simple-line",
-          color: [223, 38, 28, 0.6],
-          width: 2.5,
+          color: [223, 38, 28, 0.8],
+          width: 3.5,
           style: "solid"
         };
       } else {
         symbol = {
           type: "simple-fill",
-          color: [223, 38, 28, 0.05],
-          outline: { color: [223, 38, 28, 0.6], width: 1.5, style: "solid" }
+          color: [223, 38, 28, 0.2],
+          outline: { color: [223, 38, 28, 0.8], width: 2.5, style: "solid" }
         };
       }
 
@@ -771,13 +771,66 @@ const AdvancedQueryPanel = ({
       mapView.graphics.add(selectionGraphic);
     });
 
-    // Zoom collectively to all matching selections
+    // Zoom collectively to selections and auto-open popup/flash if exactly 1 result returned
     if (nextSelection.length > 0) {
       const geometries = nextSelection.map(f => f.geometry).filter(Boolean);
       if (geometries.length > 0) {
-        mapView.goTo(geometries).catch(err => {
-          console.warn("mapView.goTo collective extent zoom failed:", err);
-        });
+        if (geometries.length === 1) {
+          const feature = nextSelection[0];
+          
+          // Flash animation for the single result
+          const geomLower = (feature.geometry.type || selectedLayerItem.geometryType || '').toLowerCase();
+          const flashSymbol = geomLower.includes('point') && !geomLower.includes('multipoint')
+            ? {
+                type: "simple-marker",
+                style: "circle",
+                color: [223, 38, 28, 0.8],
+                size: 24,
+                outline: { color: "#ffffff", width: 2 }
+              }
+            : geomLower.includes('polyline') || geomLower.includes('line')
+            ? {
+                type: "simple-line",
+                color: [223, 38, 28, 1.0],
+                width: 6,
+                style: "solid"
+              }
+            : {
+                type: "simple-fill",
+                color: [223, 38, 28, 0.4],
+                outline: { color: "#df261c", width: 4, style: "solid" }
+              };
+
+          const flashGraphic = new Graphic({
+            geometry: feature.geometry,
+            symbol: flashSymbol
+          });
+
+          mapView.graphics.add(flashGraphic);
+          let flashCount = 0;
+          const interval = setInterval(() => {
+            flashGraphic.visible = !flashGraphic.visible;
+            flashCount++;
+            if (flashCount >= 6) {
+              clearInterval(interval);
+              mapView.graphics.remove(flashGraphic);
+            }
+          }, 150);
+
+          // Zoom to feature and open popup
+          mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).then(() => {
+            mapView.popup.open({
+              features: [feature],
+              location: feature.geometry.type === "point" ? feature.geometry : feature.geometry.extent?.center || feature.geometry
+            });
+          }).catch(err => {
+            console.warn("Auto zoom/popup failed:", err);
+          });
+        } else {
+          mapView.goTo(geometries).catch(err => {
+            console.warn("mapView.goTo collective extent zoom failed:", err);
+          });
+        }
       }
     }
 
@@ -832,22 +885,22 @@ const AdvancedQueryPanel = ({
           symbol = {
             type: "simple-marker",
             style: "circle",
-            color: [223, 38, 28, 0.4],
+            color: [223, 38, 28, 0.5],
             size: 16,
-            outline: { color: "#df261c", width: 2.5 }
+            outline: { color: [223, 38, 28, 1.0], width: 2.5 }
           };
         } else if (geomLower.includes('polyline') || geomLower.includes('line')) {
           symbol = {
             type: "simple-line",
-            color: "#df261c",
-            width: 3.5,
+            color: [223, 38, 28, 1.0],
+            width: 4.5,
             style: "solid"
           };
         } else {
           symbol = {
             type: "simple-fill",
-            color: [223, 38, 28, 0.15],
-            outline: { color: "#df261c", width: 2.5, style: "solid" }
+            color: [223, 38, 28, 0.3],
+            outline: { color: [223, 38, 28, 1.0], width: 3, style: "solid" }
           };
         }
       } else {
@@ -855,22 +908,22 @@ const AdvancedQueryPanel = ({
           symbol = {
             type: "simple-marker",
             style: "circle",
-            color: [223, 38, 28, 0.15],
+            color: [223, 38, 28, 0.25],
             size: 14,
-            outline: { color: [223, 38, 28, 0.6], width: 1.5 }
+            outline: { color: [223, 38, 28, 0.7], width: 1.5 }
           };
         } else if (geomLower.includes('polyline') || geomLower.includes('line')) {
           symbol = {
             type: "simple-line",
-            color: [223, 38, 28, 0.6],
-            width: 2.5,
+            color: [223, 38, 28, 0.7],
+            width: 3.0,
             style: "solid"
           };
         } else {
           symbol = {
             type: "simple-fill",
-            color: [223, 38, 28, 0.05],
-            outline: { color: [223, 38, 28, 0.6], width: 1.5, style: "solid" }
+            color: [223, 38, 28, 0.15],
+            outline: { color: [223, 38, 28, 0.7], width: 2.0, style: "solid" }
           };
         }
       }
@@ -881,6 +934,45 @@ const AdvancedQueryPanel = ({
       });
       mapView.graphics.add(selectionGraphic);
     });
+
+    // Pulse-flash glowing animation for clicked feature row
+    const geomLower = (feature.geometry.type || selectedLayerItem.geometryType || '').toLowerCase();
+    const flashSymbol = geomLower.includes('point') && !geomLower.includes('multipoint')
+      ? {
+          type: "simple-marker",
+          style: "circle",
+          color: [223, 38, 28, 0.8],
+          size: 24,
+          outline: { color: "#ffffff", width: 2 }
+        }
+      : geomLower.includes('polyline') || geomLower.includes('line')
+      ? {
+          type: "simple-line",
+          color: [223, 38, 28, 1.0],
+          width: 6,
+          style: "solid"
+        }
+      : {
+          type: "simple-fill",
+          color: [223, 38, 28, 0.4],
+          outline: { color: "#df261c", width: 4, style: "solid" }
+        };
+
+    const flashGraphic = new Graphic({
+      geometry: feature.geometry,
+      symbol: flashSymbol
+    });
+
+    mapView.graphics.add(flashGraphic);
+    let flashCount = 0;
+    const interval = setInterval(() => {
+      flashGraphic.visible = !flashGraphic.visible;
+      flashCount++;
+      if (flashCount >= 6) {
+        clearInterval(interval);
+        mapView.graphics.remove(flashGraphic);
+      }
+    }, 150);
 
     mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).then(() => {
       mapView.popup.open({
