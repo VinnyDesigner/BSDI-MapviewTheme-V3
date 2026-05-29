@@ -376,7 +376,85 @@ const AdvancedQueryPanel = ({
     };
   }, [mapView]);
 
-  // Load fields when selected layer changes
+  // Helper to query unique values dynamically from layer REST endpoint
+  const getFieldUniqueValues = async (layerItem, fieldName) => {
+    if (!layerItem || !fieldName) return [];
+    const { type, rawLayer } = layerItem;
+    
+    try {
+      if (type === "map-image-sublayer") {
+        const parentUrl = layerItem.parentLayer.url;
+        const sublayerId = layerItem.sublayerId;
+        const queryUrl = `${parentUrl}/${sublayerId}/query`;
+        
+        const params = new URLSearchParams();
+        params.append("f", "json");
+        params.append("where", "1=1");
+        params.append("outFields", fieldName);
+        params.append("returnGeometry", "false");
+        params.append("returnDistinctValues", "true");
+        
+        const proxyUrl = getProxyUrl(queryUrl);
+        const res = await fetch(proxyUrl, { method: "POST", body: params });
+        const data = await res.json();
+        
+        if (data && data.features) {
+          return data.features
+            .map(f => f.attributes[fieldName])
+            .filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+        }
+      } else if (rawLayer) {
+        const query = rawLayer.createQuery();
+        query.where = "1=1";
+        query.outFields = [fieldName];
+        query.returnGeometry = false;
+        query.returnDistinctValues = true;
+        
+        const featureSet = await rawLayer.queryFeatures(query);
+        if (featureSet && featureSet.features) {
+          return featureSet.features
+            .map(f => f.attributes[fieldName])
+            .filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to query unique values dynamically:", err);
+    }
+    return [];
+  };
+
+  // Helper to load and sort unique values for a specific clause row
+  const loadUniqueValuesForClause = async (clauseId, fieldName) => {
+    if (!selectedLayerItem || !fieldName) return;
+    
+    setClauses(prev => prev.map(c => c.id === clauseId ? { ...c, isLoadingValues: true } : c));
+    
+    try {
+      const values = await getFieldUniqueValues(selectedLayerItem, fieldName);
+      const uniqueVals = Array.from(new Set(values));
+      const sorted = [...uniqueVals].sort((a, b) => {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b));
+      });
+      
+      setClauses(prev => prev.map(c => c.id === clauseId ? { 
+        ...c, 
+        uniqueValues: sorted, 
+        value: sorted.length > 0 ? String(sorted[0]) : '',
+        isLoadingValues: false 
+      } : c));
+    } catch (err) {
+      console.error("Failed to load unique values for clause:", err);
+      setClauses(prev => prev.map(c => c.id === clauseId ? { 
+        ...c, 
+        uniqueValues: [], 
+        value: '',
+        isLoadingValues: false 
+      } : c));
+    }
+  };
+
+  // Load fields dynamically when selected layer changes
   useEffect(() => {
     if (!selectedLayerItem) {
       setFieldsList([]);
@@ -396,7 +474,47 @@ const AdvancedQueryPanel = ({
 
     const loadFields = async () => {
       setIsLoadingFields(true);
-      const configuredFields = [
+      
+      let actualFields = [];
+      try {
+        if (selectedLayerItem.rawLayer) {
+          if (typeof selectedLayerItem.rawLayer.load === 'function' && !selectedLayerItem.rawLayer.loaded) {
+            await selectedLayerItem.rawLayer.load();
+          }
+          if (selectedLayerItem.rawLayer.fields) {
+            actualFields = selectedLayerItem.rawLayer.fields;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load active layer fields locally:", err);
+      }
+
+      // If fields list is empty, try direct sublayer REST query
+      if (actualFields.length === 0 && selectedLayerItem.type === "map-image-sublayer") {
+        try {
+          const parentUrl = selectedLayerItem.parentLayer.url;
+          const sublayerId = selectedLayerItem.sublayerId;
+          const sublayerUrl = `${parentUrl}/${sublayerId}?f=json`;
+          const proxyUrl = getProxyUrl(sublayerUrl);
+          const res = await fetch(proxyUrl);
+          const data = await res.json();
+          if (data && data.fields) {
+            actualFields = data.fields;
+          }
+        } catch (err) {
+          console.warn("Failed to fetch sublayer fields metadata via REST:", err);
+        }
+      }
+
+      // Filter out standard system or non-queryable attributes
+      const systemFields = ['objectid', 'fid', 'shape', 'globalid', 'shape__length', 'shape__area', 'shape_length', 'shape_area', 'shape.len', 'shape.area'];
+      const filtered = actualFields.filter(f => {
+        const nameLower = f.name.toLowerCase();
+        const typeLower = (f.type || '').toLowerCase();
+        return !systemFields.includes(nameLower) && !typeLower.includes('geometry') && !typeLower.includes('oid');
+      });
+
+      const fallbackFields = [
         { name: 'Block_Number', alias: isRTL ? 'رقم القسيمة' : 'Block Number', type: 'string' },
         { name: 'Zone_Type', alias: isRTL ? 'نوع المنطقة' : 'Zone Type', type: 'string' },
         { name: 'Ownership', alias: isRTL ? 'الملكية' : 'Ownership', type: 'string' },
@@ -404,7 +522,11 @@ const AdvancedQueryPanel = ({
         { name: 'Area_sqm', alias: isRTL ? 'المساحة (م٢)' : 'Area (sqm)', type: 'double' }
       ];
 
-      setFieldsList(configuredFields);
+      const finalFields = filtered.length > 0 
+        ? filtered.map(f => ({ name: f.name, alias: f.alias || f.name, type: f.type || 'string' }))
+        : fallbackFields;
+
+      setFieldsList(finalFields);
       setIsLoadingFields(false);
 
       setSelectedFieldName('');
@@ -414,7 +536,9 @@ const AdvancedQueryPanel = ({
           logicalOp: 'WHERE', 
           fieldName: '', 
           operator: '=', 
-          value: ''
+          value: '',
+          uniqueValues: [],
+          isLoadingValues: false
         }
       ]);
     };
@@ -470,9 +594,19 @@ const AdvancedQueryPanel = ({
     }
   }, [clauses, sqlCodeMode, fieldsList]);
 
-  // Update specific clause item
+  // Update specific clause item and query unique values if field changes
   const handleUpdateClause = (clauseId, fieldsToUpdate) => {
-    setClauses(prev => prev.map(c => c.id === clauseId ? { ...c, ...fieldsToUpdate } : c));
+    setClauses(prev => prev.map(c => {
+      if (c.id === clauseId) {
+        const updated = { ...c, ...fieldsToUpdate };
+        if (fieldsToUpdate.fieldName !== undefined && fieldsToUpdate.fieldName !== c.fieldName) {
+          // Field changed, fetch unique values dynamically from service endpoint
+          loadUniqueValuesForClause(clauseId, fieldsToUpdate.fieldName);
+        }
+        return updated;
+      }
+      return c;
+    }));
   };
 
   const handleAddClauseRow = () => {
@@ -485,7 +619,9 @@ const AdvancedQueryPanel = ({
         logicalOp: 'AND', 
         fieldName: nextField, 
         operator: '=', 
-        value: '' 
+        value: '',
+        uniqueValues: [],
+        isLoadingValues: false
       }
     ]);
   };
@@ -527,11 +663,17 @@ const AdvancedQueryPanel = ({
     let queryResults = [];
     const { type, rawLayer } = selectedLayerItem;
     
+    // Debug logging pre-execution
+    console.log("=== GIS ADVANCED QUERY VERIFICATION LOG ===");
+    console.log("Selected Layer:", selectedLayerItem.title || selectedLayerItem.name);
+    console.log("Generated SQL:", activeSqlExpression);
+    
     try {
       if (type === "map-image-sublayer") {
         const parentUrl = selectedLayerItem.parentLayer.url;
         const sublayerId = selectedLayerItem.sublayerId;
         const queryUrl = `${parentUrl}/${sublayerId}/query`;
+        console.log("Query URL:", queryUrl);
         
         const params = new URLSearchParams();
         params.append("f", "json");
@@ -553,6 +695,9 @@ const AdvancedQueryPanel = ({
           });
         }
       } else {
+        const queryUrl = rawLayer.url;
+        console.log("Query URL:", queryUrl);
+
         const query = rawLayer.createQuery();
         query.where = activeSqlExpression;
         query.outFields = ["*"];
@@ -563,9 +708,11 @@ const AdvancedQueryPanel = ({
           queryResults = featureSet.features;
         }
       }
+      console.log("Returned Feature Count:", queryResults.length);
     } catch (err) {
-      console.error("Query execution failed:", err);
+      console.error("Query Errors:", err);
     }
+    console.log("=========================================");
 
     // Compute updated selection based on Selection Type
     let nextSelection = [];
@@ -619,6 +766,16 @@ const AdvancedQueryPanel = ({
       });
       mapView.graphics.add(selectionGraphic);
     });
+
+    // Zoom collectively to all matching selections
+    if (nextSelection.length > 0) {
+      const geometries = nextSelection.map(f => f.geometry).filter(Boolean);
+      if (geometries.length > 0) {
+        mapView.goTo(geometries).catch(err => {
+          console.warn("mapView.goTo collective extent zoom failed:", err);
+        });
+      }
+    }
 
     // Apply strict visual filters on the Map Layer
     try {
@@ -721,7 +878,14 @@ const AdvancedQueryPanel = ({
       mapView.graphics.add(selectionGraphic);
     });
 
-    mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 });
+    mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).then(() => {
+      mapView.popup.open({
+        features: [feature],
+        location: feature.geometry.type === "point" ? feature.geometry : feature.geometry.extent?.center || feature.geometry
+      });
+    }).catch(err => {
+      console.warn("mapView.goTo or popup failed:", err);
+    });
   };
 
   // Reset filter and map state
@@ -730,17 +894,11 @@ const AdvancedQueryPanel = ({
       { 
         id: '1', 
         logicalOp: 'WHERE', 
-        fieldName: fieldsList[0]?.name || '', 
+        fieldName: '', 
         operator: '=', 
-        value: '', 
-        customValue: '', 
-        uniqueValues: [], 
-        isLoadingValues: false 
+        value: ''
       }
     ]);
-    if (fieldsList[0]?.name) {
-      loadUniqueValuesForClause('1', fieldsList[0].name);
-    }
     setResults([]);
     setHasQueried(false);
     setSqlPreview('');
@@ -1010,14 +1168,27 @@ const AdvancedQueryPanel = ({
 
                       <div className="aq-field-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <label className="aq-sublabel" style={{ fontSize: '11px', fontWeight: 600 }}>{isRTL ? 'القيمة' : 'Value'}</label>
-                        <input 
-                          type="text" 
-                          className="aq-input-text"
-                          placeholder={isRTL ? 'القيمة...' : 'Value...'}
-                          value={clause.value}
-                          onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
-                          style={{ height: '36px', boxSizing: 'border-box' }}
-                        />
+                        {clause.isLoadingValues ? (
+                          <div style={{ height: '36px', display: 'flex', alignItems: 'center', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', color: '#64748b', background: '#f8fafc', boxSizing: 'border-box' }}>
+                            {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                          </div>
+                        ) : clause.uniqueValues && clause.uniqueValues.length > 0 ? (
+                          <CustomSelect 
+                            options={clause.uniqueValues.map(v => ({ id: String(v), title: String(v) }))}
+                            value={clause.value}
+                            onChange={(val) => handleUpdateClause(clause.id, { value: val })}
+                            placeholder={isRTL ? 'اختر القيمة' : 'Select Value'}
+                          />
+                        ) : (
+                          <input 
+                            type="text" 
+                            className="aq-input-text"
+                            placeholder={isRTL ? 'القيمة...' : 'Value...'}
+                            value={clause.value}
+                            onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
+                            style={{ height: '36px', boxSizing: 'border-box' }}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
