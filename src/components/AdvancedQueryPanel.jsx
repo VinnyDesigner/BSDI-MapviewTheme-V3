@@ -202,6 +202,7 @@ const AdvancedQueryPanel = ({
 
   // Selection Type state
   const [selectionType, setSelectionType] = useState('');
+  const highlightHandleRef = useRef(null);
 
   const [step, setStep] = useState(1);
 
@@ -859,15 +860,27 @@ const AdvancedQueryPanel = ({
           }
         }
       }
+
+      // Apply standard layerView highlight handle for FeatureLayers
+      if (highlightHandleRef.current) {
+        highlightHandleRef.current.remove();
+        highlightHandleRef.current = null;
+      }
+      if (type !== "map-image-sublayer") {
+        const layerView = await mapView.whenLayerView(rawLayer);
+        if (layerView && typeof layerView.highlight === 'function') {
+          highlightHandleRef.current = layerView.highlight(nextSelection);
+        }
+      }
     } catch (err) {
-      console.warn("Applying visual map filter failed:", err);
+      console.warn("Applying visual map filter or highlight failed:", err);
     }
 
     setIsQuerying(false);
   };
 
   // Zoom & highlight helper
-  const handleFeatureClick = (feature) => {
+  const handleFeatureClick = async (feature) => {
     if (!mapView || !feature.geometry) return;
     
     const oidField = selectedLayerItem.rawLayer.objectIdField || 'OBJECTID';
@@ -875,6 +888,23 @@ const AdvancedQueryPanel = ({
     setHighlightedFeatureId(oid);
 
     mapView.graphics.removeAll();
+
+    // Apply standard layerView highlight for clicked feature
+    try {
+      if (highlightHandleRef.current) {
+        highlightHandleRef.current.remove();
+        highlightHandleRef.current = null;
+      }
+      
+      if (selectedLayerItem.type !== "map-image-sublayer") {
+        const layerView = await mapView.whenLayerView(selectedLayerItem.rawLayer);
+        if (layerView && typeof layerView.highlight === 'function') {
+          highlightHandleRef.current = layerView.highlight(feature);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to apply click layerView highlight:", err);
+    }
 
     results.forEach(f => {
       if (!f.geometry) return;
@@ -991,6 +1021,11 @@ const AdvancedQueryPanel = ({
 
   // Reset filter and map state
   const handleResetQuery = async () => {
+    if (highlightHandleRef.current) {
+      highlightHandleRef.current.remove();
+      highlightHandleRef.current = null;
+    }
+
     setClauses([
       { 
         id: '1', 
@@ -1031,6 +1066,11 @@ const AdvancedQueryPanel = ({
 
   // Clear visual highlights and selection list
   const handleClearSelection = async () => {
+    if (highlightHandleRef.current) {
+      highlightHandleRef.current.remove();
+      highlightHandleRef.current = null;
+    }
+
     setResults([]);
     setHasQueried(false);
     setHighlightedFeatureId(null);
@@ -1377,7 +1417,14 @@ const AdvancedQueryPanel = ({
                             <span className="aq-result-index">{idx + 1}</span>
                             <span className="aq-result-label">{getFeatureLabel(feature)}</span>
                           </div>
-                          <ZoomIn size={14} className="aq-zoom-icon" />
+                          <ZoomIn 
+                            size={14} 
+                            className="aq-zoom-icon" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFeatureClick(feature);
+                            }}
+                          />
                         </div>
                       );
                     })}
