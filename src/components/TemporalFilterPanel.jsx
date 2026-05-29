@@ -27,7 +27,8 @@ const formatGeometryType = (type) => {
   return type.charAt(0).toUpperCase() + type.slice(1);
 };
 
-const calculateStepSize = (min, max, type) => {
+const calculateStepSize = (min, max, type, rangeType = 'year') => {
+  if (rangeType === 'year') return 1;
   if (type === 'numeric') return 1;
   const rangeMs = max - min;
   const oneDay = 24 * 60 * 60 * 1000;
@@ -39,8 +40,17 @@ const calculateStepSize = (min, max, type) => {
   return oneYear; // Default yearly steps
 };
 
-const formatPlayValue = (val, type) => {
+const formatPlayValue = (val, type, rangeType = 'year') => {
   if (val === null || val === undefined) return '';
+  if (rangeType === 'year') {
+    if (val > 3000) {
+      return new Date(val).getFullYear().toString();
+    }
+    return val.toString();
+  }
+  if (type === 'numeric' && val < 3000) {
+    return `${val}-01-01`;
+  }
   if (type === 'numeric') return val.toString();
   
   const date = new Date(val);
@@ -63,6 +73,7 @@ const getAllFeatureLayers = (map) => {
           if (!isGroup) {
             result.push({
               id: `${layer.id}_sub_${sub.id}`,
+              sublayerId: sub.id,
               title: `${layer.title} - ${sub.title || sub.name}`,
               type: "map-image-sublayer",
               geometryType: sub.geometryType || "Unknown",
@@ -275,18 +286,19 @@ const getActiveFeatureCount = async (layerItem, fieldName, filterExpr) => {
 
 // --- Desktop Dynamic Time Lapse Component ---
 const DesktopTimeLapsePanel = ({ 
-  mapView,
   layersConfig,
   dynamicMapServerData,
   treeData,
   timelapseSettings,
-  setTimelapseSettings
+  setTimelapseSettings,
+  mapView
 }) => {
   const [layersList, setLayersList] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState('');
   const [fieldsList, setFieldsList] = useState([]);
   const [selectedFieldName, setSelectedFieldName] = useState('');
   const [timeType, setTimeType] = useState('numeric');
+  const [timeRangeType, setTimeRangeType] = useState('year'); // 'year' | 'date'
   
   const [minTime, setMinTime] = useState(null);
   const [maxTime, setMaxTime] = useState(null);
@@ -304,7 +316,11 @@ const DesktopTimeLapsePanel = ({
   
   const intervalRef = useRef(null);
 
-  const selectedLayerItem = layersList.find(l => l.id === selectedLayerId);
+  const selectedLayerItem = layersList.find(l => 
+    l.id === selectedLayerId || 
+    l.id === `${selectedLayerId}_sub_0` || 
+    (selectedLayerId && l.id.startsWith(`${selectedLayerId}_sub_`))
+  );
   const selectedFieldItem = fieldsList.find(f => f.name === selectedFieldName);
 
   // Sync with App settings initially if layerId is already set
@@ -370,28 +386,67 @@ const DesktopTimeLapsePanel = ({
           'date', 'date-only', 'timestamp-offset',
           'string'
         ];
-        const isStringType = (type) => {
-          const t = (type || '').toLowerCase();
-          return t === 'esrifieldtypestring' || t === 'string';
-        };
         const isValidType = (type) => {
           if (!type) return false;
           return validTypesRest.includes(type) || validTypesJsApi.includes(type.toLowerCase());
         };
+        const isInvalidField = (name) => {
+          const n = (name || '').toLowerCase();
+          return (
+            n.includes('objectid') ||
+            n === 'shape' ||
+            n.includes('shape_') ||
+            n.includes('st_area') ||
+            n.includes('st_length') ||
+            n === 'fid' ||
+            n === 'id'
+          );
+        };
+        const isDateFieldType = (type) => {
+          const t = (type || '').toLowerCase();
+          return t.includes('date') || t.includes('timestamp');
+        };
+        const hasDateTimeName = (name, alias) => {
+          const n = (name || '').toLowerCase();
+          const a = (alias || '').toLowerCase();
+          const timeKeywords = ['year', 'date'];
+          return timeKeywords.some(keyword => n.includes(keyword) || a.includes(keyword));
+        };
+
+        const rootId = selectedLayerId.split('_sub_')[0];
+        const config = layersConfig.find(l => l.id === rootId);
+        const configField = config?.timeField;
+
         const filtered = fields.filter(f => {
+          if (isInvalidField(f.name)) return false;
+          const isConfigField = configField && (f.name.toLowerCase() === configField.toLowerCase());
+          if (isConfigField) return true;
           if (!isValidType(f.type)) return false;
-          if (isStringType(f.type)) {
-            const name = f.name.toLowerCase();
-            return name.includes('year') || name.includes('date') || name.includes('time') || name.includes('yr');
-          }
-          return true;
+          return hasDateTimeName(f.name, f.alias);
         });
-        setFieldsList(filtered);
+
+        // Prioritize/sort fields so that configured/date-related names are at the top of the selection
+        const prioritized = [...filtered].sort((a, b) => {
+          const aName = a.name.toLowerCase();
+          const bName = b.name.toLowerCase();
+          const aIsConfig = configField && aName === configField.toLowerCase();
+          const bIsConfig = configField && bName === configField.toLowerCase();
+          if (aIsConfig && !bIsConfig) return -1;
+          if (!aIsConfig && bIsConfig) return 1;
+
+          const aIsDate = isDateFieldType(a.type);
+          const bIsDate = isDateFieldType(b.type);
+          if (aIsDate && !bIsDate) return -1;
+          if (!aIsDate && bIsDate) return 1;
+
+          return a.name.localeCompare(b.name);
+        });
+
+        setFieldsList(prioritized);
         
-        if (filtered.length > 0) {
-          const configField = selectedLayerItem.rawLayer.timeField || (selectedLayerItem.parentLayer && selectedLayerItem.parentLayer.timeField);
-          const matched = filtered.find(f => f.name === configField);
-          setSelectedFieldName(matched ? matched.name : filtered[0].name);
+        if (prioritized.length > 0) {
+          const matched = prioritized.find(f => f.name.toLowerCase() === (configField || '').toLowerCase()) || prioritized.find(f => f.name === configField);
+          setSelectedFieldName(matched ? matched.name : prioritized[0].name);
         } else {
           setSelectedFieldName('');
         }
@@ -403,7 +458,7 @@ const DesktopTimeLapsePanel = ({
     };
 
     loadFields();
-  }, [selectedLayerId]);
+  }, [selectedLayerId, layersList]);
 
   // Load statistics and detect timeType when selected field changes
   useEffect(() => {
@@ -422,6 +477,9 @@ const DesktopTimeLapsePanel = ({
       const type = detectTimeType(selectedFieldItem);
       setTimeType(type);
 
+      const computedRangeType = (type === 'date' || type === 'string-date') ? 'date' : 'year';
+      setTimeRangeType(computedRangeType);
+
       const cacheKey = `${selectedLayerId}_${selectedFieldName}`;
       let range = cachedRanges[cacheKey];
       
@@ -436,36 +494,83 @@ const DesktopTimeLapsePanel = ({
         let min = range.min;
         let max = range.max;
         
-        if (type === 'date' || type === 'string-date') {
-          const parsedMin = new Date(min).getTime();
-          const parsedMax = new Date(max).getTime();
-          if (!isNaN(parsedMin) && !isNaN(parsedMax)) {
-            setMinTime(parsedMin);
-            setMaxTime(parsedMax);
-            setCurrentPlayVal(parsedMin);
+        // Handle "Year" vs "Date" Range Types
+        if (computedRangeType === 'year') {
+          if (type === 'date' || type === 'string-date') {
+            const minYear = new Date(min).getFullYear();
+            const maxYear = new Date(max).getFullYear();
+            if (!isNaN(minYear) && !isNaN(maxYear)) {
+              setMinTime(minYear);
+              setMaxTime(maxYear);
+              setCurrentPlayVal(minYear);
+            } else {
+              setMinTime(2018);
+              setMaxTime(2024);
+              setCurrentPlayVal(2018);
+            }
+          } else {
+            setMinTime(Number(min));
+            setMaxTime(Number(max));
+            setCurrentPlayVal(Number(min));
           }
         } else {
-          setMinTime(Number(min));
-          setMaxTime(Number(max));
-          setCurrentPlayVal(Number(min));
+          // date mode: minTime/maxTime are timestamps in milliseconds
+          if (type === 'date' || type === 'string-date') {
+            const parsedMin = new Date(min).getTime();
+            const parsedMax = new Date(max).getTime();
+            if (!isNaN(parsedMin) && !isNaN(parsedMax)) {
+              setMinTime(parsedMin);
+              setMaxTime(parsedMax);
+              setCurrentPlayVal(parsedMin);
+            } else {
+              const defaultMin = new Date('2018-01-01').getTime();
+              const defaultMax = new Date('2024-12-31').getTime();
+              setMinTime(defaultMin);
+              setMaxTime(defaultMax);
+              setCurrentPlayVal(defaultMin);
+            }
+          } else {
+            // numeric representation, e.g. year integers, convert to timestamps
+            const parsedMin = new Date(`${min}-01-01`).getTime();
+            const parsedMax = new Date(`${max}-12-31`).getTime();
+            if (!isNaN(parsedMin) && !isNaN(parsedMax)) {
+              setMinTime(parsedMin);
+              setMaxTime(parsedMax);
+              setCurrentPlayVal(parsedMin);
+            } else {
+              const defaultMin = new Date('2018-01-01').getTime();
+              const defaultMax = new Date('2024-12-31').getTime();
+              setMinTime(defaultMin);
+              setMaxTime(defaultMax);
+              setCurrentPlayVal(defaultMin);
+            }
+          }
         }
       } else {
-        setMinTime(2018);
-        setMaxTime(2024);
-        setCurrentPlayVal(2018);
+        if (computedRangeType === 'year') {
+          setMinTime(2018);
+          setMaxTime(2024);
+          setCurrentPlayVal(2018);
+        } else {
+          const defaultMin = new Date('2018-01-01').getTime();
+          const defaultMax = new Date('2024-12-31').getTime();
+          setMinTime(defaultMin);
+          setMaxTime(defaultMax);
+          setCurrentPlayVal(defaultMin);
+        }
       }
       
       setIsLoadingRange(false);
     };
 
     loadRange();
-  }, [selectedFieldName, selectedLayerId]);
+  }, [selectedFieldName, selectedLayerId, layersList]);
 
   // Animation Playback Effect
   useEffect(() => {
     if (isPlaying && minTime !== null && maxTime !== null) {
       const intervalDuration = SPEED_MAP[playbackSpeed] || 1200;
-      const step = calculateStepSize(minTime, maxTime, timeType);
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
 
       intervalRef.current = setInterval(() => {
         setCurrentPlayVal(prev => {
@@ -494,7 +599,7 @@ const DesktopTimeLapsePanel = ({
         intervalRef.current = null;
       }
     };
-  }, [isPlaying, playbackSpeed, minTime, maxTime, timeType, loopMode]);
+  }, [isPlaying, playbackSpeed, minTime, maxTime, timeType, loopMode, timeRangeType]);
 
   // Apply map filter and query active count on currentPlayVal change
   useEffect(() => {
@@ -505,6 +610,7 @@ const DesktopTimeLapsePanel = ({
       layerId: selectedLayerId,
       timeField: selectedFieldName,
       timeType: timeType,
+      timeRangeType: timeRangeType,
       fromYear: minTime,
       toYear: currentPlayVal,
       startYear: minTime,
@@ -517,15 +623,26 @@ const DesktopTimeLapsePanel = ({
 
     const debounceTimer = setTimeout(async () => {
       let expression = "";
-      if (timeType === 'date' || timeType === 'string-date') {
-        const dateStr = new Date(currentPlayVal).toISOString().split('T')[0];
+      if (timeRangeType === 'year') {
         if (timeType === 'date') {
-          expression = `${selectedFieldName} <= DATE '${dateStr}'`;
+          expression = `${selectedFieldName} >= DATE '${minTime}-01-01' AND ${selectedFieldName} <= DATE '${currentPlayVal}-12-31'`;
+        } else if (timeType === 'string-date') {
+          expression = `${selectedFieldName} >= '${minTime}-01-01' AND ${selectedFieldName} <= '${currentPlayVal}-12-31'`;
         } else {
-          expression = `${selectedFieldName} <= '${dateStr}'`;
+          expression = `${selectedFieldName} >= ${minTime} AND ${selectedFieldName} <= ${currentPlayVal}`;
         }
       } else {
-        expression = `${selectedFieldName} <= ${currentPlayVal}`;
+        const dateStr = new Date(currentPlayVal).toISOString().split('T')[0];
+        const minDateStr = new Date(minTime).toISOString().split('T')[0];
+        if (timeType === 'date') {
+          expression = `${selectedFieldName} >= DATE '${minDateStr}' AND ${selectedFieldName} <= DATE '${dateStr}'`;
+        } else if (timeType === 'string-date') {
+          expression = `${selectedFieldName} >= '${minDateStr}' AND ${selectedFieldName} <= '${dateStr}'`;
+        } else {
+          const minYr = new Date(minTime).getFullYear();
+          const currYr = new Date(currentPlayVal).getFullYear();
+          expression = `${selectedFieldName} >= ${minYr} AND ${selectedFieldName} <= ${currYr}`;
+        }
       }
 
       setIsLoadingCount(true);
@@ -535,7 +652,7 @@ const DesktopTimeLapsePanel = ({
     }, 200);
 
     return () => clearTimeout(debounceTimer);
-  }, [currentPlayVal, selectedLayerId, selectedFieldName, timeType, minTime, isPlaying, playbackSpeed, loopMode]);
+  }, [currentPlayVal, selectedLayerId, selectedFieldName, timeType, minTime, isPlaying, playbackSpeed, loopMode, timeRangeType]);
 
   const handleReset = async () => {
     setIsPlaying(false);
@@ -545,11 +662,13 @@ const DesktopTimeLapsePanel = ({
     setMaxTime(null);
     setCurrentPlayVal(null);
     setActiveCount(0);
+    setTimeRangeType('year');
     
     setTimelapseSettings({
       layerId: '',
       timeField: '',
       timeType: 'numeric',
+      timeRangeType: 'year',
       fromYear: 2018,
       toYear: 2024,
       startYear: 2018,
@@ -569,7 +688,7 @@ const DesktopTimeLapsePanel = ({
   const stepForward = () => {
     setIsPlaying(false);
     if (currentPlayVal !== null && maxTime !== null) {
-      const step = calculateStepSize(minTime, maxTime, timeType);
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
       setCurrentPlayVal(Math.min(maxTime, currentPlayVal + step));
     }
   };
@@ -577,7 +696,7 @@ const DesktopTimeLapsePanel = ({
   const stepBack = () => {
     setIsPlaying(false);
     if (currentPlayVal !== null && minTime !== null) {
-      const step = calculateStepSize(minTime, maxTime, timeType);
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
       setCurrentPlayVal(Math.max(minTime, currentPlayVal - step));
     }
   };
@@ -598,105 +717,144 @@ const DesktopTimeLapsePanel = ({
             value={selectedLayerId}
             onChange={(val) => {
               setSelectedLayerId(val);
+              setSelectedFieldName('');
+              setMinTime(null);
+              setMaxTime(null);
+              setCurrentPlayVal(null);
+              setActiveCount(0);
+              // Clear previous results/filters
+              setTimelapseSettings(prev => ({
+                ...prev,
+                layerId: val,
+                timeField: '',
+                isPlaying: false,
+                lastApply: 0
+              }));
             }}
-            placeholder="Select a layer to animate..."
+            placeholder="Select Layer"
           />
         </div>
 
-        {/* Field Selection */}
+        {/* Field Selection (Always shown in default state) */}
         <div className="temporal-section">
           <label className="temporal-label">
             Time Field
             {isLoadingFields && <span className="field-loading-dot" />}
           </label>
           <CustomSelect 
-            options={fieldsList.map(f => ({
-              id: f.name,
-              title: `${f.name} (${f.alias || f.name})`
-            }))}
+            options={fieldsList.map(f => {
+              const lowerName = f.name.toLowerCase();
+              let title = `${f.name} (${f.alias || f.name})`;
+              if (lowerName.includes('year')) {
+                title = 'Year';
+              } else if (lowerName.includes('date')) {
+                title = 'Date';
+              }
+              return {
+                id: f.name,
+                title: title
+              };
+            })}
             value={selectedFieldName}
-            onChange={(val) => setSelectedFieldName(val)}
-            placeholder={isLoadingFields ? 'Loading fields...' : 'Select time field...'}
+            onChange={(val) => {
+              setSelectedFieldName(val);
+              setMinTime(null);
+              setMaxTime(null);
+              setCurrentPlayVal(null);
+              setActiveCount(0);
+              setTimelapseSettings(prev => ({
+                ...prev,
+                timeField: val,
+                isPlaying: false,
+                lastApply: 0
+              }));
+            }}
+            placeholder="Select Time Field"
+            disabled={!selectedLayerId}
           />
         </div>
 
-        {/* Timeline Slider — clean single-track GIS style */}
-        {minTime !== null && maxTime !== null && currentPlayVal !== null && (
-          <div className="temporal-section timeline-range-section">
-            <div className="timeline-header">
-              <label className="temporal-label">Timeline</label>
-              <div className="range-display">
-                <Clock size={13} />
-                <span>{formatPlayValue(currentPlayVal, timeType)}</span>
-              </div>
-            </div>
+        {selectedLayerId && selectedFieldName && (
+          <>
+            {/* Timeline Slider — clean single-track GIS style */}
+            {minTime !== null && maxTime !== null && currentPlayVal !== null && (
+              <div className="temporal-section timeline-range-section">
+                <div className="timeline-header">
+                  <label className="temporal-label">Timeline</label>
+                  <div className="range-display">
+                    <Clock size={13} />
+                    <span>{formatPlayValue(currentPlayVal, timeType, timeRangeType)}</span>
+                  </div>
+                </div>
 
-            <div className="timeline-slider-clean">
-              <div className="timeline-track-clean">
-                <div 
-                  className="timeline-fill-clean"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-                <input 
-                  type="range"
-                  className="timeline-input-clean"
-                  min={minTime}
-                  max={maxTime}
-                  step={calculateStepSize(minTime, maxTime, timeType)}
-                  value={currentPlayVal}
-                  onChange={(e) => {
-                    setIsPlaying(false);
-                    setCurrentPlayVal(Number(e.target.value));
-                  }}
-                />
+                <div className="timeline-slider-clean">
+                  <div className="timeline-track-clean">
+                    <div 
+                      className="timeline-fill-clean"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                    <input 
+                      type="range"
+                      className="timeline-input-clean"
+                      min={minTime}
+                      max={maxTime}
+                      step={calculateStepSize(minTime, maxTime, timeType, timeRangeType)}
+                      value={currentPlayVal}
+                      onChange={(e) => {
+                        setIsPlaying(false);
+                        setCurrentPlayVal(Number(e.target.value));
+                      }}
+                    />
+                  </div>
+                  <div className="timeline-labels-clean">
+                    <span>{formatPlayValue(minTime, timeType, timeRangeType)}</span>
+                    <span>{formatPlayValue(maxTime, timeType, timeRangeType)}</span>
+                  </div>
+                </div>
               </div>
-              <div className="timeline-labels-clean">
-                <span>{formatPlayValue(minTime, timeType)}</span>
-                <span>{formatPlayValue(maxTime, timeType)}</span>
+            )}
+
+            {/* Filtered Features Count */}
+            {selectedFieldName && minTime !== null && (
+              <div className="count-badge">
+                <span>Filtered Features</span>
+                <span className="count-val">
+                  {isLoadingCount ? 'Querying...' : activeCount.toLocaleString()}
+                </span>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Filtered Features Count */}
-        {selectedFieldName && minTime !== null && (
-          <div className="count-badge">
-            <span>Filtered Features</span>
-            <span className="count-val">
-              {isLoadingCount ? 'Querying...' : activeCount.toLocaleString()}
-            </span>
-          </div>
-        )}
+            {/* Playback Transport Bar */}
+            {selectedFieldName && minTime !== null && (
+              <div className="temporal-section playback-section-clean">
+                <div className="playback-controls-row">
+                  <div className="segmented-playback-bar">
+                    <button className="playback-bar-btn prev" onClick={stepBack} title="Previous">
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      className={`playback-bar-btn play-pause ${isPlaying ? 'playing' : ''}`}
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      title={isPlaying ? 'Pause' : 'Play'}
+                    >
+                      {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                    </button>
+                    <button className="playback-bar-btn next" onClick={stepForward} title="Next">
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
 
-        {/* Playback Transport Bar */}
-        {selectedFieldName && minTime !== null && (
-          <div className="temporal-section playback-section-clean">
-            <div className="playback-controls-row">
-              <div className="segmented-playback-bar">
-                <button className="playback-bar-btn prev" onClick={stepBack} title="Previous">
-                  <ChevronLeft size={18} />
-                </button>
-                <button
-                  className={`playback-bar-btn play-pause ${isPlaying ? 'playing' : ''}`}
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  title={isPlaying ? 'Pause' : 'Play'}
-                >
-                  {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-                </button>
-                <button className="playback-bar-btn next" onClick={stepForward} title="Next">
-                  <ChevronRight size={18} />
-                </button>
+                {/* Reset — compact utility button */}
+                <div className="transport-reset-row">
+                  <button className="transport-reset-btn" onClick={handleReset} title="Reset Timeline">
+                    <RotateCcw size={15} />
+                    <span>Reset</span>
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Reset — compact utility button */}
-            <div className="transport-reset-row">
-              <button className="transport-reset-btn" onClick={handleReset} title="Reset Timeline">
-                <RotateCcw size={15} />
-                <span>Reset</span>
-              </button>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
       </div>
@@ -712,386 +870,686 @@ const MobileTabletTemporalPanel = ({
   timelapseSettings, 
   setTimelapseSettings,
   timeCompareTab = 'slider',
-  setTimeCompareTab
+  setTimeCompareTab,
+  mapView
 }) => {
-  const [availableFields, setAvailableFields] = useState([]);
+  const [layersList, setLayersList] = useState([]);
+  const [selectedLayerId, setSelectedLayerId] = useState('');
+  const [fieldsList, setFieldsList] = useState([]);
+  const [selectedFieldName, setSelectedFieldName] = useState('');
+  const [timeType, setTimeType] = useState('numeric');
+  const [timeRangeType, setTimeRangeType] = useState('year'); // 'year' | 'date'
+  
+  const [minTime, setMinTime] = useState(null);
+  const [maxTime, setMaxTime] = useState(null);
+  const [currentPlayVal, setCurrentPlayVal] = useState(null);
+  const [cachedRanges, setCachedRanges] = useState({});
+  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState('Medium');
+  const [loopMode, setLoopMode] = useState(true);
+  
+  const [activeCount, setActiveCount] = useState(0);
+  const [isLoadingCount, setIsLoadingCount] = useState(false);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
-  const [fieldError, setFieldError] = useState(null);
+  const [isLoadingRange, setIsLoadingRange] = useState(false);
+  
   const intervalRef = useRef(null);
 
-  const temporalLayers = layersConfig.filter(l => l.timeField);
-  const activeLayer = temporalLayers.find(l => l.id === timelapseSettings.layerId);
+  const selectedLayerItem = layersList.find(l => 
+    l.id === selectedLayerId || 
+    l.id === `${selectedLayerId}_sub_0` || 
+    (selectedLayerId && l.id.startsWith(`${selectedLayerId}_sub_`))
+  );
+  const selectedFieldItem = fieldsList.find(f => f.name === selectedFieldName);
 
-  const pushFilter = useCallback((overrides = {}) => {
-    setTimelapseSettings(prev => ({
-      ...prev,
-      ...overrides,
-      lastApply: Date.now()
-    }));
-  }, [setTimelapseSettings]);
-
+  // Sync with App settings initially if layerId is already set
   useEffect(() => {
-    if (!activeLayer) return;
-    setFieldError(null);
-    setIsLoadingFields(true);
+    if (timelapseSettings?.layerId && layersList.length > 0) {
+      setSelectedLayerId(timelapseSettings.layerId);
+      if (timelapseSettings.timeField) {
+        setSelectedFieldName(timelapseSettings.timeField);
+      }
+    }
+  }, [timelapseSettings?.layerId, layersList]);
 
-    const detectFields = async () => {
+  // Detect and update active map layers
+  useEffect(() => {
+    if (!mapView || !mapView.map) return;
+    
+    const updateLayersList = () => {
+      const list = getAllFeatureLayers(mapView.map);
+      setLayersList(list);
+    };
+
+    updateLayersList();
+
+    const handle = mapView.map.layers.on("change", updateLayersList);
+    
+    mapView.map.layers.forEach(l => {
+      if (!l.loaded) {
+        l.load().then(updateLayersList).catch(() => {});
+      }
+    });
+
+    return () => handle.remove();
+  }, [mapView]);
+
+  // Load fields when selected layer changes
+  useEffect(() => {
+    if (!selectedLayerItem) {
+      setFieldsList([]);
+      setSelectedFieldName('');
+      setMinTime(null);
+      setMaxTime(null);
+      setCurrentPlayVal(null);
+      setActiveCount(0);
+      return;
+    }
+
+    const loadFields = async () => {
+      setIsLoadingFields(true);
       try {
-        const serviceUrl = activeLayer.url;
-        const subLayerUrl = `${getProxyUrl(serviceUrl)}/0?f=pjson`;
-        const res = await fetch(subLayerUrl);
-        const data = await res.json();
+        const fields = await getLayerFields(selectedLayerItem);
+        const validTypesRest = [
+          'esriFieldTypeSmallInteger', 
+          'esriFieldTypeInteger',
+          'esriFieldTypeSingle', 
+          'esriFieldTypeDouble', 
+          'esriFieldTypeDate', 
+          'esriFieldTypeString'
+        ];
+        const validTypesJsApi = [
+          'small-integer', 'integer', 'long', 'big-integer',
+          'single', 'double',
+          'date', 'date-only', 'timestamp-offset',
+          'string'
+        ];
+        const isValidType = (type) => {
+          if (!type) return false;
+          return validTypesRest.includes(type) || validTypesJsApi.includes(type.toLowerCase());
+        };
+        const isInvalidField = (name) => {
+          const n = (name || '').toLowerCase();
+          return (
+            n.includes('objectid') ||
+            n === 'shape' ||
+            n.includes('shape_') ||
+            n.includes('st_area') ||
+            n.includes('st_length') ||
+            n === 'fid' ||
+            n === 'id'
+          );
+        };
+        const isDateFieldType = (type) => {
+          const t = (type || '').toLowerCase();
+          return t.includes('date') || t.includes('timestamp');
+        };
+        const hasDateTimeName = (name, alias) => {
+          const n = (name || '').toLowerCase();
+          const a = (alias || '').toLowerCase();
+          const timeKeywords = ['year', 'date'];
+          return timeKeywords.some(keyword => n.includes(keyword) || a.includes(keyword));
+        };
 
-        if (data.fields && data.fields.length > 0) {
-          const numericTypes = ['esriFieldTypeSmallInteger', 'esriFieldTypeInteger',
-            'esriFieldTypeSingle', 'esriFieldTypeDouble', 'esriFieldTypeDate'];
-          const timeFields = data.fields
-            .filter(f => numericTypes.includes(f.type))
-            .map(f => ({ name: f.name, alias: f.alias || f.name, type: f.type }));
+        const rootId = selectedLayerId.split('_sub_')[0];
+        const config = layersConfig.find(l => l.id === rootId);
+        const configField = config?.timeField;
 
-          setAvailableFields(timeFields.length > 0 ? timeFields : [
-            { name: activeLayer.timeField || 'SURVEY_YEAR', alias: activeLayer.timeField || 'Survey Year' }
-          ]);
+        const filtered = fields.filter(f => {
+          if (isInvalidField(f.name)) return false;
+          const isConfigField = configField && (f.name.toLowerCase() === configField.toLowerCase());
+          if (isConfigField) return true;
+          if (!isValidType(f.type)) return false;
+          return hasDateTimeName(f.name, f.alias);
+        });
 
-          const configField = activeLayer.timeField;
-          const matchedField = timeFields.find(f => f.name === configField);
-          if (matchedField && !timelapseSettings.timeField) {
-            setTimelapseSettings(prev => ({ ...prev, timeField: matchedField.name }));
-          } else if (!timelapseSettings.timeField && timeFields.length > 0) {
-            setTimelapseSettings(prev => ({ ...prev, timeField: timeFields[0].name }));
-          }
+        const prioritized = [...filtered].sort((a, b) => {
+          const aName = a.name.toLowerCase();
+          const bName = b.name.toLowerCase();
+          const aIsConfig = configField && aName === configField.toLowerCase();
+          const bIsConfig = configField && bName === configField.toLowerCase();
+          if (aIsConfig && !bIsConfig) return -1;
+          if (!aIsConfig && bIsConfig) return 1;
+
+          const aIsDate = isDateFieldType(a.type);
+          const bIsDate = isDateFieldType(b.type);
+          if (aIsDate && !bIsDate) return -1;
+          if (!aIsDate && bIsDate) return 1;
+
+          return a.name.localeCompare(b.name);
+        });
+
+        setFieldsList(prioritized);
+        
+        if (prioritized.length > 0) {
+          const matched = prioritized.find(f => f.name.toLowerCase() === (configField || '').toLowerCase()) || prioritized.find(f => f.name === configField);
+          setSelectedFieldName(matched ? matched.name : prioritized[0].name);
         } else {
-          const fallback = [{ name: activeLayer.timeField || 'SURVEY_YEAR', alias: activeLayer.timeField || 'Survey Year' }];
-          setAvailableFields(fallback);
-          if (!timelapseSettings.timeField) {
-            setTimelapseSettings(prev => ({ ...prev, timeField: fallback[0].name }));
-          }
+          setSelectedFieldName('');
         }
-      } catch (err) {
-        console.warn('[TemporalFilter] Field detection failed, using config fallback:', err.message);
-        setFieldError('Using configured field (service unreachable)');
-        const fallback = [{ name: activeLayer.timeField || 'SURVEY_YEAR', alias: activeLayer.timeField || 'Survey Year' }];
-        setAvailableFields(fallback);
-        if (!timelapseSettings.timeField) {
-          setTimelapseSettings(prev => ({ ...prev, timeField: fallback[0].name }));
-        }
+      } catch (e) {
+        console.error("Error loading fields:", e);
       } finally {
         setIsLoadingFields(false);
       }
     };
 
-    detectFields();
-  }, [activeLayer?.id]);
+    loadFields();
+  }, [selectedLayerId, layersList]);
 
-  const stopPlayback = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setTimelapseSettings(prev => ({ ...prev, isPlaying: false }));
-  }, [setTimelapseSettings]);
-
-  const startPlayback = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    const speed = SPEED_MAP[timelapseSettings.speed] || 1200;
-    intervalRef.current = setInterval(() => {
-      setTimelapseSettings(prev => {
-        const nextYear = prev.toYear + 1;
-        const loopedYear = nextYear > prev.endYear ? prev.startYear : nextYear;
-        return {
-          ...prev,
-          toYear: loopedYear,
-          lastApply: Date.now()
-        };
-      });
-    }, speed);
-  }, [timelapseSettings.speed, setTimelapseSettings]);
-
+  // Load statistics and detect timeType when selected field changes
   useEffect(() => {
-    if (timelapseSettings.isPlaying) {
-      startPlayback();
+    if (!selectedLayerItem || !selectedFieldName) {
+      setMinTime(null);
+      setMaxTime(null);
+      setCurrentPlayVal(null);
+      setActiveCount(0);
+      return;
+    }
+
+    const loadRange = async () => {
+      setIsLoadingRange(true);
+      setIsPlaying(false);
+      
+      const type = detectTimeType(selectedFieldItem);
+      setTimeType(type);
+
+      const computedRangeType = (type === 'date' || type === 'string-date') ? 'date' : 'year';
+      setTimeRangeType(computedRangeType);
+
+      const cacheKey = `${selectedLayerId}_${selectedFieldName}`;
+      let range = cachedRanges[cacheKey];
+      
+      if (!range) {
+        range = await getTimeRange(selectedLayerItem, selectedFieldName);
+        if (range) {
+          setCachedRanges(prev => ({ ...prev, [cacheKey]: range }));
+        }
+      }
+
+      if (range) {
+        let min = range.min;
+        let max = range.max;
+        
+        // Handle "Year" vs "Date" Range Types
+        if (computedRangeType === 'year') {
+          if (type === 'date' || type === 'string-date') {
+            const minYear = new Date(min).getFullYear();
+            const maxYear = new Date(max).getFullYear();
+            if (!isNaN(minYear) && !isNaN(maxYear)) {
+              setMinTime(minYear);
+              setMaxTime(maxYear);
+              setCurrentPlayVal(minYear);
+            } else {
+              setMinTime(2018);
+              setMaxTime(2024);
+              setCurrentPlayVal(2018);
+            }
+          } else {
+            setMinTime(Number(min));
+            setMaxTime(Number(max));
+            setCurrentPlayVal(Number(min));
+          }
+        } else {
+          // date mode: minTime/maxTime are timestamps in milliseconds
+          if (type === 'date' || type === 'string-date') {
+            const parsedMin = new Date(min).getTime();
+            const parsedMax = new Date(max).getTime();
+            if (!isNaN(parsedMin) && !isNaN(parsedMax)) {
+              setMinTime(parsedMin);
+              setMaxTime(parsedMax);
+              setCurrentPlayVal(parsedMin);
+            } else {
+              const defaultMin = new Date('2018-01-01').getTime();
+              const defaultMax = new Date('2024-12-31').getTime();
+              setMinTime(defaultMin);
+              setMaxTime(defaultMax);
+              setCurrentPlayVal(defaultMin);
+            }
+          } else {
+            const parsedMin = new Date(`${min}-01-01`).getTime();
+            const parsedMax = new Date(`${max}-12-31`).getTime();
+            if (!isNaN(parsedMin) && !isNaN(parsedMax)) {
+              setMinTime(parsedMin);
+              setMaxTime(parsedMax);
+              setCurrentPlayVal(parsedMin);
+            } else {
+              const defaultMin = new Date('2018-01-01').getTime();
+              const defaultMax = new Date('2024-12-31').getTime();
+              setMinTime(defaultMin);
+              setMaxTime(defaultMax);
+              setCurrentPlayVal(defaultMin);
+            }
+          }
+        }
+      } else {
+        if (computedRangeType === 'year') {
+          setMinTime(2018);
+          setMaxTime(2024);
+          setCurrentPlayVal(2018);
+        } else {
+          const defaultMin = new Date('2018-01-01').getTime();
+          const defaultMax = new Date('2024-12-31').getTime();
+          setMinTime(defaultMin);
+          setMaxTime(defaultMax);
+          setCurrentPlayVal(defaultMin);
+        }
+      }
+      
+      setIsLoadingRange(false);
+    };
+
+    loadRange();
+  }, [selectedFieldName, selectedLayerId, layersList]);
+
+  // Animation Playback Effect
+  useEffect(() => {
+    if (isPlaying && minTime !== null && maxTime !== null) {
+      const intervalDuration = SPEED_MAP[playbackSpeed] || 1200;
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
+
+      intervalRef.current = setInterval(() => {
+        setCurrentPlayVal(prev => {
+          let next = prev + step;
+          if (next > maxTime) {
+            if (loopMode) {
+              next = minTime;
+            } else {
+              setIsPlaying(false);
+              return prev;
+            }
+          }
+          return next;
+        });
+      }, intervalDuration);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     }
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [timelapseSettings.isPlaying, timelapseSettings.speed]);
+  }, [isPlaying, playbackSpeed, minTime, maxTime, timeType, loopMode, timeRangeType]);
 
-  const togglePlay = () => {
-    if (timelapseSettings.isPlaying) {
-      stopPlayback();
-    } else {
-      setTimelapseSettings(prev => ({ ...prev, isPlaying: true }));
-    }
-  };
+  // Apply map filter and query active count on currentPlayVal change
+  useEffect(() => {
+    if (!selectedLayerItem || !selectedFieldName || minTime === null || currentPlayVal === null) return;
 
-  const stepForward = () => {
-    stopPlayback();
-    const next = Math.min(timelapseSettings.endYear, timelapseSettings.toYear + 1);
-    pushFilter({ toYear: next, isPlaying: false });
-  };
+    // Direct state propagation to App which notifies MapView
+    setTimelapseSettings({
+      layerId: selectedLayerId,
+      timeField: selectedFieldName,
+      timeType: timeType,
+      timeRangeType: timeRangeType,
+      fromYear: minTime,
+      toYear: currentPlayVal,
+      startYear: minTime,
+      endYear: maxTime,
+      isPlaying: isPlaying,
+      speed: playbackSpeed,
+      loop: loopMode,
+      lastApply: Date.now()
+    });
 
-  const stepBack = () => {
-    stopPlayback();
-    const prev = Math.max(timelapseSettings.startYear, timelapseSettings.toYear - 1);
-    pushFilter({ toYear: prev, isPlaying: false });
-  };
+    const debounceTimer = setTimeout(async () => {
+      let expression = "";
+      if (timeRangeType === 'year') {
+        if (timeType === 'date') {
+          expression = `${selectedFieldName} >= DATE '${minTime}-01-01' AND ${selectedFieldName} <= DATE '${currentPlayVal}-12-31'`;
+        } else if (timeType === 'string-date') {
+          expression = `${selectedFieldName} >= '${minTime}-01-01' AND ${selectedFieldName} <= '${currentPlayVal}-12-31'`;
+        } else {
+          expression = `${selectedFieldName} >= ${minTime} AND ${selectedFieldName} <= ${currentPlayVal}`;
+        }
+      } else {
+        const dateStr = new Date(currentPlayVal).toISOString().split('T')[0];
+        const minDateStr = new Date(minTime).toISOString().split('T')[0];
+        if (timeType === 'date') {
+          expression = `${selectedFieldName} >= DATE '${minDateStr}' AND ${selectedFieldName} <= DATE '${dateStr}'`;
+        } else if (timeType === 'string-date') {
+          expression = `${selectedFieldName} >= '${minDateStr}' AND ${selectedFieldName} <= '${dateStr}'`;
+        } else {
+          const minYr = new Date(minTime).getFullYear();
+          const currYr = new Date(currentPlayVal).getFullYear();
+          expression = `${selectedFieldName} >= ${minYr} AND ${selectedFieldName} <= ${currYr}`;
+        }
+      }
 
-  const handleReset = () => {
-    stopPlayback();
-    if (!activeLayer) return;
-    setTimelapseSettings(prev => ({
-      ...prev,
-      fromYear: activeLayer.startYear || prev.startYear,
-      toYear: activeLayer.endYear || prev.endYear,
+      setIsLoadingCount(true);
+      const count = await getActiveFeatureCount(selectedLayerItem, selectedFieldName, expression);
+      setActiveCount(count);
+      setIsLoadingCount(false);
+    }, 200);
+
+    return () => clearTimeout(debounceTimer);
+  }, [currentPlayVal, selectedLayerId, selectedFieldName, timeType, minTime, isPlaying, playbackSpeed, loopMode, timeRangeType]);
+
+  const handleReset = async () => {
+    setIsPlaying(false);
+    setSelectedLayerId('');
+    setSelectedFieldName('');
+    setMinTime(null);
+    setMaxTime(null);
+    setCurrentPlayVal(null);
+    setActiveCount(0);
+    setTimeRangeType('year');
+    
+    setTimelapseSettings({
+      layerId: '',
+      timeField: '',
+      timeType: 'numeric',
+      timeRangeType: 'year',
+      fromYear: 2018,
+      toYear: 2024,
+      startYear: 2018,
+      endYear: 2024,
       isPlaying: false,
-      lastApply: 0
-    }));
+      lastApply: 0 // clears filters
+    });
   };
 
   const handleApply = () => {
-    stopPlayback();
-    pushFilter({});
+    setIsPlaying(false);
+    setTimelapseSettings({
+      layerId: selectedLayerId,
+      timeField: selectedFieldName,
+      timeType: timeType,
+      timeRangeType: timeRangeType,
+      fromYear: minTime,
+      toYear: currentPlayVal,
+      startYear: minTime,
+      endYear: maxTime,
+      isPlaying: false,
+      speed: playbackSpeed,
+      loop: loopMode,
+      lastApply: Date.now()
+    });
   };
 
-  const totalYears = timelapseSettings.endYear - timelapseSettings.startYear || 1;
-  const fromPct = ((timelapseSettings.fromYear - timelapseSettings.startYear) / totalYears) * 100;
-  const toPct   = ((timelapseSettings.toYear   - timelapseSettings.startYear) / totalYears) * 100;
+  const stepForward = () => {
+    setIsPlaying(false);
+    if (currentPlayVal !== null && maxTime !== null) {
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
+      setCurrentPlayVal(Math.min(maxTime, currentPlayVal + step));
+    }
+  };
+
+  const stepBack = () => {
+    setIsPlaying(false);
+    if (currentPlayVal !== null && minTime !== null) {
+      const step = calculateStepSize(minTime, maxTime, timeType, timeRangeType);
+      setCurrentPlayVal(Math.max(minTime, currentPlayVal - step));
+    }
+  };
+
+  const progressPercentage = (minTime !== null && maxTime !== null && currentPlayVal !== null)
+    ? ((currentPlayVal - minTime) / (maxTime - minTime)) * 100
+    : 0;
 
   return (
     <div className="temporal-filter-container">
-      <div className="temporal-tab-container">
-        <button 
-          className={`temporal-tab-btn ${timeCompareTab === 'slider' ? 'active' : ''}`}
-          onClick={() => {
-            stopPlayback();
-            setTimeCompareTab('slider');
-          }}
-        >
-          <Clock size={14} />
-          <span>Timeline Filter</span>
-        </button>
-        <button 
-          className={`temporal-tab-btn ${timeCompareTab === 'swipe' ? 'active' : ''}`}
-          onClick={() => {
-            stopPlayback();
-            setTimeCompareTab('swipe');
-          }}
-        >
-          <Columns2 size={14} />
-          <span>Swipe Compare</span>
-        </button>
-      </div>
+      {selectedLayerId && selectedFieldName && (
+        <div className="temporal-tab-container">
+          <button 
+            className={`temporal-tab-btn ${timeCompareTab === 'slider' ? 'active' : ''}`}
+            onClick={() => {
+              setIsPlaying(false);
+              setTimeCompareTab('slider');
+            }}
+          >
+            <Clock size={14} />
+            <span>Timeline Filter</span>
+          </button>
+          <button 
+            className={`temporal-tab-btn ${timeCompareTab === 'swipe' ? 'active' : ''}`}
+            onClick={() => {
+              setIsPlaying(false);
+              setTimeCompareTab('swipe');
+            }}
+          >
+            <Columns2 size={14} />
+            <span>Swipe Compare</span>
+          </button>
+        </div>
+      )}
 
       <div className="temporal-filter-body">
-        {timelapseSettings.lastApply > 0 && (
+        {selectedLayerId && selectedFieldName && minTime !== null && (
           <div className="temporal-active-badge">
             <Zap size={13} />
             <span>
               {timeCompareTab === 'swipe'
-                ? `Compare: ${timelapseSettings.fromYear} | ${timelapseSettings.toYear}`
-                : `Filter Active: ${timelapseSettings.fromYear} — ${timelapseSettings.toYear}`}
+                ? `Compare: ${formatPlayValue(minTime, timeType, timeRangeType)} | ${formatPlayValue(currentPlayVal, timeType, timeRangeType)}`
+                : `Filter Active: ${formatPlayValue(minTime, timeType, timeRangeType)} — ${formatPlayValue(currentPlayVal, timeType, timeRangeType)}`}
             </span>
           </div>
         )}
 
+        {/* Layer Selection */}
         <div className="temporal-section">
-          <label className="temporal-label">Temporal Layer</label>
+          <label className="temporal-label">Select Layer</label>
           <TreeSelect 
             treeData={treeData}
-            value={timelapseSettings.layerId}
+            value={selectedLayerId}
             onChange={(val) => {
-              let rootId = val;
-              if (val.includes('_sub_')) {
-                rootId = val.split('_sub_')[0];
-              }
-              const layer = layersConfig.find(l => l.id === rootId);
-              if (!layer) return;
-              stopPlayback();
-              setTimelapseSettings({
-                ...timelapseSettings,
+              setSelectedLayerId(val);
+              setSelectedFieldName('');
+              setMinTime(null);
+              setMaxTime(null);
+              setCurrentPlayVal(null);
+              setActiveCount(0);
+              setTimelapseSettings(prev => ({
+                ...prev,
                 layerId: val,
-                startYear: layer.startYear || 2018,
-                endYear: layer.endYear || 2024,
-                fromYear: layer.startYear || 2018,
-                toYear: layer.endYear || 2024,
-                timeField: layer.timeField || '',
+                timeField: '',
                 isPlaying: false,
                 lastApply: 0
-              });
+              }));
             }}
-            placeholder="Choose a layer..."
+            placeholder="Select Layer"
           />
         </div>
 
+        {/* Field Selection (Always shown in default state) */}
         <div className="temporal-section">
           <label className="temporal-label">
             Time Field
             {isLoadingFields && <span className="field-loading-dot" />}
           </label>
           <CustomSelect 
-            options={availableFields.map(f => ({ id: f.name, title: f.alias || f.name }))}
-            value={timelapseSettings.timeField}
-            onChange={(val) => setTimelapseSettings(prev => ({ ...prev, timeField: val }))}
-            placeholder={isLoadingFields ? 'Detecting fields...' : 'Select time field...'}
+            options={fieldsList.map(f => {
+              const lowerName = f.name.toLowerCase();
+              let title = `${f.name} (${f.alias || f.name})`;
+              if (lowerName.includes('year')) {
+                title = 'Year';
+              } else if (lowerName.includes('date')) {
+                title = 'Date';
+              }
+              return {
+                id: f.name,
+                title: title
+              };
+            })}
+            value={selectedFieldName}
+            onChange={(val) => {
+              setSelectedFieldName(val);
+              setMinTime(null);
+              setMaxTime(null);
+              setCurrentPlayVal(null);
+              setActiveCount(0);
+              setTimelapseSettings(prev => ({
+                ...prev,
+                timeField: val,
+                isPlaying: false,
+                lastApply: 0
+              }));
+            }}
+            placeholder="Select Time Field"
+            disabled={!selectedLayerId}
           />
-          {fieldError && <span className="field-error-hint">{fieldError}</span>}
         </div>
 
-        {timeCompareTab === 'swipe' ? (
-          <div className="temporal-section timeline-range-section">
-            <label className="temporal-label" style={{ marginBottom: '12px' }}>Comparison Years</label>
-            
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px', fontWeight: '600' }}>
-                <span style={{ color: '#64748b' }}>Left Side Year</span>
-                <span style={{ color: '#1e3c72', fontWeight: 'bold' }}>{timelapseSettings.fromYear}</span>
-              </div>
-              <input 
-                type="range"
-                className="range-thumb single-slider"
-                min={timelapseSettings.startYear}
-                max={timelapseSettings.endYear}
-                value={timelapseSettings.fromYear}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setTimelapseSettings(prev => ({ ...prev, fromYear: val }));
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
+        {selectedLayerId && selectedFieldName && (
+          <>
 
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px', fontWeight: '600' }}>
-                <span style={{ color: '#64748b' }}>Right Side Year</span>
-                <span style={{ color: '#1e3c72', fontWeight: 'bold' }}>{timelapseSettings.toYear}</span>
-              </div>
-              <input 
-                type="range"
-                className="range-thumb single-slider"
-                min={timelapseSettings.startYear}
-                max={timelapseSettings.endYear}
-                value={timelapseSettings.toYear}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setTimelapseSettings(prev => ({ ...prev, toYear: val }));
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="temporal-section timeline-range-section">
-            <div className="timeline-header">
-              <label className="temporal-label">Time Range</label>
-              <div className="range-display">
-                <Clock size={13} />
-                <span>{timelapseSettings.fromYear} — {timelapseSettings.toYear}</span>
-              </div>
-            </div>
+            {timeCompareTab === 'swipe' ? (
+              <div className="temporal-section timeline-range-section">
+                <label className="temporal-label" style={{ marginBottom: '12px' }}>Comparison Years</label>
+                
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px', fontWeight: '600' }}>
+                    <span style={{ color: '#64748b' }}>Left Side Value</span>
+                    <span style={{ color: '#1e3c72', fontWeight: 'bold' }}>{formatPlayValue(minTime, timeType, timeRangeType)}</span>
+                  </div>
+                  <input 
+                    type="range"
+                    className="range-thumb single-slider"
+                    min={minTime}
+                    max={maxTime}
+                    value={minTime}
+                    disabled={true}
+                    style={{ width: '100%', opacity: 0.7 }}
+                  />
+                </div>
 
-            <div className="timeline-slider-wrapper">
-              <div className="timeline-track">
-                <div 
-                  className="timeline-highlight"
-                  style={{ left: `${fromPct}%`, right: `${100 - toPct}%` }}
-                />
-                <input 
-                  type="range"
-                  className="range-thumb thumb-left"
-                  min={timelapseSettings.startYear}
-                  max={timelapseSettings.endYear}
-                  value={timelapseSettings.fromYear}
-                  onChange={(e) => {
-                    const val = Math.min(Number(e.target.value), timelapseSettings.toYear);
-                    setTimelapseSettings(prev => ({ ...prev, fromYear: val }));
-                  }}
-                />
-                <input 
-                  type="range"
-                  className="range-thumb thumb-right"
-                  min={timelapseSettings.startYear}
-                  max={timelapseSettings.endYear}
-                  value={timelapseSettings.toYear}
-                  onChange={(e) => {
-                    const val = Math.max(Number(e.target.value), timelapseSettings.fromYear);
-                    setTimelapseSettings(prev => ({ ...prev, toYear: val }));
-                  }}
-                />
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px', fontWeight: '600' }}>
+                    <span style={{ color: '#64748b' }}>Right Side Value</span>
+                    <span style={{ color: '#1e3c72', fontWeight: 'bold' }}>{formatPlayValue(currentPlayVal, timeType, timeRangeType)}</span>
+                  </div>
+                  <input 
+                    type="range"
+                    className="range-thumb single-slider"
+                    min={minTime}
+                    max={maxTime}
+                    step={calculateStepSize(minTime, maxTime, timeType, timeRangeType)}
+                    value={currentPlayVal}
+                    onChange={(e) => {
+                      setIsPlaying(false);
+                      setCurrentPlayVal(Number(e.target.value));
+                    }}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
               </div>
-              <div className="timeline-labels">
-                <span>{timelapseSettings.startYear}</span>
-                <span>{timelapseSettings.endYear}</span>
+            ) : (
+              <div className="temporal-section timeline-range-section">
+                <div className="timeline-header">
+                  <label className="temporal-label">Timeline</label>
+                  <div className="range-display">
+                    <Clock size={13} />
+                    <span>{formatPlayValue(currentPlayVal, timeType, timeRangeType)}</span>
+                  </div>
+                </div>
+
+                <div className="timeline-slider-clean" style={{ margin: '10px 0 20px 0' }}>
+                  <div className="timeline-track-clean">
+                    <div 
+                      className="timeline-fill-clean"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                    <input 
+                      type="range"
+                      className="timeline-input-clean"
+                      min={minTime}
+                      max={maxTime}
+                      step={calculateStepSize(minTime, maxTime, timeType, timeRangeType)}
+                      value={currentPlayVal}
+                      onChange={(e) => {
+                        setIsPlaying(false);
+                        setCurrentPlayVal(Number(e.target.value));
+                      }}
+                    />
+                  </div>
+                  <div className="timeline-labels-clean">
+                    <span>{formatPlayValue(minTime, timeType, timeRangeType)}</span>
+                    <span>{formatPlayValue(maxTime, timeType, timeRangeType)}</span>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {timeCompareTab === 'slider' && (
+              <div className="temporal-section">
+                <label className="temporal-label">Playback Speed</label>
+                <div className="speed-btn-group">
+                  {['Slow', 'Medium', 'Fast'].map(s => (
+                    <button
+                      key={s}
+                      className={`speed-btn ${playbackSpeed === s ? 'active' : ''}`}
+                      onClick={() => setPlaybackSpeed(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {timeCompareTab === 'slider' && minTime !== null && (
+              <div className="temporal-section playback-controls-section">
+                <div className="playback-group">
+                  <button className="playback-btn secondary" onClick={stepBack} title="Previous">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    className={`playback-btn primary ${isPlaying ? 'active' : ''}`}
+                    onClick={() => setIsPlaying(!isPlaying)}
+                  >
+                    {isPlaying
+                      ? <Pause size={22} fill="currentColor" />
+                      : <Play size={22} fill="currentColor" />}
+                  </button>
+                  <button className="playback-btn secondary" onClick={stepForward} title="Next">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Filtered Features Count */}
+            {selectedFieldName && minTime !== null && (
+              <div className="count-badge" style={{ margin: '15px 0' }}>
+                <span>Filtered Features</span>
+                <span className="count-val">
+                  {isLoadingCount ? 'Querying...' : activeCount.toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <div className="info-box-v4" style={{ marginTop: '15px' }}>
+              <Info size={14} />
+              <span>
+                {timeCompareTab === 'swipe'
+                  ? 'Creates a swipe divider comparing starting value vs current slider value.'
+                  : 'Applies dynamic spatial filters. Use play controls to animate.'}
+              </span>
             </div>
-          </div>
+          </>
         )}
+      </div>
 
-        {timeCompareTab === 'slider' && (
-          <div className="temporal-section">
-            <label className="temporal-label">Playback Speed</label>
-            <div className="speed-btn-group">
-              {['Slow', 'Medium', 'Fast'].map(s => (
-                <button
-                  key={s}
-                  className={`speed-btn ${(timelapseSettings.speed || 'Medium') === s ? 'active' : ''}`}
-                  onClick={() => setTimelapseSettings(prev => ({ ...prev, speed: s }))}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {timeCompareTab === 'slider' && (
-          <div className="temporal-section playback-controls-section">
-            <div className="playback-group">
-              <button className="playback-btn secondary" onClick={stepBack} title="Step Back (-1yr)">
-                <ChevronLeft size={20} />
-              </button>
-              <button
-                className={`playback-btn primary ${timelapseSettings.isPlaying ? 'active' : ''}`}
-                onClick={togglePlay}
-                disabled={!timelapseSettings.layerId}
-              >
-                {timelapseSettings.isPlaying
-                  ? <Pause size={22} fill="currentColor" />
-                  : <Play size={22} fill="currentColor" />}
-              </button>
-              <button className="playback-btn secondary" onClick={stepForward} title="Step Forward (+1yr)">
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="info-box-v4">
-          <Info size={14} />
-          <span>
-            {timeCompareTab === 'swipe'
-              ? 'Creates a swipe divider comparing left year vs right year of the selected layer.'
-              : 'Applies definitionExpression to filter features by year. Use playback to animate.'}
-          </span>
+      {selectedLayerId && selectedFieldName && (
+        <div className="temporal-footer">
+          <button className="temporal-btn-secondary" onClick={handleReset}>
+            <RotateCcw size={15} /> Reset
+          </button>
+          <button
+            className="temporal-btn-primary"
+            onClick={handleApply}
+            disabled={!selectedLayerId || !selectedFieldName}
+          >
+            {timeCompareTab === 'swipe' ? 'Apply Compare' : 'Apply Filter'}
+          </button>
         </div>
-      </div>
-
-      <div className="temporal-footer">
-        <button className="temporal-btn-secondary" onClick={handleReset}>
-          <RotateCcw size={15} /> Reset
-        </button>
-        <button
-          className="temporal-btn-primary"
-          onClick={handleApply}
-          disabled={!timelapseSettings.layerId || !timelapseSettings.timeField}
-        >
-          {timeCompareTab === 'swipe' ? 'Apply Compare' : 'Apply Filter'}
-        </button>
-      </div>
+      )}
     </div>
   );
 };
@@ -1202,6 +1660,7 @@ const TemporalFilterPanel = ({
   if (!isDesktop) {
     return (
       <MobileTabletTemporalPanel
+        mapView={mapView}
         layersConfig={layersConfig}
         dynamicMapServerData={dynamicMapServerData}
         treeData={treeData}

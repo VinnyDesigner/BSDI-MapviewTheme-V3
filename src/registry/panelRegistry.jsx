@@ -18,6 +18,7 @@ import AddDataPanel from '../components/AddDataPanel';
 import PrintPanel from '../components/PrintPanel';
 import ArcadePanel from '../components/ArcadePanel';
 import TemporalFilterPanel from '../components/TemporalFilterPanel';
+import AdvancedQueryPanel from '../components/AdvancedQueryPanel';
 import DataRequestPanel from '../components/DataRequestPanel';
 import BookmarkPanel from '../components/BookmarkPanel';
 import CustomSelect from '../components/CustomSelect';
@@ -1627,6 +1628,7 @@ export const PANEL_REGISTRY = {
   print: PrintPanel,
   arcade: ArcadePanel,
   time_compare: TemporalFilterPanel,
+  advanced_query: AdvancedQueryPanel,
   data_request: DataRequestPanel,
   bookmark: BookmarkPanel,
   layers: LayersPanel,

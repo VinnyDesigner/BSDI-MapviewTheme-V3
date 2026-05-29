@@ -264,7 +264,15 @@ const ArcGISMap = ({
     const view = new SceneView({
       container: map3DDiv.current,
       map: map,
-      camera: { position: { x: 50.55, y: 26.15, z: 5000 }, tilt: 65, heading: 0 },
+      camera: { 
+        position: { 
+          longitude: 50.6443, 
+          latitude: 26.3185, 
+          z: 120 
+        }, 
+        tilt: 65, 
+        heading: 35 
+      },
       ui: { components: [] }
     });
 
@@ -278,7 +286,7 @@ const ArcGISMap = ({
     map.add(buildingsLayer);
 
     const ifcVillaLayer = new SceneLayer({
-      url: "https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer?f=json",
+      url: "https://gis9.smartgeoapps.com/server/rest/services/Hosted/IFC_OldVilla_WSL2/SceneServer/layers/0",
       title: "IFC Old Villa", id: "ifc-old-villa", opacity: 1.0
     });
     map.add(ifcVillaLayer);
@@ -733,10 +741,39 @@ const ArcGISMap = ({
       const field = timelapseSettings.timeField || 'SURVEY_YEAR';
       const fromYear = timelapseSettings.fromYear;
       const toYear = timelapseSettings.toYear;
+      const timeType = timelapseSettings.timeType || 'numeric';
+      const rangeType = timelapseSettings.timeRangeType || (fromYear < 3000 ? 'year' : 'date');
 
-      // Left expression & Right expression
-      const leftExpr = `${field} = ${fromYear}`;
-      const rightExpr = `${field} = ${toYear}`;
+      let leftExpr = "";
+      let rightExpr = "";
+
+      if (rangeType === 'year') {
+        if (timeType === 'date') {
+          leftExpr = `${field} >= DATE '${fromYear}-01-01' AND ${field} <= DATE '${fromYear}-12-31'`;
+          rightExpr = `${field} >= DATE '${toYear}-01-01' AND ${field} <= DATE '${toYear}-12-31'`;
+        } else if (timeType === 'string-date') {
+          leftExpr = `${field} >= '${fromYear}-01-01' AND ${field} <= '${fromYear}-12-31'`;
+          rightExpr = `${field} >= '${toYear}-01-01' AND ${field} <= '${toYear}-12-31'`;
+        } else {
+          leftExpr = `${field} = ${fromYear}`;
+          rightExpr = `${field} = ${toYear}`;
+        }
+      } else {
+        const fromStr = new Date(fromYear).toISOString().split('T')[0];
+        const toStr = new Date(toYear).toISOString().split('T')[0];
+        if (timeType === 'date') {
+          leftExpr = `${field} = DATE '${fromStr}'`;
+          rightExpr = `${field} = DATE '${toStr}'`;
+        } else if (timeType === 'string-date') {
+          leftExpr = `${field} = '${fromStr}'`;
+          rightExpr = `${field} = '${toStr}'`;
+        } else {
+          const fromYr = new Date(fromYear).getFullYear();
+          const toYr = new Date(toYear).getFullYear();
+          leftExpr = `${field} = ${fromYr}`;
+          rightExpr = `${field} = ${toYr}`;
+        }
+      }
 
       console.log(`[Temporal Swipe] Applying Left: "${leftExpr}" & Right: "${rightExpr}"`);
 
@@ -990,29 +1027,48 @@ const ArcGISMap = ({
   const applyTemporalFilterNow = useCallback(async (settings, viewInstance, activeLayers) => {
     if (!settings?.layerId || !viewInstance) return;
 
-    const { layerId, fromYear, toYear, timeField, timeType } = settings;
+    const { layerId, fromYear, toYear, timeField, timeType, timeRangeType } = settings;
+    const selectedYear = toYear; // properly bind selectedYear to the timelineValue
     const field = timeField || 'SURVEY_YEAR';
     
-    // Construct filter expression based on type
+    const rangeType = timeRangeType || (fromYear < 3000 ? 'year' : 'date');
+
+    // Construct filter expression based on type and range type
     let expression = "";
-    if (timeType === 'date') {
-      const fromStr = new Date(fromYear).toISOString().split('T')[0];
-      const toStr = new Date(toYear).toISOString().split('T')[0];
-      expression = `${field} >= DATE '${fromStr}' AND ${field} <= DATE '${toStr}'`;
-    } else if (timeType === 'string-date') {
-      const fromStr = new Date(fromYear).toISOString().split('T')[0];
-      const toStr = new Date(toYear).toISOString().split('T')[0];
-      expression = `${field} >= '${fromStr}' AND ${field} <= '${toStr}'`;
+    if (rangeType === 'year') {
+      if (timeType === 'date') {
+        expression = `${field} >= DATE '${fromYear}-01-01' AND ${field} <= DATE '${toYear}-12-31'`;
+      } else if (timeType === 'string-date') {
+        expression = `${field} >= '${fromYear}-01-01' AND ${field} <= '${toYear}-12-31'`;
+      } else {
+        expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
+      }
     } else {
-      expression = `${field} >= ${fromYear} AND ${field} <= ${toYear}`;
+      const fromStr = new Date(fromYear).toISOString().split('T')[0];
+      const toStr = new Date(toYear).toISOString().split('T')[0];
+      if (timeType === 'date') {
+        expression = `${field} >= DATE '${fromStr}' AND ${field} <= DATE '${toStr}'`;
+      } else if (timeType === 'string-date') {
+        expression = `${field} >= '${fromStr}' AND ${field} <= '${toStr}'`;
+      } else {
+        const fromYr = new Date(fromYear).getFullYear();
+        const toYr = new Date(toYear).getFullYear();
+        expression = `${field} >= ${fromYr} AND ${field} <= ${toYr}`;
+      }
     }
 
-    console.log(`[Temporal Filter] Applying expression: "${expression}" on "${layerId}"`);
+    console.log(`[Temporal Filter] Applying expression: "${expression}" on "${layerId}", selectedYear: ${selectedYear}`);
 
     // 1. Set view.timeExtent for time-aware services if applicable
     try {
-      const startDate = timeType === 'numeric' ? new Date(`${fromYear}-01-01T00:00:00Z`) : new Date(fromYear);
-      const endDate = timeType === 'numeric' ? new Date(`${toYear}-12-31T23:59:59Z`) : new Date(toYear);
+      let startDate, endDate;
+      if (rangeType === 'year') {
+        startDate = new Date(`${fromYear}-01-01T00:00:00Z`);
+        endDate = new Date(`${toYear}-12-31T23:59:59Z`);
+      } else {
+        startDate = new Date(fromYear);
+        endDate = new Date(toYear);
+      }
       viewInstance.timeExtent = new TimeExtent({ start: startDate, end: endDate });
     } catch (e) {
       console.warn('[Temporal] view.timeExtent assignment bypassed:', e.message);
@@ -1049,28 +1105,47 @@ const ArcGISMap = ({
       }
     } else {
       // FeatureLayer, GeoJSONLayer, CSVLayer
-      const targetLayer = activeLayers[layerId] || viewInstance.map.findLayerById(layerId);
+      const targetLayer = activeLayers[layerId] || 
+                          viewInstance.map.findLayerById(layerId) ||
+                          activeLayers[`${layerId}_sub_0`] ||
+                          viewInstance.map.findLayerById(`${layerId}_sub_0`) ||
+                          viewInstance.map.layers.find(l => l.id && l.id.startsWith(`${layerId}_sub_`));
       if (!targetLayer) {
         console.warn(`[Temporal] Layer not found: "${layerId}"`);
         return;
       }
       targetLayer.visible = true;
-      targetLayer.definitionExpression = expression;
 
-      try {
-        const lv = await viewInstance.whenLayerView(targetLayer);
-        if (lv) {
-          lv.filter = new FeatureFilter({ where: expression });
-          if (typeof lv.refresh === 'function') lv.refresh();
+      // Debugging: Inspect actual feature attributes to inspect matching field values
+      targetLayer.queryFeatures({
+        where: "1=1",
+        outFields: ["*"],
+        returnGeometry: false
+      }).then((res) => {
+        if (res && res.features && res.features[0]) {
+          console.log('[Temporal Debug] Sample Feature Attributes:', res.features[0].attributes);
         }
-      } catch (e) {
-        console.warn('[Temporal] LayerView filter failed (fallback to definitionExpression):', e.message);
-      }
+      }).catch(err => {
+        console.warn('[Temporal Debug] Query features failed:', err.message);
+      });
+
+      // Recommended fix: Use layerView.filter only, do NOT mix with definitionExpression
+      viewInstance.whenLayerView(targetLayer).then((layerView) => {
+        if (layerView) {
+          layerView.filter = {
+            where: expression
+          };
+          if (typeof layerView.refresh === 'function') {
+            layerView.refresh();
+          }
+        }
+      }).catch(err => {
+        console.warn('[Temporal] LayerView.filter assignment failed:', err.message);
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Clear all temporal filters ──────────────────────────────────────────
   const clearAllTemporalFilters = useCallback((activeLayers, viewInstance) => {
     if (!viewInstance) return;
 
@@ -1080,9 +1155,11 @@ const ArcGISMap = ({
     // Clear all potential definitionExpressions and filter criteria
     viewInstance.map.allLayers.forEach(layer => {
       if (layer.type === 'feature' || layer.type === 'geojson' || layer.type === 'csv') {
-        layer.definitionExpression = null;
         viewInstance.whenLayerView(layer).then(lv => {
-          if (lv) lv.filter = null;
+          if (lv) {
+            lv.filter = null;
+            if (typeof lv.refresh === 'function') lv.refresh();
+          }
         }).catch(() => {});
       } else if (layer.type === 'map-image') {
         if (layer.customParameters && layer.customParameters.layerDefs) {

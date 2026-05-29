@@ -6,7 +6,7 @@ export const toolbarConfig = {
     },
     {
       id: 'analysis',
-      toolIds: ['navigation', 'measure', 'draw']
+      toolIds: ['navigation', 'measure', 'draw', 'advanced_query']
     },
     {
       id: 'data',

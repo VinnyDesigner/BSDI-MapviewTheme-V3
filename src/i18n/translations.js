@@ -28,6 +28,7 @@ export const translations = {
       split:            'Swipe',
       split_view:       'Split View',
       basemap:          'Basemaps',
+      advanced_query:   'Advanced Query',
     },
 
     // ── Navigation panel ──────────────────────────────────
@@ -60,6 +61,7 @@ export const translations = {
       split:            'Swipe',
       split_view:       'Split View',
       basemap:          'Basemaps',
+      advanced_query:   'Advanced Query',
     },
 
     // ── Layers panel ─────────────────────────────────────
@@ -443,6 +445,7 @@ export const translations = {
       split_view:       'عرض منقسم',
       spatial_analysis: 'التحليل المكاني',
       basemap:      'خرائط الأساس',
+      advanced_query:   'استعلام متقدم',
     },
 
     // ── Navigation panel ──────────────────────────────────
@@ -476,6 +479,7 @@ export const translations = {
       split_view:       'عرض منقسم',
       spatial_analysis: 'التحليل المكاني',
       basemap:      'خرائط الأساس',
+      advanced_query:   'استعلام متقدم',
     },
 
     // ── Layers panel ─────────────────────────────────────

@@ -742,8 +742,8 @@ function AppInner() {
   const is3DDisabled = isSplitModePersistent || isSplitView;
 
   const [timelapseSettings, setTimelapseSettings] = useState({
-    layerId: 'sample-data-1',
-    timeField: 'SURVEY_YEAR',
+    layerId: '',
+    timeField: '',
     currentYear: 2024,
     fromYear: 2018,
     toYear: 2024,
