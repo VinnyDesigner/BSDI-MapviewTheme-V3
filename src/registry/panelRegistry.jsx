@@ -199,7 +199,7 @@ export const IdentifyPanel = ({
 
   // Handle selectedLayerId validation/auto-reset
   React.useEffect(() => {
-    if (identifySettings.selectedLayerId !== 'all') {
+    if (identifySettings.selectedLayerId && identifySettings.selectedLayerId !== 'all') {
       const findNode = (nodes, id) => {
         for (const n of nodes) {
           if (n.id === id) return true;
