@@ -506,12 +506,16 @@ const AdvancedQueryPanel = ({
         }
       }
 
-      // Filter out standard system or non-queryable attributes
-      const systemFields = ['objectid', 'fid', 'shape', 'globalid', 'shape__length', 'shape__area', 'shape_length', 'shape_area', 'shape.len', 'shape.area'];
+      // Filter out standard system or non-queryable attributes to present meaningful fields for users
+      const systemKeywords = ['objectid', 'fid', 'shape', 'globalid', 'st_area', 'st_length', 'shape.len', 'shape.area', 'uuid', 'rowid', 'created_', 'edited_'];
       const filtered = actualFields.filter(f => {
         const nameLower = f.name.toLowerCase();
         const typeLower = (f.type || '').toLowerCase();
-        return !systemFields.includes(nameLower) && !typeLower.includes('geometry') && !typeLower.includes('oid');
+        
+        const isSystem = systemKeywords.some(kw => nameLower.includes(kw));
+        const isNonSimpleType = typeLower.includes('geometry') || typeLower.includes('oid') || typeLower.includes('blob') || typeLower.includes('raster');
+        
+        return !isSystem && !isNonSimpleType;
       });
 
       const fallbackFields = [
