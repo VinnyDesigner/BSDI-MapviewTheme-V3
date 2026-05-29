@@ -217,7 +217,15 @@ export const IdentifyPanel = ({
   }, [treeData, identifySettings.selectedLayerId, setIdentifySettings]);
 
   return (
-    <div className="tool-content">
+    <div className="tool-content" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <style>{`
+        .side-panel-content {
+          overflow-y: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+          height: calc(100% - 60px) !important;
+        }
+      `}</style>
       {!identifySettings.results ? (
         <>
           <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -264,7 +272,7 @@ export const IdentifyPanel = ({
           </div>
         </>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '460px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
           <div 
             style={{ 
               display: 'flex', 
