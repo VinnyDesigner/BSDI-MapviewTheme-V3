@@ -179,37 +179,37 @@ const Header = ({ onMenuClick, view }) => {
                   <X size={14} />
                 </button>
               )}
-
-              {/* Suggestions Dropdown */}
-              <AnimatePresence>
-                {(suggestions.length > 0 || noResults) && (
-                  <motion.div 
-                    className="header-suggestions-dropdown"
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                  >
-                    {suggestions.map((sug, idx) => (
-                      <div 
-                        key={idx} 
-                        className="header-suggestion-item"
-                        onClick={() => handleSelectSuggestion(sug)}
-                        dir={lang === 'AR' ? 'rtl' : 'ltr'}
-                      >
-                        <MapPin size={14} className="sug-icon" />
-                        <span className="sug-text">{sug.text}</span>
-                      </div>
-                    ))}
-                    {noResults && searchTerm && (
-                      <div className="header-suggestion-empty" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
-                        {lang === 'AR' ? 'لم يتم العثور على مواقع' : 'No locations found'}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           )}
+
+          {/* Suggestions Dropdown */}
+          <AnimatePresence>
+            {isSearchExpanded && (suggestions.length > 0 || noResults) && (
+              <motion.div 
+                className="header-suggestions-dropdown"
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+              >
+                {suggestions.map((sug, idx) => (
+                  <div 
+                    key={idx} 
+                    className="header-suggestion-item"
+                    onClick={() => handleSelectSuggestion(sug)}
+                    dir={lang === 'AR' ? 'rtl' : 'ltr'}
+                  >
+                    <MapPin size={16} className="sug-icon" />
+                    <span className="sug-text">{sug.text}</span>
+                  </div>
+                ))}
+                {noResults && searchTerm && (
+                  <div className="header-suggestion-empty" dir={lang === 'AR' ? 'rtl' : 'ltr'}>
+                    {lang === 'AR' ? 'لم يتم العثور على مواقع' : 'No locations found'}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         <div className="header-divider" />
