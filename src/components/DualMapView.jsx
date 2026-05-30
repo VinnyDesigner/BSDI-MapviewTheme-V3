@@ -15,7 +15,7 @@ import MapImageLayer from '@arcgis/core/layers/MapImageLayer';
 import * as reactiveUtils from '@arcgis/core/core/reactiveUtils';
 import { layersConfig } from '../layers';
 
-const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, basemap, syncMode, onExit }) => {
+const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, basemap, syncMode, dynamicMapServerData, onExit }) => {
   const leftMapDiv = useRef(null);
   const rightMapDiv = useRef(null);
   
@@ -192,13 +192,36 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
       selectedIds.forEach(id => {
         if (!id) return;
         if (id.includes('_sub_')) {
-          const [pId, subId] = id.split('_sub_');
+          const [pId, subIdStr] = id.split('_sub_');
+          const subId = Number(subIdStr);
           if (!parsed[pId]) {
             parsed[pId] = { config: layersConfig.find(l => l.id === pId), subIds: [] };
           } else if (parsed[pId].subIds === null) {
             parsed[pId].subIds = [];
           }
-          parsed[pId].subIds.push(Number(subId));
+          
+          // Get metadata sublayers to check if this is a group
+          const mapData = dynamicMapServerData?.[pId];
+          const sublayers = mapData?.metadata?.layers || [];
+          
+          const collectLeafIds = (sId) => {
+            const match = sublayers.find(s => s.id === sId);
+            if (match) {
+              if (match.subLayerIds && match.subLayerIds.length > 0) {
+                match.subLayerIds.forEach(childId => collectLeafIds(childId));
+              } else {
+                if (!parsed[pId].subIds.includes(sId)) {
+                  parsed[pId].subIds.push(sId);
+                }
+              }
+            } else {
+              if (!parsed[pId].subIds.includes(sId)) {
+                parsed[pId].subIds.push(sId);
+              }
+            }
+          };
+          
+          collectLeafIds(subId);
         } else {
           if (!parsed[id]) {
             parsed[id] = { config: layersConfig.find(l => l.id === id), subIds: null };
@@ -270,7 +293,7 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
     updateMapLayers(leftView.map, leftParsed, 'left');
     updateMapLayers(rightView.map, rightParsed, 'right');
 
-  }, [leftView, rightView, splitLayers]);
+  }, [leftView, rightView, splitLayers, dynamicMapServerData]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {

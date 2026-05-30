@@ -22,12 +22,23 @@ const Header = ({ onMenuClick, view }) => {
       const { default: SearchViewModel } = await import('@arcgis/core/widgets/Search/SearchViewModel');
       if (!active) return;
       
-      const vm = new SearchViewModel({
-        view: view,
-        maxSuggestions: 6,
-        includeDefaultSources: true
-      });
-      searchVMRef.current = vm;
+      try {
+        const vm = new SearchViewModel({
+          view: view,
+          maxSuggestions: 6,
+          includeDefaultSources: true
+        });
+        if (vm.defaultSources) {
+          vm.defaultSources.forEach(source => {
+            if (source) {
+              source.countryCode = "BHR";
+            }
+          });
+        }
+        searchVMRef.current = vm;
+      } catch (err) {
+        console.warn("Failed to initialize SearchViewModel or set default country code:", err);
+      }
     };
     if (view) {
       initSearch();
@@ -35,7 +46,9 @@ const Header = ({ onMenuClick, view }) => {
     return () => {
       active = false;
       if (searchVMRef.current) {
-        searchVMRef.current.destroy();
+        try {
+          searchVMRef.current.destroy();
+        } catch (e) {}
         searchVMRef.current = null;
       }
     };
@@ -92,6 +105,21 @@ const Header = ({ onMenuClick, view }) => {
     
     try {
       const response = await searchVMRef.current.search(suggestionOrTerm);
+      if (response && response.results && response.results.length > 0) {
+        response.results.forEach(res => {
+          if (res.results && res.results.length > 0) {
+            res.results.forEach(innerRes => {
+              if (innerRes.feature && innerRes.feature.geometry) {
+                console.log("Extent:", innerRes.feature.geometry.extent);
+                console.log("Spatial Reference:", innerRes.feature.geometry.spatialReference);
+                if (view) {
+                  console.log("Scale:", view.scale);
+                }
+              }
+            });
+          }
+        });
+      }
       if (response && response.numResults === 0) {
         setNoResults(true);
       }

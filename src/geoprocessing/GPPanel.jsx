@@ -77,12 +77,11 @@ const StatusBanner = ({ jobStatus, isRTL }) => {
   );
 };
 
-// ── Main Panel component ───────────────────────────────────────────────────────
-
 const GPPanel = ({
   view,
   layersConfig = [],
   dynamicMapServerData = {},
+  treeData
 }) => {
   const [activeTab, setActiveTab]       = useState('browse');   // 'browse' | 'run' | 'results'
   const [selectedToolId, setSelectedToolId] = useState(null);
@@ -103,31 +102,6 @@ const GPPanel = ({
 
   const allTools = getAllGPTools();
   const selectedManifest = selectedToolId ? getGPTool(selectedToolId) : null;
-
-  // ── Layer tree (re-used from existing TreeSelect infrastructure) ──────────
-  const treeData = useMemo(() => {
-    const tree = [];
-    layersConfig.forEach(l => {
-      if (l.type === 'feature') {
-        tree.push({ id: l.id, title: l.title, type: 'feature', selectable: true, children: [] });
-      } else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData[l.id];
-        if (mapData?.metadata?.layers) {
-          const subs = mapData.metadata.layers
-            .filter(s => s.parentLayerId == null || s.parentLayerId === -1)
-            .map(s => ({
-              id: `${l.id}_sub_${s.id}`,
-              title: s.name || s.title,
-              type: 'feature', selectable: true, children: [],
-            }));
-          if (subs.length > 0) {
-            tree.push({ id: l.id, title: l.title, type: 'root-group', selectable: false, children: subs });
-          }
-        }
-      }
-    });
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   // ── Default parameter values when tool is selected ────────────────────────
   useEffect(() => {

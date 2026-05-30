@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import ArcGISMap from './components/MapView'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -94,8 +94,8 @@ function AppInner() {
   )
   
   const [splitLayers, setSplitLayers] = useState({
-    left: [layersConfig[0]?.id || ''],
-    right: [layersConfig[1]?.id || layersConfig[0]?.id || '']
+    left: [],
+    right: []
   })
   const [splitBasemaps, setSplitBasemaps] = useState({
     left: 'streets-navigation-vector',
@@ -285,37 +285,94 @@ function AppInner() {
     const view = mapView;
     setLayerVisibility(prev => {
       const updates = { [`${layerId}_sub_${subId}`]: visible };
-      
       const layerData = dynamicMapServerData[layerId];
-      if (layerData && layerData.metadata.layers) {
-        const sub = layerData.metadata.layers.find(l => l.id === subId);
-        if (sub && sub.subLayerIds) {
-          const toggleChildren = (ids) => {
-            ids.forEach(childId => {
+      
+      if (layerData && layerData.metadata && layerData.metadata.layers) {
+        const metadataLayers = layerData.metadata.layers;
+        
+        // 1. Descendant Propagation:
+        // Set all descendants of this sublayer to match this sublayer's visibility
+        const toggleChildren = (parentId) => {
+          const parent = metadataLayers.find(l => l.id === parentId);
+          if (parent && parent.subLayerIds) {
+            parent.subLayerIds.forEach(childId => {
               updates[`${layerId}_sub_${childId}`] = visible;
-              const child = layerData.metadata.layers.find(l => l.id === childId);
-              if (child && child.subLayerIds) toggleChildren(child.subLayerIds);
+              toggleChildren(childId);
             });
+          }
+        };
+        toggleChildren(subId);
+
+        // Helper to find parent of a sublayer
+        const getParentId = (childId) => {
+          const child = metadataLayers.find(l => l.id === childId);
+          return (child && child.parentLayerId !== -1 && child.parentLayerId != null) ? child.parentLayerId : null;
+        };
+
+        // 2. Ancestor/Parent Propagation:
+        if (visible) {
+          // If a child is checked, all parent groups up to the root must also be checked
+          let currParentId = getParentId(subId);
+          while (currParentId !== null) {
+            updates[`${layerId}_sub_${currParentId}`] = true;
+            currParentId = getParentId(currParentId);
+          }
+          // The root service layer itself must also be checked/visible
+          updates[layerId] = true;
+        } else {
+          // If a child is unchecked, parent groups should remain checked/enabled
+          // UNLESS ALL of their child sublayers are unchecked.
+          const checkAndUpdateParents = (childId) => {
+            const parentId = getParentId(childId);
+            if (parentId === null) return;
+
+            const parent = metadataLayers.find(l => l.id === parentId);
+            if (parent && parent.subLayerIds) {
+              const anyChildActive = parent.subLayerIds.some(cid => {
+                const cKey = `${layerId}_sub_${cid}`;
+                return updates[cKey] !== undefined ? updates[cKey] : !!prev[cKey];
+              });
+              
+              updates[`${layerId}_sub_${parentId}`] = anyChildActive;
+              checkAndUpdateParents(parentId);
+            }
           };
-          toggleChildren(sub.subLayerIds);
+          checkAndUpdateParents(subId);
+
+          // Finally, if ALL top-level sublayers under this root service are unchecked, uncheck the root service layer
+          const rootChildren = metadataLayers.filter(s => s.parentLayerId == null || s.parentLayerId === -1);
+          const anyRootChildActive = rootChildren.some(s => {
+            const sKey = `${layerId}_sub_${s.id}`;
+            return updates[sKey] !== undefined ? updates[sKey] : !!prev[sKey];
+          });
+          updates[layerId] = anyRootChildActive;
         }
       }
+
+      const finalState = { ...prev, ...updates };
 
       // Sync with ArcGIS View
       if (view) {
         const layer = view.map.findLayerById(layerId);
         if (layer) {
+          // Sync root service layer visibility
+          if (updates[layerId] !== undefined) {
+            layer.visible = updates[layerId];
+          }
+          // Sync sublayers
           Object.keys(updates).forEach(key => {
-            const sId = parseInt(key.split('_sub_')[1]);
-            const s = typeof layer.findSublayerById === 'function' 
-              ? layer.findSublayerById(sId) 
-              : (layer.sublayers ? layer.sublayers.find(x => x.id === sId) : null);
-            if (s) s.visible = updates[key];
+            if (key.startsWith(`${layerId}_sub_`)) {
+              const sId = parseInt(key.split('_sub_')[1]);
+              const s = typeof layer.findSublayerById === 'function' 
+                ? layer.findSublayerById(sId) 
+                : (layer.sublayers ? layer.sublayers.find(x => x.id === sId) : null);
+              if (s) s.visible = updates[key];
+            }
           });
         }
       }
       
-      return { ...prev, ...updates };
+      return finalState;
     });
   };
 
@@ -936,6 +993,129 @@ function AppInner() {
     setActiveTool(toolId);
   }
 
+  // ── Unified Reactive Layer Tree (Single Source of Truth) ──
+  const unifiedTreeData = React.useMemo(() => {
+    const combinedLayers = [...layersConfig];
+
+    if (addDataResults && Array.isArray(addDataResults)) {
+      addDataResults.forEach(r => {
+        if (r.children && r.children.length > 0) {
+          r.children.forEach(c => {
+            if (!combinedLayers.some(l => l.id === c.id)) {
+              combinedLayers.push({
+                id: c.id,
+                title: c.name,
+                type: 'feature',
+                isDynamic: true,
+                rawLayer: c.layer
+              });
+            }
+          });
+        } else {
+          if (!combinedLayers.some(l => l.id === r.id)) {
+            combinedLayers.push({
+              id: r.id,
+              title: r.name,
+              type: 'feature',
+              isDynamic: true,
+              rawLayer: r.layer
+            });
+          }
+        }
+      });
+    }
+
+    const ordered = [];
+    if (layerOrder && Array.isArray(layerOrder)) {
+      layerOrder.forEach(id => {
+        const found = combinedLayers.find(l => l.id === id);
+        if (found) ordered.push(found);
+      });
+    }
+
+    combinedLayers.forEach(l => {
+      if (!ordered.some(o => o.id === l.id)) {
+        ordered.push(l);
+      }
+    });
+
+    const tree = [];
+    ordered.forEach(l => {
+      const mapData = dynamicMapServerData?.[l.id];
+      const isMultiLayer = l.type === 'map-image' || (l.url && (l.url.toLowerCase().includes('featureserver') || l.url.toLowerCase().includes('mapserver')));
+
+      if (isMultiLayer && mapData && mapData.metadata && mapData.metadata.layers) {
+        const sublayers = mapData.metadata.layers;
+        
+        const buildNode = (sub) => {
+          const subId = `${l.id}_sub_${sub.id}`;
+          const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+
+          if (hasChildren) {
+            const childrenNodes = [];
+            sub.subLayerIds.forEach(childId => {
+              const childSub = sublayers.find(s => s.id === childId);
+              if (childSub) {
+                const childNode = buildNode(childSub);
+                if (childNode) {
+                  childrenNodes.push(childNode);
+                }
+              }
+            });
+            
+            if (childrenNodes.length > 0) {
+              return {
+                id: subId,
+                title: sub.name || sub.title,
+                type: 'group',
+                selectable: false,
+                children: childrenNodes
+              };
+            }
+            return null;
+          } else {
+            return {
+              id: subId,
+              title: sub.name || sub.title,
+              type: 'feature',
+              selectable: true,
+              children: []
+            };
+          }
+        };
+
+        const rootChildren = [];
+        sublayers.forEach(sub => {
+          if (sub.parentLayerId == null || sub.parentLayerId === -1) {
+            const node = buildNode(sub);
+            if (node) {
+              rootChildren.push(node);
+            }
+          }
+        });
+
+        if (rootChildren.length > 0) {
+          tree.push({
+            id: l.id,
+            title: l.title,
+            type: 'root-group',
+            selectable: false,
+            children: rootChildren
+          });
+        }
+      } else {
+        tree.push({
+          id: l.id,
+          title: l.title,
+          type: 'feature',
+          selectable: true,
+          children: []
+        });
+      }
+    });
+
+    return tree;
+  }, [layersConfig, dynamicMapServerData, layerOrder, addDataResults]);
 
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
@@ -953,6 +1133,7 @@ function AppInner() {
     const allCollectedProps = {
       t,
       lang,
+      treeData: unifiedTreeData,
       view: mapView,
       mapView,
       is3D,
@@ -1058,6 +1239,7 @@ function AppInner() {
           is3D={is3D} 
           isSplitMode={isSplitModePersistent}
           activeTool={activeTool}
+          dynamicMapServerData={dynamicMapServerData}
           identifySettings={identifySettings}
           onIdentifyResults={(results) => setIdentifySettings(prev => ({ ...prev, results, isQuerying: false }))}
           onIdentifyQueryStart={() => setIdentifySettings(prev => ({ ...prev, isQuerying: true, results: null }))}
@@ -1114,6 +1296,7 @@ function AppInner() {
         splitModes={splitModes}
         basemap={currentBasemap} 
         syncMode={syncMode}
+        dynamicMapServerData={dynamicMapServerData}
         onExit={() => setIsSplitView(false)}
       />
       <div className="map-overlay-container">

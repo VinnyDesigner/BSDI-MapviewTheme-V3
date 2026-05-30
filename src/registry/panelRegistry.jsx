@@ -27,6 +27,40 @@ import TreeSelect from '../components/TreeSelect';
 import GPPanel from '../geoprocessing/GPPanel';
 import { useLanguage } from '../context/LanguageContext';
 
+// Bahrain geometry safety guard
+const isValidBahrainGeometry = (geom, view) => {
+  if (!geom) return false;
+  
+  // Log the debug info as requested by the user
+  console.log("Extent:", geom.extent);
+  console.log("Spatial Reference:", geom.spatialReference);
+  if (view) {
+    console.log("Scale:", view.scale);
+  }
+
+  // Get extent or center
+  let extent = geom.extent;
+  if (!extent && geom.type === 'point') {
+    extent = { xmin: geom.x, xmax: geom.x, ymin: geom.y, ymax: geom.y };
+  }
+  if (!extent) return true; // fallback
+  
+  const sr = geom.spatialReference;
+  const isWebMercator = sr && (sr.wkid === 3857 || sr.wkid === 102100 || sr.latestWkid === 3857 || sr.latestWkid === 102100);
+  
+  if (isWebMercator) {
+    // Web Mercator bounds for Bahrain: X: 5.4M to 5.8M, Y: 2.8M to 3.2M
+    if (Math.abs(extent.xmin) < 1000 && Math.abs(extent.ymin) < 1000) return false;
+    return extent.xmin >= 5400000 && extent.xmax <= 5800000 &&
+           extent.ymin >= 2800000 && extent.ymax <= 3200000;
+  } else {
+    // WGS84 bounds for Bahrain: Longitude 49.5 to 51.5, Latitude 24.5 to 27.5
+    if (Math.abs(extent.xmin) < 0.1 && Math.abs(extent.ymin) < 0.1) return false;
+    return extent.xmin >= 49.5 && extent.xmax <= 51.5 &&
+           extent.ymin >= 24.5 && extent.ymax <= 27.5;
+  }
+};
+
 // ── Search Panel Component ──────────────────────────────────────────────────
 export const SearchPanel = ({ t }) => (
   <div className="tool-content">
@@ -70,7 +104,6 @@ export const BasemapPanel = ({ basemaps, currentBasemap, setCurrentBasemap }) =>
   </div>
 );
 
-// ── Identify Panel Component ────────────────────────────────────────────────
 export const IdentifyPanel = ({ 
   t, 
   layersConfig, 
@@ -82,7 +115,8 @@ export const IdentifyPanel = ({
   setExpandedIdentifyLayers,
   selectedIdentifyFeature,
   setSelectedIdentifyFeature,
-  mapView
+  mapView,
+  treeData
 }) => {
   const handleExportFeatures = (featuresList, exportTitle) => {
     try {
@@ -112,90 +146,6 @@ export const IdentifyPanel = ({
       alert("Failed to export GeoJSON: " + err.message);
     }
   };
-
-  // Recursively build active layer tree structure
-  const treeData = React.useMemo(() => {
-    const tree = [];
-
-    layersConfig.forEach(l => {
-      // 1. Feature layers (flat)
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      }
-      // 2. MapServer layers (hierarchical)
-      else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) {
-                    childrenNodes.push(childNode);
-                  }
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) {
-                rootChildren.push(node);
-              }
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   // Handle selectedLayerId validation/auto-reset
   React.useEffect(() => {
@@ -365,7 +315,11 @@ export const IdentifyPanel = ({
                                 <button 
                                   className="action-icon-btn" 
                                   title="Zoom To"
-                                  onClick={() => mapView.goTo({ target: f.geometry, zoom: 15 })}
+                                  onClick={() => {
+                                    if (isValidBahrainGeometry(f.geometry, mapView)) {
+                                      mapView.goTo({ target: f.geometry, zoom: 15 });
+                                    }
+                                  }}
                                   style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#1e3c72', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600' }}
                                 >
                                   <Maximize2 size={12} /> Zoom
@@ -461,88 +415,12 @@ export const BlendPanel = ({
   layersConfig,
   dynamicMapServerData,
   t,
-  lang
+  lang,
+  treeData
 }) => {
   const isRTL = lang === 'AR';
   const basemapOptions = basemaps.map(bm => ({ id: bm.id, title: bm.title }));
   const isOverlaySelected = !!blendSettings.overlayLayerId;
-
-  // Build hierarchical tree data for Overlay Layer selection
-  const treeData = React.useMemo(() => {
-    const tree = [];
-    if (!layersConfig) return tree;
-
-    layersConfig.forEach(l => {
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      } else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) childrenNodes.push(childNode);
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) rootChildren.push(node);
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   const handleReset = () => {
     setBlendSettings(prev => ({
@@ -649,13 +527,13 @@ export const BlendPanel = ({
   );
 };
 
-// ── Spatial Analysis Panel Component ─────────────────────────────────────────
 export const SpatialAnalysisPanel = ({ 
   view,
   layersConfig, 
   dynamicMapServerData,
   spatialSettings, 
-  setSpatialSettings 
+  setSpatialSettings,
+  treeData
 }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
@@ -791,88 +669,7 @@ export const SpatialAnalysisPanel = ({
     }
   };
 
-  const treeData = React.useMemo(() => {
-    const tree = [];
 
-    layersConfig.forEach(l => {
-      // 1. Feature layers (flat)
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      }
-      // 2. MapServer layers (hierarchical)
-      else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) {
-                    childrenNodes.push(childNode);
-                  }
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) {
-                rootChildren.push(node);
-              }
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   React.useEffect(() => {
     if (spatialSettings.layerId && spatialSettings.layerId !== 'all') {
@@ -1166,85 +963,10 @@ export const SwipePanel = ({
   swipeMode, 
   setSwipeMode,
   showSplitBasemap,
-  setShowSplitBasemap
+  setShowSplitBasemap,
+  treeData
 }) => {
   const isRTL = lang === 'AR';
-
-  const treeData = React.useMemo(() => {
-    const tree = [];
-    if (!layersConfig) return tree;
-
-    layersConfig.forEach(l => {
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      } else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) childrenNodes.push(childNode);
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) rootChildren.push(node);
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   return (
     <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1392,86 +1114,10 @@ export const SplitViewPanel = ({
   showSplitBasemap, 
   setShowSplitBasemap,
   t,
-  lang
+  lang,
+  treeData
 }) => {
   const isRTL = lang === 'AR';
-
-  // Build hierarchical tree data for Split Layers selection
-  const treeData = React.useMemo(() => {
-    const tree = [];
-    if (!layersConfig) return tree;
-
-    layersConfig.forEach(l => {
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      } else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData && dynamicMapServerData[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) childrenNodes.push(childNode);
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) rootChildren.push(node);
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   return (
     <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>

@@ -94,7 +94,8 @@ const ArcGISMap = ({
   activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart,
   onRequestData, onDataRequestAOIChange, dataRequestDrawingTool,
   dataRequestStep,
-  isSplitView
+  isSplitView,
+  dynamicMapServerData
 }) => {
   const map2DDiv = useRef(null);
   const map3DDiv = useRef(null);
@@ -403,13 +404,42 @@ const ArcGISMap = ({
       selectedIds.forEach(id => {
         if (!id) return;
         if (id.includes('_sub_')) {
-          const [pId, subId] = id.split('_sub_');
-          if (!parsed[pId]) parsed[pId] = { config: layersConfig.find(l => l.id === pId), subIds: [] };
-          else if (parsed[pId].subIds === null) parsed[pId].subIds = [];
-          parsed[pId].subIds.push(Number(subId));
+          const [pId, subIdStr] = id.split('_sub_');
+          const subId = Number(subIdStr);
+          if (!parsed[pId]) {
+            parsed[pId] = { config: layersConfig.find(l => l.id === pId), subIds: [] };
+          } else if (parsed[pId].subIds === null) {
+            parsed[pId].subIds = [];
+          }
+          
+          // Get metadata sublayers to check if this is a group
+          const mapData = dynamicMapServerData?.[pId];
+          const sublayers = mapData?.metadata?.layers || [];
+          
+          const collectLeafIds = (sId) => {
+            const match = sublayers.find(s => s.id === sId);
+            if (match) {
+              if (match.subLayerIds && match.subLayerIds.length > 0) {
+                match.subLayerIds.forEach(childId => collectLeafIds(childId));
+              } else {
+                if (!parsed[pId].subIds.includes(sId)) {
+                  parsed[pId].subIds.push(sId);
+                }
+              }
+            } else {
+              if (!parsed[pId].subIds.includes(sId)) {
+                parsed[pId].subIds.push(sId);
+              }
+            }
+          };
+          
+          collectLeafIds(subId);
         } else {
-          if (!parsed[id]) parsed[id] = { config: layersConfig.find(l => l.id === id), subIds: null };
-          else parsed[id].subIds = null;
+          if (!parsed[id]) {
+            parsed[id] = { config: layersConfig.find(l => l.id === id), subIds: null };
+          } else {
+            parsed[id].subIds = null;
+          }
         }
       });
       return parsed;
@@ -608,7 +638,7 @@ const ArcGISMap = ({
     return () => {
       isCancelled = true;
     };
-  }, [isSplitMode, splitLayers, splitBasemaps, swipeMode]);
+  }, [isSplitMode, splitLayers, splitBasemaps, swipeMode, dynamicMapServerData]);
 
   // 4b. Time Compare Swipe
   useEffect(() => {
@@ -1032,13 +1062,13 @@ const ArcGISMap = ({
       }
     } else {
       // FeatureLayer, GeoJSONLayer, CSVLayer
-      const targetLayer = activeLayers[layerId] || 
-                          viewInstance.map.findLayerById(layerId) ||
-                          activeLayers[`${layerId}_sub_0`] ||
-                          viewInstance.map.findLayerById(`${layerId}_sub_0`) ||
-                          viewInstance.map.layers.find(l => l.id && l.id.startsWith(`${layerId}_sub_`));
+      const baseId = layerId.includes('_sub_') ? layerId.split('_sub_')[0] : layerId;
+      const targetLayer = activeLayers[baseId] || 
+                          viewInstance.map.findLayerById(baseId) ||
+                          activeLayers[layerId] || 
+                          viewInstance.map.findLayerById(layerId);
       if (!targetLayer) {
-        console.warn(`[Temporal] Layer not found: "${layerId}"`);
+        console.warn(`[Temporal] Layer not found: "${layerId}" (base: "${baseId}")`);
         return;
       }
       targetLayer.visible = true;
@@ -1056,7 +1086,10 @@ const ArcGISMap = ({
         console.warn('[Temporal Debug] Query features failed:', err.message);
       });
 
-      // Recommended fix: Use layerView.filter only, do NOT mix with definitionExpression
+      // Apply definitionExpression directly to the FeatureLayer for solid server-side rendering
+      targetLayer.definitionExpression = expression;
+
+      // Also apply layerView.filter for instant client-side updates
       viewInstance.whenLayerView(targetLayer).then((layerView) => {
         if (layerView) {
           layerView.filter = {
@@ -1082,6 +1115,7 @@ const ArcGISMap = ({
     // Clear all potential definitionExpressions and filter criteria
     viewInstance.map.allLayers.forEach(layer => {
       if (layer.type === 'feature' || layer.type === 'geojson' || layer.type === 'csv') {
+        layer.definitionExpression = null; // Clear definitionExpression
         viewInstance.whenLayerView(layer).then(lv => {
           if (lv) {
             lv.filter = null;
@@ -1513,6 +1547,9 @@ const ArcGISMap = ({
 
           if (fullExtent) {
             const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
+            console.log("Extent:", ext);
+            console.log("Spatial Reference:", ext.spatialReference);
+            console.log("Scale:", view.scale);
             view.goTo({ target: ext });
           }
           if (typeof onSpatialResult === 'function') {
@@ -1594,6 +1631,9 @@ const ArcGISMap = ({
           if (resultCount > 0) {
             if (fullExtent) {
               const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
+              console.log("Extent:", ext);
+              console.log("Spatial Reference:", ext.spatialReference);
+              console.log("Scale:", view.scale);
               view.goTo({ target: ext });
             }
             if (typeof onSpatialResult === 'function') {
@@ -1677,6 +1717,9 @@ const ArcGISMap = ({
                 xmax: Math.max(...xs), ymax: Math.max(...ys),
                 spatialReference: view.spatialReference
               };
+              console.log("Extent:", fullExtent);
+              console.log("Spatial Reference:", fullExtent.spatialReference);
+              console.log("Scale:", view.scale);
               view.goTo({ target: fullExtent });
             }
           }

@@ -22,6 +22,40 @@ const getProxyUrl = (url) => {
   return url;
 };
 
+// Bahrain geometry safety guard
+const isValidBahrainGeometry = (geom, view) => {
+  if (!geom) return false;
+  
+  // Log the debug info as requested by the user
+  console.log("Extent:", geom.extent);
+  console.log("Spatial Reference:", geom.spatialReference);
+  if (view) {
+    console.log("Scale:", view.scale);
+  }
+
+  // Get extent or center
+  let extent = geom.extent;
+  if (!extent && geom.type === 'point') {
+    extent = { xmin: geom.x, xmax: geom.x, ymin: geom.y, ymax: geom.y };
+  }
+  if (!extent) return true; // fallback
+  
+  const sr = geom.spatialReference;
+  const isWebMercator = sr && (sr.wkid === 3857 || sr.wkid === 102100 || sr.latestWkid === 3857 || sr.latestWkid === 102100);
+  
+  if (isWebMercator) {
+    // Web Mercator bounds for Bahrain: X: 5.4M to 5.8M, Y: 2.8M to 3.2M
+    if (Math.abs(extent.xmin) < 1000 && Math.abs(extent.ymin) < 1000) return false;
+    return extent.xmin >= 5400000 && extent.xmax <= 5800000 &&
+           extent.ymin >= 2800000 && extent.ymax <= 3200000;
+  } else {
+    // WGS84 bounds for Bahrain: Longitude 49.5 to 51.5, Latitude 24.5 to 27.5
+    if (Math.abs(extent.xmin) < 0.1 && Math.abs(extent.ymin) < 0.1) return false;
+    return extent.xmin >= 49.5 && extent.xmax <= 51.5 &&
+           extent.ymin >= 24.5 && extent.ymax <= 27.5;
+  }
+};
+
 // Helper: Traverse map layers recursively to get feature-compatible layers
 const getAllFeatureLayers = (map) => {
   if (!map) return [];
@@ -728,6 +762,7 @@ const AdvancedQueryPanel = ({
         query.where = activeSqlExpression;
         query.outFields = ["*"];
         query.returnGeometry = true;
+        query.outSpatialReference = mapView.spatialReference;
         
         const featureSet = await rawLayer.queryFeatures(query);
         if (featureSet && featureSet.features) {
@@ -840,14 +875,19 @@ const AdvancedQueryPanel = ({
           }, 150);
 
           // Zoom to feature
-          mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).catch(err => {
-            console.warn("Auto zoom failed:", err);
-          });
+          if (isValidBahrainGeometry(feature.geometry, mapView)) {
+            mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).catch(err => {
+              console.warn("Auto zoom failed:", err);
+            });
+          }
         } else {
           // Zoom to all selected graphics collectively
-          mapView.goTo(nextSelection).catch(err => {
-            console.warn("mapView.goTo collective graphics zoom failed:", err);
-          });
+          const validSelection = nextSelection.filter(f => isValidBahrainGeometry(f.geometry, mapView));
+          if (validSelection.length > 0) {
+            mapView.goTo(validSelection).catch(err => {
+              console.warn("mapView.goTo collective graphics zoom failed:", err);
+            });
+          }
         }
       }
     }
@@ -1021,9 +1061,11 @@ const AdvancedQueryPanel = ({
       }
     }, 150);
 
-    mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).catch(err => {
-      console.warn("mapView.goTo failed:", err);
-    });
+    if (isValidBahrainGeometry(feature.geometry, mapView)) {
+      mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).catch(err => {
+        console.warn("mapView.goTo failed:", err);
+      });
+    }
   };
 
   // Reset filter and map state

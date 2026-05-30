@@ -291,7 +291,11 @@ const DesktopTimeLapsePanel = ({
   treeData,
   timelapseSettings,
   setTimelapseSettings,
-  mapView
+  mapView,
+  setLayerVisibility,
+  layerVisibility,
+  toggleLayer,
+  toggleSubLayer
 }) => {
   const [layersList, setLayersList] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState('');
@@ -316,11 +320,13 @@ const DesktopTimeLapsePanel = ({
   
   const intervalRef = useRef(null);
 
-  const selectedLayerItem = layersList.find(l => 
-    l.id === selectedLayerId || 
-    l.id === `${selectedLayerId}_sub_0` || 
-    (selectedLayerId && l.id.startsWith(`${selectedLayerId}_sub_`))
-  );
+  const selectedLayerItem = layersList.find(l => {
+    if (!selectedLayerId) return false;
+    if (l.id === selectedLayerId) return true;
+    if (selectedLayerId.startsWith(`${l.id}_sub_`)) return true;
+    if (l.id.startsWith(`${selectedLayerId}_sub_`)) return true;
+    return false;
+  });
   const selectedFieldItem = fieldsList.find(f => f.name === selectedFieldName);
 
   // Sync with App settings initially if layerId is already set
@@ -730,6 +736,20 @@ const DesktopTimeLapsePanel = ({
                 isPlaying: false,
                 lastApply: 0
               }));
+
+              // Automatically enable visibility in state so they can see the layer
+              if (val) {
+                if (val.includes('_sub_')) {
+                  const [parentId, subId] = val.split('_sub_');
+                  if (typeof toggleSubLayer === 'function') {
+                    toggleSubLayer(parentId, isNaN(Number(subId)) ? subId : Number(subId), true);
+                  }
+                } else {
+                  if (typeof setLayerVisibility === 'function') {
+                    setLayerVisibility(prev => ({ ...prev, [val]: true }));
+                  }
+                }
+              }
             }}
             placeholder="Select Layer"
           />
@@ -871,7 +891,11 @@ const MobileTabletTemporalPanel = ({
   setTimelapseSettings,
   timeCompareTab = 'slider',
   setTimeCompareTab,
-  mapView
+  mapView,
+  setLayerVisibility,
+  layerVisibility,
+  toggleLayer,
+  toggleSubLayer
 }) => {
   const [layersList, setLayersList] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState('');
@@ -896,11 +920,13 @@ const MobileTabletTemporalPanel = ({
   
   const intervalRef = useRef(null);
 
-  const selectedLayerItem = layersList.find(l => 
-    l.id === selectedLayerId || 
-    l.id === `${selectedLayerId}_sub_0` || 
-    (selectedLayerId && l.id.startsWith(`${selectedLayerId}_sub_`))
-  );
+  const selectedLayerItem = layersList.find(l => {
+    if (!selectedLayerId) return false;
+    if (l.id === selectedLayerId) return true;
+    if (selectedLayerId.startsWith(`${l.id}_sub_`)) return true;
+    if (l.id.startsWith(`${selectedLayerId}_sub_`)) return true;
+    return false;
+  });
   const selectedFieldItem = fieldsList.find(f => f.name === selectedFieldName);
 
   // Sync with App settings initially if layerId is already set
@@ -1352,6 +1378,20 @@ const MobileTabletTemporalPanel = ({
                 isPlaying: false,
                 lastApply: 0
               }));
+
+              // Automatically enable visibility in state so they can see the layer
+              if (val) {
+                if (val.includes('_sub_')) {
+                  const [parentId, subId] = val.split('_sub_');
+                  if (typeof toggleSubLayer === 'function') {
+                    toggleSubLayer(parentId, isNaN(Number(subId)) ? subId : Number(subId), true);
+                  }
+                } else {
+                  if (typeof setLayerVisibility === 'function') {
+                    setLayerVisibility(prev => ({ ...prev, [val]: true }));
+                  }
+                }
+              }
             }}
             placeholder="Select Layer"
           />
@@ -1554,7 +1594,6 @@ const MobileTabletTemporalPanel = ({
   );
 };
 
-// --- Main Exported Component ---
 const TemporalFilterPanel = ({ 
   layersConfig, 
   dynamicMapServerData,
@@ -1562,92 +1601,14 @@ const TemporalFilterPanel = ({
   setTimelapseSettings,
   timeCompareTab = 'slider',
   setTimeCompareTab,
-  mapView
+  mapView,
+  treeData,
+  setLayerVisibility,
+  layerVisibility,
+  toggleLayer,
+  toggleSubLayer
 }) => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 1024);
-
-  const treeData = React.useMemo(() => {
-    const tree = [];
-
-    layersConfig.forEach(l => {
-      // 1. Feature layers (flat)
-      if (l.type === 'feature') {
-        tree.push({
-          id: l.id,
-          title: l.title,
-          type: 'feature',
-          selectable: true,
-          children: []
-        });
-      }
-      // 2. MapServer layers (hierarchical)
-      else if (l.type === 'map-image') {
-        const mapData = dynamicMapServerData?.[l.id];
-        if (mapData && mapData.metadata && mapData.metadata.layers) {
-          const sublayers = mapData.metadata.layers;
-          
-          const buildNode = (sub) => {
-            const subId = `${l.id}_sub_${sub.id}`;
-            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
-
-            if (hasChildren) {
-              const childrenNodes = [];
-              sub.subLayerIds.forEach(childId => {
-                const childSub = sublayers.find(s => s.id === childId);
-                if (childSub) {
-                  const childNode = buildNode(childSub);
-                  if (childNode) {
-                    childrenNodes.push(childNode);
-                  }
-                }
-              });
-              
-              if (childrenNodes.length > 0) {
-                return {
-                  id: subId,
-                  title: sub.name || sub.title,
-                  type: 'group',
-                  selectable: false,
-                  children: childrenNodes
-                };
-              }
-              return null;
-            } else {
-              return {
-                id: subId,
-                title: sub.name || sub.title,
-                type: 'feature',
-                selectable: true,
-                children: []
-              };
-            }
-          };
-
-          const rootChildren = [];
-          sublayers.forEach(sub => {
-            if (sub.parentLayerId == null || sub.parentLayerId === -1) {
-              const node = buildNode(sub);
-              if (node) {
-                rootChildren.push(node);
-              }
-            }
-          });
-
-          if (rootChildren.length > 0) {
-            tree.push({
-              id: l.id,
-              title: l.title,
-              type: 'root-group',
-              selectable: false,
-              children: rootChildren
-            });
-          }
-        }
-      }
-    });
-
-    return tree;
-  }, [layersConfig, dynamicMapServerData]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1668,6 +1629,10 @@ const TemporalFilterPanel = ({
         setTimelapseSettings={setTimelapseSettings}
         timeCompareTab={timeCompareTab}
         setTimeCompareTab={setTimeCompareTab}
+        setLayerVisibility={setLayerVisibility}
+        layerVisibility={layerVisibility}
+        toggleLayer={toggleLayer}
+        toggleSubLayer={toggleSubLayer}
       />
     );
   }
@@ -1680,6 +1645,10 @@ const TemporalFilterPanel = ({
       treeData={treeData}
       timelapseSettings={timelapseSettings}
       setTimelapseSettings={setTimelapseSettings}
+      setLayerVisibility={setLayerVisibility}
+      layerVisibility={layerVisibility}
+      toggleLayer={toggleLayer}
+      toggleSubLayer={toggleSubLayer}
     />
   );
 };

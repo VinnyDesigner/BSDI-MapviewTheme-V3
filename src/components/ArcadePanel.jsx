@@ -39,7 +39,7 @@ function buildTreeFromSublayers(sublayers, parentId) {
   });
 }
 
-const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
+const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
 
@@ -51,8 +51,8 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
   const [validationResult, setValidationResult] = useState(null);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  const [flatLayerOptions, setFlatLayerOptions] = useState([]);
-  const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+  const flatLayerOptions = treeData || [];
+  const isLoadingLayers = false;
   const [isFunctionsExpanded, setIsFunctionsExpanded] = useState(false);
   const editorRef = useRef(null);
 
@@ -99,52 +99,6 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange }) => {
       ]
     }
   ];
-
-  // ── Load hierarchical layer tree ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!view || !layersConfig) return;
-
-    const loadLayers = async () => {
-      setIsLoadingLayers(true);
-      const tree = [];
-
-      for (const config of layersConfig) {
-        const layer = view.map.findLayerById(config.id);
-        if (!layer) continue;
-        
-        try {
-          await layer.load();
-          if (layer.type === 'map-image' && layer.sublayers) {
-            const rootChildren = buildTreeFromSublayers(layer.sublayers, config.id);
-            if (rootChildren.length > 0) {
-              tree.push({
-                id: config.id,
-                title: config.title,
-                type: 'root-group',
-                selectable: false,
-                children: rootChildren
-              });
-            }
-          } else if (layer.type === 'feature') {
-            tree.push({
-              id: config.id,
-              title: config.title,
-              type: 'feature',
-              selectable: true,
-              children: []
-            });
-          }
-        } catch (e) {
-          console.warn(`Layer ${config.id} load error:`, e);
-        }
-      }
-      
-      setFlatLayerOptions(tree);
-      setIsLoadingLayers(false);
-    };
-
-    loadLayers();
-  }, [view, layersConfig]);
 
   // ── Load fields when layer selection changes ──────────────────────────────
   useEffect(() => {

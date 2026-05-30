@@ -6,6 +6,16 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
 
+  const getDescendantIds = (node) => {
+    let ids = [node.id];
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(child => {
+        ids = [...ids, ...getDescendantIds(child)];
+      });
+    }
+    return ids;
+  };
+
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
   const [expandedNodes, setExpandedNodes] = useState({});
@@ -116,7 +126,7 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
       ? (Array.isArray(value) && value.includes(node.id)) 
       : value === node.id;
     const hasChildren = node.children && node.children.length > 0;
-    const isSelectable = node.selectable;
+    const isSelectable = multi ? true : node.selectable;
 
     const rowContent = (
       <div 
@@ -142,11 +152,17 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
             if (multi) {
               e.stopPropagation();
               const currentValue = Array.isArray(value) ? value : [];
+              const descendants = getDescendantIds(node);
+              const isNodeSelected = currentValue.includes(node.id);
               let newValue;
-              if (currentValue.includes(node.id)) {
-                newValue = currentValue.filter(id => id !== node.id);
+              
+              if (isNodeSelected) {
+                // Remove node and all its descendants from selection
+                newValue = currentValue.filter(id => !descendants.includes(id));
               } else {
-                newValue = [...currentValue, node.id];
+                // Add node and all its descendants to selection
+                const toAdd = descendants.filter(id => !currentValue.includes(id));
+                newValue = [...currentValue, ...toAdd];
               }
               onChange(newValue);
             } else {
@@ -162,12 +178,12 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
           <div style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '-12px', top: '50%', width: '12px', height: '1px', backgroundColor: '#cbd5e1' }} />
         )}
 
-        {node.type === 'feature' && (
-          multi ? (
-            <div className={`select-checkbox ${isSelected ? 'checked' : ''}`} style={{ margin: isRTL ? '0 0 0 4px' : '0 4px 0 0' }}>
-              {isSelected && <Check size={8} color="white" strokeWidth={4} />}
-            </div>
-          ) : (
+        {multi ? (
+          <div className={`select-checkbox ${isSelected ? 'checked' : ''}`} style={{ margin: isRTL ? '0 0 0 4px' : '0 4px 0 0', flexShrink: 0 }}>
+            {isSelected && <Check size={8} color="white" strokeWidth={4} />}
+          </div>
+        ) : (
+          node.type === 'feature' && (
             <div style={{
               width: '14px', height: '14px', borderRadius: '50%',
               border: `1.5px solid ${isSelected ? '#df261c' : '#94a3b8'}`,
