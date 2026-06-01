@@ -236,6 +236,19 @@ export const translations = {
     'Summarize Layer': 'Summarize Layer',
     'Summary Fields': 'Summary Fields',
 
+    // Viewshed Analysis
+    'Viewshed Analysis': 'Viewshed Analysis',
+    'Observer Point Layer': 'Observer Point Layer',
+    'Observer Height': 'Observer Height',
+    'Observer Height Unit': 'Observer Height Unit',
+    'Target Height': 'Target Height',
+    'Target Height Unit': 'Target Height Unit',
+    'Minimum Distance': 'Minimum Distance',
+    'Maximum Distance': 'Maximum Distance',
+    'Horizontal Angle (deg)': 'Horizontal Angle (deg)',
+    'Vertical Angle (deg)': 'Vertical Angle (deg)',
+    'Analysis Method': 'Analysis Method',
+
     // Legacy Spatial Analysis
     'Analysis': 'Analysis',
     'Select Analysis Tool': 'Select Analysis Tool',
@@ -653,6 +666,19 @@ export const translations = {
     'Polygon Layer': 'طبقة المضلع',
     'Summarize Layer': 'طبقة التلخيص',
     'Summary Fields': 'حقول التلخيص',
+
+    // Viewshed Analysis
+    'Viewshed Analysis': 'تحليل مجال الرؤية (Viewshed)',
+    'Observer Point Layer': 'طبقة نقطة المراقبة',
+    'Observer Height': 'ارتفاع المراقب',
+    'Observer Height Unit': 'وحدة ارتفاع المراقب',
+    'Target Height': 'ارتفاع الهدف',
+    'Target Height Unit': 'وحدة ارتفاع الهدف',
+    'Minimum Distance': 'المسافة الدنيا',
+    'Maximum Distance': 'المسافة القصوى',
+    'Horizontal Angle (deg)': 'الزاوية الأفقية (درجة)',
+    'Vertical Angle (deg)': 'الزاوية الرأسية (درجة)',
+    'Analysis Method': 'طريقة التحليل',
 
     // Legacy Spatial Analysis
     'Analysis': 'التحليل',

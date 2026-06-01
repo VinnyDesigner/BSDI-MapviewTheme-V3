@@ -44,8 +44,9 @@ function nextColour() {
  * @param {string}   opts.toolName    – display name of the tool
  * @returns {Promise<Object[]>}  – array of rendered result descriptors
  */
-export async function renderGPResults({ result, outputDefs, view, runId, toolName }) {
+export async function renderGPResults({ result, outputDefs, view, runId, toolName, colour }) {
   const rendered = [];
+  const rgbColour = hexToRgb(colour);
 
   for (const out of result.outputs) {
     const def = outputDefs.find(d => d.name === out.name) || {
@@ -58,7 +59,7 @@ export async function renderGPResults({ result, outputDefs, view, runId, toolNam
     let renderResult;
     switch (def.renderMode) {
       case 'MapLayer':
-        renderResult = await _renderMapLayer(out, def, view, runId, toolName);
+        renderResult = await _renderMapLayer(out, def, view, runId, toolName, rgbColour);
         break;
       case 'Table':
         renderResult = _renderTable(out, def);
@@ -77,7 +78,7 @@ export async function renderGPResults({ result, outputDefs, view, runId, toolNam
   const mapLayerResult = rendered.find(r => r.renderMode === 'MapLayer');
   if (mapLayerResult?.extent && view) {
     try {
-      await view.goTo({ target: mapLayerResult.extent.expand(1.2) });
+      await view.goTo({ target: mapLayerResult.extent.expand(2.5) });
     } catch (_) {}
   }
 
@@ -89,9 +90,29 @@ export async function renderGPResults({ result, outputDefs, view, runId, toolNam
  */
 export function removeGPResultLayer(view, runId) {
   if (!view?.map) return;
-  const layerId = `${GP_LAYER_PREFIX}${runId}`;
-  const layer = view.map.findLayerById(layerId);
-  if (layer) view.map.remove(layer);
+
+  // Clean up any 3D Viewshed exploratory analyses
+  if (view.analyses) {
+    const toRemove = [];
+    view.analyses.forEach(analysis => {
+      if (analysis.runId === runId || (analysis.title && analysis.title.includes(runId))) {
+        toRemove.push(analysis);
+      }
+    });
+    toRemove.forEach(a => {
+      try {
+        view.analyses.remove(a);
+      } catch (err) {
+        console.warn('Failed to remove 3D viewshed analysis', err);
+      }
+    });
+  }
+
+  const prefix = `${GP_LAYER_PREFIX}${runId}`;
+  const layersToRemove = view.map.layers.filter(l => l.id && l.id.startsWith(prefix)).toArray();
+  layersToRemove.forEach(layer => {
+    view.map.remove(layer);
+  });
 }
 
 /**
@@ -99,17 +120,31 @@ export function removeGPResultLayer(view, runId) {
  */
 export function toggleGPResultLayer(view, runId, visible) {
   if (!view?.map) return;
-  const layer = view.map.findLayerById(`${GP_LAYER_PREFIX}${runId}`);
-  if (layer) layer.visible = visible;
+
+  // Toggle 3D Viewshed exploratory analyses
+  if (view.analyses) {
+    view.analyses.forEach(analysis => {
+      if (analysis.runId === runId || (analysis.title && analysis.title.includes(runId))) {
+        analysis.visible = visible;
+      }
+    });
+  }
+
+  const prefix = `${GP_LAYER_PREFIX}${runId}`;
+  view.map.layers.forEach(layer => {
+    if (layer.id && layer.id.startsWith(prefix)) {
+      layer.visible = visible;
+    }
+  });
 }
 
 // ── Private render strategies ───────────────────────────────────────────────
 
-async function _renderMapLayer(out, def, view, runId, toolName) {
+async function _renderMapLayer(out, def, view, runId, toolName, rgbColour) {
   if (!view?.map) return null;
 
   const layerId = `${GP_LAYER_PREFIX}${runId}-${out.name}`;
-  const colour = nextColour();
+  const colour = rgbColour || nextColour();
   let fullExtent = null;
   let featureCount = 0;
 
@@ -121,11 +156,28 @@ async function _renderMapLayer(out, def, view, runId, toolName) {
     });
 
     const features = out.value.features || out.value;
+    const rawFeatureCount = Array.isArray(features) ? features.length : 0;
     for (const f of features) {
       const geom = _esriGeomToGraphic(f.geometry || f);
       if (!geom) continue;
 
-      const symbol = _autoSymbol(geom.type, colour);
+      let symbol;
+      if (f.attributes?.Visibility === 'Visible Area') {
+        symbol = {
+          type: 'simple-fill',
+          color: [22, 163, 74, 0.45],
+          outline: { color: [22, 163, 74, 0.85], width: 1.5 }
+        };
+      } else if (f.attributes?.Visibility === 'Non-visible Area') {
+        symbol = {
+          type: 'simple-fill',
+          color: [220, 38, 38, 0.35],
+          outline: { color: [220, 38, 38, 0.75], width: 1.5 }
+        };
+      } else {
+        symbol = _autoSymbol(geom.type, colour);
+      }
+
       const graphic = new Graphic({
         geometry: geom,
         symbol,
@@ -133,10 +185,33 @@ async function _renderMapLayer(out, def, view, runId, toolName) {
       });
       graphicsLayer.add(graphic);
 
-      if (graphic.geometry?.extent) {
-        fullExtent = fullExtent
-          ? fullExtent.union(graphic.geometry.extent)
-          : graphic.geometry.extent.clone();
+      let geomExtent = graphic.geometry?.extent;
+      if (!geomExtent && graphic.geometry?.type === 'point') {
+        const pt = graphic.geometry;
+        geomExtent = {
+          xmin: pt.x - 100,
+          ymin: pt.y - 100,
+          xmax: pt.x + 100,
+          ymax: pt.y + 100,
+          spatialReference: pt.spatialReference
+        };
+      }
+
+      if (geomExtent) {
+        if (!fullExtent) {
+          fullExtent = {
+            xmin: geomExtent.xmin,
+            ymin: geomExtent.ymin,
+            xmax: geomExtent.xmax,
+            ymax: geomExtent.ymax,
+            spatialReference: geomExtent.spatialReference
+          };
+        } else {
+          fullExtent.xmin = Math.min(fullExtent.xmin, geomExtent.xmin);
+          fullExtent.ymin = Math.min(fullExtent.ymin, geomExtent.ymin);
+          fullExtent.xmax = Math.max(fullExtent.xmax, geomExtent.xmax);
+          fullExtent.ymax = Math.max(fullExtent.ymax, geomExtent.ymax);
+        }
       }
       featureCount++;
     }
@@ -147,6 +222,7 @@ async function _renderMapLayer(out, def, view, runId, toolName) {
       renderMode: 'MapLayer',
       layerId,
       label: def.label,
+      rawFeatureCount,
       featureCount,
       extent: fullExtent,
       type: 'graphics',
@@ -250,4 +326,18 @@ function _toGeoJSON(value) {
     geometry: f.geometry || null,
     properties: f.attributes || f.properties || {},
   }));
+}
+
+function hexToRgb(hex) {
+  if (!hex) return null;
+  try {
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+    return [r, g, b];
+  } catch (e) {
+    return null;
+  }
 }

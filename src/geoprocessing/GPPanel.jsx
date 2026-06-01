@@ -20,7 +20,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Database, Search, ChevronRight, ChevronLeft, Plus, X, AlertCircle, Loader, CheckCircle2, Layers } from 'lucide-react';
+import { Database, Search, ChevronRight, ChevronLeft, Plus, X, AlertCircle, Loader, CheckCircle2, Layers, Target, Eye, Scissors, BarChart2, MapPin } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -81,7 +81,11 @@ const GPPanel = ({
   view,
   layersConfig = [],
   dynamicMapServerData = {},
-  treeData
+  treeData,
+  results = [],
+  setResults,
+  setLayerOrder,
+  setLayerVisibility
 }) => {
   const [activeTab, setActiveTab]       = useState('browse');   // 'browse' | 'run' | 'results'
   const [selectedToolId, setSelectedToolId] = useState(null);
@@ -114,6 +118,158 @@ const GPPanel = ({
     setJobStatus(null);
   }, [selectedManifest]);
 
+  // ── Dynamic Reactive Tree Data for GP Layer Picker ─────────────────────────
+  const dynamicTreeData = useMemo(() => {
+    if (!view?.map) return treeData || [];
+
+    const items = [];
+
+    view.map.layers.forEach(layer => {
+      // Exclude system layers that we shouldn't buffer or query
+      const isSystemLayer = [
+        'identify-highlights', 'identify-sketch-layer',
+        'data-request-aoi-layer', 'data-request-final-layer',
+        'graphics-layer-draw', 'graphicsLayer', 'spatial-analysis-layer'
+      ].includes(layer.id) || layer.id?.startsWith('heatmap-');
+      
+      if (isSystemLayer) return;
+
+      // Group / Multi-layers (MapServer / FeatureServer with sublayers)
+      if (layer.type === 'map-image') {
+        const subItems = [];
+        if (layer.allSublayers) {
+          layer.allSublayers.forEach(sub => {
+            const hasChildren = sub.subLayerIds && sub.subLayerIds.length > 0;
+            if (!hasChildren) {
+              subItems.push({
+                id: `${layer.id}_sub_${sub.id}`,
+                title: sub.title || sub.name,
+                type: 'feature',
+                selectable: true
+              });
+            }
+          });
+        }
+        if (subItems.length > 0) {
+          items.push({
+            id: layer.id,
+            title: layer.title || layer.id,
+            type: 'root-group',
+            selectable: false,
+            children: subItems
+          });
+        }
+      } else {
+        items.push({
+          id: layer.id,
+          title: layer.title || layer.id,
+          type: 'feature',
+          selectable: true
+        });
+      }
+    });
+
+    return items;
+  }, [view, treeData, runs]);
+
+  // ── Dynamic Parameter Fields & Options based on selection ───────────────
+  const modifiedParameters = useMemo(() => {
+    if (!selectedManifest) return [];
+    if (selectedManifest.toolId !== 'gp_buffer') return selectedManifest.parameters;
+
+    const params = selectedManifest.parameters.map(p => ({ ...p }));
+    const dissolveTypeParam = params.find(p => p.name === 'Dissolve_Type');
+    const dissolveFieldParam = params.find(p => p.name === 'Dissolve_Field');
+
+    const selectedInputLayerId = paramValues.Input_Features;
+    const selectedDissolveType = paramValues.Dissolve_Type || 'none';
+
+    // 1. Hide Dissolve Field if dissolve type is not 'by-field'
+    let filteredParams = params;
+    if (selectedDissolveType !== 'by-field') {
+      filteredParams = params.filter(p => p.name !== 'Dissolve_Field');
+    }
+
+    // 2. Query fields for the selected layer to dynamically fill Dissolve Field
+    if (selectedInputLayerId && dissolveFieldParam) {
+      let targetLayer = null;
+      if (view?.map) {
+        if (selectedInputLayerId.includes('_sub_')) {
+          const [parentId, subId] = selectedInputLayerId.split('_sub_');
+          const parent = view.map.findLayerById(parentId);
+          if (parent && parent.allSublayers) {
+            targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
+          }
+        } else {
+          targetLayer = view.map.findLayerById(selectedInputLayerId);
+        }
+      }
+
+      let fields = [];
+      if (targetLayer) {
+        if (targetLayer.fields) {
+          fields = targetLayer.fields.map(f => f.name);
+        } else if (targetLayer.layer?.fields) {
+          fields = targetLayer.layer.fields.map(f => f.name);
+        } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
+          const firstGraphic = targetLayer.graphics.getItemAt(0);
+          if (firstGraphic && firstGraphic.attributes) {
+            fields = Object.keys(firstGraphic.attributes);
+          }
+        }
+      }
+
+      if (fields.length > 0) {
+        dissolveFieldParam.choiceList = fields;
+      } else {
+        dissolveFieldParam.choiceList = [];
+      }
+    }
+
+    return filteredParams;
+  }, [selectedManifest, paramValues.Input_Features, paramValues.Dissolve_Type, view, dynamicTreeData]);
+
+  // ── Auto-select first dissolve field option if available ───────────────────
+  useEffect(() => {
+    if (selectedToolId !== 'gp_buffer') return;
+    const selectedInputLayerId = paramValues.Input_Features;
+    const selectedDissolveType = paramValues.Dissolve_Type || 'none';
+    
+    if (selectedDissolveType === 'by-field' && selectedInputLayerId) {
+      let targetLayer = null;
+      if (view?.map) {
+        if (selectedInputLayerId.includes('_sub_')) {
+          const [parentId, subId] = selectedInputLayerId.split('_sub_');
+          const parent = view.map.findLayerById(parentId);
+          if (parent && parent.allSublayers) {
+            targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
+          }
+        } else {
+          targetLayer = view.map.findLayerById(selectedInputLayerId);
+        }
+      }
+
+      let fields = [];
+      if (targetLayer) {
+        if (targetLayer.fields) {
+          fields = targetLayer.fields.map(f => f.name);
+        } else if (targetLayer.layer?.fields) {
+          fields = targetLayer.layer.fields.map(f => f.name);
+        } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
+          const firstGraphic = targetLayer.graphics.getItemAt(0);
+          if (firstGraphic && firstGraphic.attributes) {
+            fields = Object.keys(firstGraphic.attributes);
+          }
+        }
+      }
+
+      if (fields.length > 0 && !fields.includes(paramValues.Dissolve_Field)) {
+        setParamValues(prev => ({ ...prev, Dissolve_Field: fields[0] }));
+      }
+    }
+  }, [selectedToolId, paramValues.Input_Features, paramValues.Dissolve_Type, view]);
+
+
   // ── Tool selection ────────────────────────────────────────────────────────
   const selectTool = (toolId) => {
     setSelectedToolId(toolId);
@@ -125,7 +281,15 @@ const GPPanel = ({
     if (!selectedManifest || isRunning) return;
 
     const runId   = `gp-run-${Date.now()}`;
-    const colour  = nextRunColour();
+    const colour = selectedManifest.toolId === 'gp_viewshed'
+      ? '#16a34a' // Green for Viewshed
+      : selectedManifest.toolId === 'gp_clip'
+      ? '#f97316' // Orange for Clip
+      : selectedManifest.toolId === 'gp_summarize_within'
+      ? '#9333ea' // Purple for Summarize
+      : selectedManifest.toolId === 'gp_geocode'
+      ? '#ec4899' // Pink for Geocode
+      : '#268fff'; // Blue for Buffer / Default
 
     setIsRunning(true);
     setJobStatus({ status: 'submitting', message: t('gpStatusSubmitting'), progress: 0 });
@@ -136,7 +300,12 @@ const GPPanel = ({
     try {
       const result = await engine.run(paramValues, {
         onStatusUpdate: (update) => setJobStatus({ ...update, progress: update.progress ?? null }),
+        view,
       });
+
+      const outputLayerName = (selectedManifest.toolId === 'gp_buffer' || selectedManifest.toolId === 'gp_viewshed' || selectedManifest.toolId === 'gp_clip' || selectedManifest.toolId === 'gp_summarize_within' || selectedManifest.toolId === 'gp_geocode')
+        ? (paramValues.Output_Layer_Name || result.raw?.Output_Layer_Name)
+        : selectedManifest.meta.name;
 
       // Render outputs to map
       const rendered = await renderGPResults({
@@ -144,8 +313,27 @@ const GPPanel = ({
         outputDefs: selectedManifest.outputs || [],
         view,
         runId,
-        toolName: selectedManifest.meta.name,
+        toolName: outputLayerName,
+        colour,
       });
+
+      // ── Required Validation and Debug Information Logging ──────────────────────
+      rendered.filter(r => r.renderMode === 'MapLayer').forEach(r => {
+        const layer = view.map.findLayerById(r.layerId);
+        console.log("=== GEOPROCESSING RESULT VALIDATION & DEBUG ===");
+        console.log("Result Layer ID: ", r.layerId);
+        console.log("Geometry Type:   ", r.geometryType || 'polygon');
+        console.log("Feature Count:   ", r.featureCount);
+        console.log("Layer Extent:    ", r.extent ? JSON.stringify(r.extent.toJSON ? r.extent.toJSON() : r.extent, null, 2) : 'null');
+        console.log("Visibility State:", layer ? layer.visible : 'Not added to map');
+        console.log("Renderer:        ", layer ? (layer.renderer ? JSON.stringify(layer.renderer.toJSON ? layer.renderer.toJSON() : layer.renderer) : 'SimpleRenderer') : 'N/A');
+        console.log("Opacity:         ", layer ? layer.opacity : 'N/A');
+        console.log("==================================================");
+      });
+
+      const hasFeaturesButNoGeom = rendered
+        .filter(r => r.renderMode === 'MapLayer')
+        .some(r => r.rawFeatureCount > 0 && r.featureCount === 0);
 
       const totalFeatures = rendered
         .filter(r => r.renderMode === 'MapLayer')
@@ -154,7 +342,7 @@ const GPPanel = ({
       const run = {
         id: runId,
         toolId: selectedManifest.toolId,
-        toolName: t(selectedManifest.meta.name) || selectedManifest.meta.name,
+        toolName: outputLayerName,
         colour,
         date: new Date().toLocaleString(),
         status: result.success ? 'Succeeded' : 'Failed',
@@ -162,7 +350,54 @@ const GPPanel = ({
         rendered,
         totalFeatures,
         jobId: result.jobId,
+        metadata: result.raw,
+        hasFeaturesButNoGeom,
       };
+
+      // Automatically register the output layer in the Layers panel / addDataResults
+      if ((selectedManifest.toolId === 'gp_buffer' || selectedManifest.toolId === 'gp_viewshed' || selectedManifest.toolId === 'gp_clip' || selectedManifest.toolId === 'gp_summarize_within' || selectedManifest.toolId === 'gp_geocode') && setResults) {
+        const mapLayerResult = rendered.find(r => r.renderMode === 'MapLayer');
+        if (mapLayerResult) {
+          const layerId = mapLayerResult.layerId;
+          const layer = view.map.findLayerById(layerId);
+          if (layer) {
+            // Register layer order and visibility
+            if (setLayerOrder) setLayerOrder(prev => [layerId, ...prev]);
+            if (setLayerVisibility) setLayerVisibility(prev => ({ ...prev, [layerId]: true }));
+
+            // Create flat list object for results tree
+            const childObj = {
+              id: layerId,
+              name: outputLayerName,
+              visible: true,
+              layer,
+              color: selectedManifest.toolId === 'gp_viewshed'
+                ? [22, 163, 74]
+                : selectedManifest.toolId === 'gp_clip'
+                ? [249, 115, 22]
+                : selectedManifest.toolId === 'gp_summarize_within'
+                ? [147, 51, 234] // Purple for summarize within
+                : selectedManifest.toolId === 'gp_geocode'
+                ? [236, 72, 153] // Pink/Magenta for geocode addresses
+                : [38, 143, 255], // Green for viewshed, Orange for clip, Purple for summarize, Pink for geocode, Blue for buffer
+              geometryType: mapLayerResult.geometryType || 'point',
+              featureCount: mapLayerResult.featureCount || 0
+            };
+
+            const resultObj = {
+              id: `gp-parent-${Date.now()}`,
+              name: outputLayerName,
+              date: new Date().toLocaleString(),
+              featureCount: mapLayerResult.featureCount || 0,
+              visible: true,
+              type: 'multi-file',
+              children: [childObj]
+            };
+
+            setResults(prev => [resultObj, ...prev]);
+          }
+        }
+      }
 
       setRuns(prev => [run, ...prev]);
       setActiveTab('results');
@@ -173,7 +408,7 @@ const GPPanel = ({
       setIsRunning(false);
       engineRef.current = null;
     }
-  }, [selectedManifest, paramValues, view, isRunning]);
+  }, [selectedManifest, paramValues, view, isRunning, t]);
 
   const handleCancelRun = useCallback(() => {
     engineRef.current?.cancel();
@@ -199,9 +434,99 @@ const GPPanel = ({
   const handleZoom = (runId) => {
     if (!view?.map) return;
     const run = runs.find(r => r.id === runId);
-    const mapLayerResult = run?.rendered?.find(r => r.renderMode === 'MapLayer');
-    if (mapLayerResult?.extent) {
-      view.goTo({ target: mapLayerResult.extent.expand(1.2) });
+    if (!run) return;
+
+    const mapLayerResult = run.rendered?.find(r => r.renderMode === 'MapLayer');
+    if (!mapLayerResult) return;
+
+    // 1. Retrieve actual output layer
+    const layer = view.map.findLayerById(mapLayerResult.layerId);
+    
+    // Helper to calculate unioned extent of all graphics
+    const getGraphicsLayerExtent = (graphicsLayer) => {
+      if (!graphicsLayer || !graphicsLayer.graphics || graphicsLayer.graphics.length === 0) return null;
+      let fullExtent = null;
+      graphicsLayer.graphics.forEach(g => {
+        if (g.geometry) {
+          let ext = g.geometry.extent;
+          if (!ext && g.geometry.type === 'point') {
+            const pt = g.geometry;
+            ext = {
+              xmin: pt.x - 50,
+              ymin: pt.y - 50,
+              xmax: pt.x + 50,
+              ymax: pt.y + 50,
+              spatialReference: pt.spatialReference
+            };
+          }
+          if (ext) {
+            if (!fullExtent) {
+              fullExtent = ext.clone ? ext.clone() : { ...ext };
+            } else {
+              if (fullExtent.union) {
+                fullExtent = fullExtent.union(ext);
+              } else {
+                fullExtent.xmin = Math.min(fullExtent.xmin, ext.xmin);
+                fullExtent.ymin = Math.min(fullExtent.ymin, ext.ymin);
+                fullExtent.xmax = Math.max(fullExtent.xmax, ext.xmax);
+                fullExtent.ymax = Math.max(fullExtent.ymax, ext.ymax);
+              }
+            }
+          }
+        }
+      });
+      return fullExtent;
+    };
+
+    // 2. Calculate output geometry extent
+    let extent = getGraphicsLayerExtent(layer);
+    if (!extent) {
+      extent = mapLayerResult.extent;
+    }
+
+    if (extent) {
+      // 3. Execute view.goTo with padding (expand by 1.8)
+      const target = extent.expand ? extent.expand(1.8) : extent;
+      view.goTo({ target }, { animate: true, duration: 1500 });
+    }
+
+    // 4. Flash/highlight the result geometry for 2.5 seconds
+    if (layer && layer.graphics && layer.graphics.length > 0) {
+      const originalSymbols = [];
+      layer.graphics.forEach(g => {
+        originalSymbols.push({ graphic: g, symbol: g.symbol });
+        
+        let highlightSymbol;
+        if (g.geometry.type === 'point') {
+          highlightSymbol = {
+            type: 'simple-marker',
+            color: [255, 255, 0, 0.9], // Bright yellow
+            size: 16,
+            outline: { color: [0, 255, 255, 1], width: 2 } // Cyan outline
+          };
+        } else if (g.geometry.type === 'polyline') {
+          highlightSymbol = {
+            type: 'simple-line',
+            color: [255, 255, 0, 1],
+            width: 5
+          };
+        } else {
+          // Polygon
+          highlightSymbol = {
+            type: 'simple-fill',
+            color: [255, 255, 0, 0.45], // Semi-transparent yellow
+            outline: { color: [0, 255, 255, 1], width: 3 } // Thick Cyan outline
+          };
+        }
+        g.symbol = highlightSymbol;
+      });
+
+      // Restore original symbols after 2.5 seconds
+      setTimeout(() => {
+        originalSymbols.forEach(item => {
+          item.graphic.symbol = item.symbol;
+        });
+      }, 2500);
     }
   };
 
@@ -340,157 +665,301 @@ const GPPanel = ({
           disabled={!selectedManifest}
           style={{ opacity: selectedManifest ? 1 : 0.4 }}
         >
-          {selectedManifest ? t(selectedManifest.meta.name) : t('gpTabRun')}
+          {t('gpTabRun')}
         </button>
         <button className={`tool-tab ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>
           {t('gpTabResults')} {runs.length > 0 && <span className="tab-badge">{runs.length}</span>}
         </button>
       </div>
 
-      <div className="panel-content-scroll" style={{ flex: 1, padding: '6px 0', overflow: 'auto' }}>
-        {/* ── Browse tab ── */}
-        {activeTab === 'browse' && (
-          <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Search */}
-            <div style={{ position: 'relative' }}>
-              <Search size={13} style={{ position: 'absolute', [isRTL ? 'right' : 'left']: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
-              <input
-                className="tool-input"
-                placeholder={t('gpSearchPlaceholder')}
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: isRTL ? 8 : 30, paddingRight: isRTL ? 30 : 8 }}
-              />
+      {activeTab === 'run' && selectedManifest ? (() => {
+        // Monochrome line icons mapping for header
+        const refinedToolUI = {
+          gp_buffer: {
+            icon: <Target size={18} strokeWidth={2} />,
+            desc: 'Create buffer polygons around selected features.'
+          },
+          gp_viewshed: {
+            icon: <Eye size={18} strokeWidth={2} />,
+            desc: 'Identify visible and non-visible areas.'
+          },
+          gp_clip: {
+            icon: <Scissors size={18} strokeWidth={2} />,
+            desc: 'Extract features within a boundary.'
+          },
+          gp_summarize_within: {
+            icon: <BarChart2 size={18} strokeWidth={2} />,
+            desc: 'Calculate statistics within polygons.'
+          },
+          gp_geocode: {
+            icon: <MapPin size={18} strokeWidth={2} />,
+            desc: 'Convert addresses into map locations.'
+          }
+        };
+
+        const refined = refinedToolUI[selectedManifest.toolId] || {
+          icon: <Layers size={18} strokeWidth={2} />,
+          desc: selectedManifest.meta.description || ''
+        };
+
+        return (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+            {/* Sticky Selected Tool Header */}
+            <div style={{
+              background: '#fff',
+              padding: '10px 16px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              direction: isRTL ? 'rtl' : 'ltr',
+              flexShrink: 0
+            }}>
+              {/* Monochrome Line Icon */}
+              <span style={{
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                color: '#002D5D'
+              }}>
+                {refined.icon}
+              </span>
+
+              {/* Title & One-line Description */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'stretch', textAlign: 'start' }}>
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#1a2f4d',
+                  lineHeight: '1.2'
+                }}>
+                  {t(selectedManifest.meta.name)}
+                </span>
+                {refined.desc && (
+                  <span style={{
+                    fontSize: '10.5px',
+                    color: '#64748b',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    lineHeight: '1.2'
+                  }}>
+                    {refined.desc}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Add from URL button */}
-            <button
-              className="secondary-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-              onClick={() => setAddUrlOpen(true)}
-            >
-              <Plus size={13} /> {t('gpAddServiceUrl')}
-            </button>
+            {/* Scrollable Parameters Container (Only this section scrolls!) */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: isRTL ? '12px 0 12px 16px' : '12px 16px 12px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}>
+              {/* Dynamic form */}
+              <GPFormRenderer
+                params={modifiedParameters}
+                values={paramValues}
+                onChange={(name, val) => setParamValues(prev => ({ ...prev, [name]: val }))}
+                treeData={dynamicTreeData}
+              />
 
-            {/* Tool list grouped by category */}
-            {Object.entries(toolsByCategory).length === 0 && (
-              <div className="empty-state">
-                <div className="empty-card">
-                  <div className="empty-icon-wrapper"><Database size={28} /></div>
-                  <h3 className="empty-title">{t('gpNoToolsFound')}</h3>
-                  <p className="empty-desc">{t('gpNoToolsDesc')}</p>
+              {/* Status */}
+              <StatusBanner jobStatus={jobStatus} isRTL={isRTL} />
+
+              {/* Validation warnings */}
+              {missingRequired.length > 0 && !isRunning && (
+                <div style={{ fontSize: 11, color: '#dc3545', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                  <AlertCircle size={12} style={{ marginTop: 1, flexShrink: 0 }} />
+                  {t('gpMissingRequired')} {missingRequired.join(', ')}
                 </div>
+              )}
+            </div>
+          </div>
+        );
+      })() : (
+        // Regular scroll container for Browse and Results tabs
+        <div className="panel-content-scroll" style={{ flex: 1, padding: '6px 0', overflow: 'auto' }}>
+          {/* ── Browse tab ── */}
+          {activeTab === 'browse' && (
+            <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Search & Add Tool row */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Search size={13} style={{ position: 'absolute', [isRTL ? 'right' : 'left']: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+                  <input
+                    className="tool-input"
+                    placeholder={t('gpSearchPlaceholder')}
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    style={{
+                      paddingLeft: isRTL ? 12 : 36,
+                      paddingRight: isRTL ? 36 : 12,
+                      width: '100%',
+                      height: '34px',
+                      fontSize: '12px'
+                    }}
+                  />
+                </div>
+                <button
+                  className="secondary-btn"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    height: '34px',
+                    padding: '0 10px',
+                    borderRadius: '6px'
+                  }}
+                  onClick={() => setAddUrlOpen(true)}
+                >
+                  <Plus size={12} /> {t('gpBtnAddTool')}
+                </button>
               </div>
-            )}
 
-            {Object.entries(toolsByCategory).map(([cat, tools]) => (
-              <div key={cat}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>
-                  {t(`gpCategory${cat}`) !== `gpCategory${cat}` ? t(`gpCategory${cat}`) : cat}
+              {/* Flat Tool List */}
+              {filteredTools.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-card">
+                    <div className="empty-icon-wrapper"><Database size={28} /></div>
+                    <h3 className="empty-title">{t('gpNoToolsFound')}</h3>
+                    <p className="empty-desc">{t('gpNoToolsDesc')}</p>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {tools.map(tool => (
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {filteredTools.map(tool => {
+                  const isSelected = selectedToolId === tool.toolId;
+                  
+                  // Monochrome line icons mapping and single-line description fallbacks
+                  const refinedToolUI = {
+                    gp_buffer: {
+                      icon: <Target size={15} strokeWidth={2} />,
+                      desc: 'Create buffer polygons around selected features.'
+                    },
+                    gp_viewshed: {
+                      icon: <Eye size={15} strokeWidth={2} />,
+                      desc: 'Identify visible and non-visible areas.'
+                    },
+                    gp_clip: {
+                      icon: <Scissors size={15} strokeWidth={2} />,
+                      desc: 'Extract features within a boundary.'
+                    },
+                    gp_summarize_within: {
+                      icon: <BarChart2 size={15} strokeWidth={2} />,
+                      desc: 'Calculate statistics within polygons.'
+                    },
+                    gp_geocode: {
+                      icon: <MapPin size={15} strokeWidth={2} />,
+                      desc: 'Convert addresses into map locations.'
+                    }
+                  };
+
+                  const refined = refinedToolUI[tool.toolId] || {
+                    icon: <Layers size={15} strokeWidth={2} />,
+                    desc: tool.meta.description || ''
+                  };
+
+                  return (
                     <button
                       key={tool.toolId}
                       onClick={() => selectTool(tool.toolId)}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '10px 12px', borderRadius: 8,
-                        background: selectedToolId === tool.toolId ? 'rgba(0,45,93,0.06)' : 'white',
-                        border: selectedToolId === tool.toolId ? '1px solid rgba(0,45,93,0.15)' : '1px solid #e2e8f0',
-                        cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: isSelected ? 'rgba(0,45,93,0.06)' : 'white',
+                        border: isSelected ? '1px solid rgba(0,45,93,0.18)' : '1px solid #e2e8f0',
+                        cursor: 'pointer',
+                        textAlign: isRTL ? 'right' : 'left',
+                        transition: 'all 0.12s ease-in-out',
+                        width: '100%'
                       }}
                       className="gp-tool-card"
                     >
-                      <span style={{ fontSize: 18, flexShrink: 0 }}>{tool.meta.icon || '⚙️'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2f4d', marginBottom: 2 }}>
+                      {/* Consistent Monochrome Line Icon */}
+                      <span style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        color: isSelected ? '#002D5D' : '#64748b'
+                      }}>
+                        {refined.icon}
+                      </span>
+
+                      {/* Left Aligned Content */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start', textAlign: 'left' }}>
+                        <span style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#1a2f4d',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          lineHeight: '1.2'
+                        }}>
                           {t(tool.meta.name)}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {t(tool.meta.description)}
-                        </div>
+                        </span>
+                        {refined.desc && (
+                          <span style={{
+                            fontSize: '10.5px',
+                            color: '#64748b',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: '1.2'
+                          }}>
+                            {refined.desc}
+                          </span>
+                        )}
                       </div>
-                      {isRTL ? <ChevronLeft size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Configure & Run tab ── */}
-        {activeTab === 'run' && selectedManifest && (
-          <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Tool header */}
-            <div style={{ padding: '10px 12px', background: 'rgba(0,45,93,0.04)', borderRadius: 8, [isRTL ? 'borderRight' : 'borderLeft']: '3px solid #002D5D' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#002D5D', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>{selectedManifest.meta.icon}</span> {t(selectedManifest.meta.name)}
-              </div>
-              {selectedManifest.meta.description && (
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>{t(selectedManifest.meta.description)}</p>
-              )}
             </div>
+          )}
 
-            {/* Dynamic form */}
-            <GPFormRenderer
-              params={selectedManifest.parameters}
-              values={paramValues}
-              onChange={(name, val) => setParamValues(prev => ({ ...prev, [name]: val }))}
-              treeData={treeData}
-            />
-
-            {/* Status */}
-            <StatusBanner jobStatus={jobStatus} isRTL={isRTL} />
-
-            {/* Validation warnings */}
-            {missingRequired.length > 0 && !isRunning && (
-              <div style={{ fontSize: 11, color: '#dc3545', display: 'flex', alignItems: 'flex-start', gap: 5 }}>
-                <AlertCircle size={12} style={{ marginTop: 1, flexShrink: 0 }} />
-                {t('gpMissingRequired')} {missingRequired.join(', ')}
-              </div>
-            )}
-            
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-               {isRunning ? (
-                  <button className="secondary-btn" onClick={handleCancelRun} style={{ padding: '8px 16px', background: '#fff' }}>
-                     {t('gpBtnCancel')}
-                  </button>
-               ) : (
-                  <button className="primary-btn" onClick={handleRunTool} style={{ padding: '8px 16px', flex: 1, background: '#002D5D' }}>
-                     {t('gpBtnRun')}
-                  </button>
-               )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Results tab ── */}
-        {activeTab === 'results' && (
-          <div className="results-list">
-            {runs.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-card">
-                  <div className="empty-icon-wrapper"><Layers size={28} /></div>
-                  <h3 className="empty-title">{t('gpNoResultsYet')}</h3>
-                  <p className="empty-desc">{t('gpNoResultsDesc')}</p>
+          {/* ── Results tab ── */}
+          {activeTab === 'results' && (
+            <div className="results-list">
+              {runs.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-card">
+                    <div className="empty-icon-wrapper"><Layers size={28} /></div>
+                    <h3 className="empty-title">{t('gpNoResultsYet')}</h3>
+                    <p className="empty-desc">{t('gpNoResultsDesc')}</p>
+                  </div>
                 </div>
-              </div>
-            ) : runs.map(run => (
-              <GPResultCard
-                key={run.id}
-                run={run}
-                onToggle={handleToggle}
-                onDelete={handleDelete}
-                onZoom={handleZoom}
-                onExport={handleExport}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+              ) : runs.map(run => (
+                <GPResultCard
+                  key={run.id}
+                  run={run}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onZoom={handleZoom}
+                  onExport={handleExport}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       {activeTab === 'run' && selectedManifest && (

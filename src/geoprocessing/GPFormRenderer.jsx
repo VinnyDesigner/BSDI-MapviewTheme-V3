@@ -59,30 +59,86 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [] }) => {
 
   return (
     <div className="gp-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {Object.entries(grouped).map(([category, catParams]) => (
-        <div key={category} className="gp-form-category">
-          {category && (
-            <div className="gp-category-label">{category}</div>
-          )}
-          {catParams.map(param => (
-            <div key={param.name} className="gp-form-field" style={{ marginBottom: 0 }}>
-              <label className="gp-field-label">
-                {t(param.label)}
-                {param.required && <span className="gp-required-star">*</span>}
-              </label>
-              {param.description && (
-                <p className="gp-field-desc">{t(param.description)}</p>
-              )}
-              <ParamWidget
-                param={param}
-                value={values[param.name] ?? param.defaultValue ?? ''}
-                onChange={(val) => onChange(param.name, val)}
-                treeData={treeData}
-              />
-            </div>
-          ))}
-        </div>
-      ))}
+      {Object.entries(grouped).map(([category, catParams]) => {
+        // Group fields into rows dynamically
+        const rows = [];
+        let i = 0;
+        while (i < catParams.length) {
+          const p1 = catParams[i];
+          const p2 = catParams[i + 1];
+          
+          let shouldGroup = false;
+          if (p2) {
+            const n1 = p1.name;
+            const n2 = p2.name;
+            if (
+              (n1 === 'Distance' && n2 === 'Unit') ||
+              (n1 === 'Method' && n2 === 'Dissolve_Type') ||
+              (n1 === 'Observer_Height' && n2 === 'Observer_Height_Unit') ||
+              (n1 === 'Target_Height' && n2 === 'Target_Height_Unit') ||
+              (n1 === 'Min_Distance' && n2 === 'Max_Distance') ||
+              (n1 === 'Horizontal_Angle' && n2 === 'Vertical_Angle') ||
+              (n1 === 'Distance_Unit' && n2 === 'Method')
+            ) {
+              shouldGroup = true;
+            }
+          }
+
+          if (shouldGroup) {
+            rows.push({ type: 'row', fields: [p1, p2] });
+            i += 2;
+          } else {
+            rows.push({ type: 'single', field: p1 });
+            i++;
+          }
+        }
+
+        return (
+          <div key={category} className="gp-form-category" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {category && (
+              <div className="gp-category-label" style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{category}</div>
+            )}
+            {rows.map((row, idx) => {
+              if (row.type === 'single') {
+                const param = row.field;
+                return (
+                  <div key={param.name} className="gp-form-field" style={{ marginBottom: 0 }}>
+                    <label className="gp-field-label" title={t(param.label)} style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#1a2f4d', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                      {t(param.label)}
+                      {param.required && <span className="gp-required-star" style={{ color: '#DF261C', marginLeft: '3px' }}>*</span>}
+                    </label>
+                    <ParamWidget
+                      param={param}
+                      value={values[param.name] ?? param.defaultValue ?? ''}
+                      onChange={(val) => onChange(param.name, val)}
+                      treeData={treeData}
+                    />
+                  </div>
+                );
+              } else {
+                return (
+                  <div key={`row-${idx}`} style={{ display: 'flex', gap: '16px', width: '100%' }}>
+                    {row.fields.map(param => (
+                      <div key={param.name} className="gp-form-field" style={{ flex: 1, minWidth: 0, marginBottom: 0 }}>
+                        <label className="gp-field-label" title={t(param.label)} style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#1a2f4d', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                          {t(param.label)}
+                          {param.required && <span className="gp-required-star" style={{ color: '#DF261C', marginLeft: '3px' }}>*</span>}
+                        </label>
+                        <ParamWidget
+                          param={param}
+                          value={values[param.name] ?? param.defaultValue ?? ''}
+                          onChange={(val) => onChange(param.name, val)}
+                          treeData={treeData}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 };

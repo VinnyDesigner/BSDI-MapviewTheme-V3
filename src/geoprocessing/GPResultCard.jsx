@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Maximize2, Eye, EyeOff, Trash2, Download, ChevronDown, ChevronUp, Table2 } from 'lucide-react';
+import { Maximize2, Eye, EyeOff, Trash2, Download, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Table2, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
@@ -29,38 +29,58 @@ const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
 
   return (
     <div className="result-tree-node">
-      <div className={`result-row ${run.visible ? '' : 'hidden-layer'}`}>
+      <div className={`result-row ${run.visible ? '' : 'hidden-layer'}`} style={{ padding: '8px 12px' }}>
         {/* Row 1 — main info + actions */}
-        <div className="result-row-first">
-          <div className="result-info">
+        <div className="result-row-first" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div className="result-info" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Far-Left Expand/Collapse Accordion Arrow */}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#64748b',
+                margin: 0
+              }}
+            >
+              {expanded ? (
+                <ChevronDown size={14} />
+              ) : (
+                isRTL ? <ChevronLeft size={14} /> : <ChevronRight size={14} />
+              )}
+            </button>
+
+            {/* Layer Visibility Checkbox */}
             <input
               type="checkbox"
               className="custom-checkbox"
               checked={run.visible}
               onChange={() => onToggle(run.id)}
+              style={{ margin: 0 }}
             />
-            {/* Dynamic colour swatch based on tool category */}
+
+            {/* Dynamic colour swatch */}
             <div style={{
               width: 10, height: 10, borderRadius: 2, flexShrink: 0,
               background: run.colour || '#268FFF',
               boxShadow: `0 0 0 2px ${(run.colour || '#268FFF')}44`,
             }} />
-            <span className="result-name" title={run.toolName}>{run.toolName}</span>
+
+            {/* Layer / Tool Name */}
+            <span className="result-name" title={run.toolName} style={{ fontWeight: 600, fontSize: '12px', color: '#1a2f4d' }}>
+              {run.toolName}
+            </span>
           </div>
 
-          <div className="result-actions" style={{ position: 'relative' }}>
+          <div className="result-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
             {hasMapLayer && (
               <button className="action-btn" onClick={() => onZoom(run.id)} title="Zoom to result">
                 <Maximize2 size={14} />
-              </button>
-            )}
-            {(tableOutputs.length > 0) && (
-              <button
-                className="action-btn"
-                onClick={() => setExpanded(!expanded)}
-                title={expanded ? 'Collapse table' : 'Expand table'}
-              >
-                {expanded ? <ChevronUp size={14} /> : <Table2 size={14} />}
               </button>
             )}
             <button className="action-btn" onClick={openExport} title="Export">
@@ -72,20 +92,87 @@ const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
           </div>
         </div>
 
-        {/* Row 2 — metadata */}
-        <div className="result-row-second">
-          <span className="result-feature-count">
+        {/* Row 2 — metadata summary */}
+        <div className="result-row-second" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingLeft: isRTL ? 0 : 26, paddingRight: isRTL ? 26 : 0 }}>
+          <span className="result-feature-count" style={{ fontSize: '11px', color: '#64748b' }}>
             {run.totalFeatures != null ? `${run.totalFeatures} ${t('gpFeatures')}` : run.status}
           </span>
-          <span className="result-upload-date">{run.date}</span>
+          <span className="result-upload-date" style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+            {run.date}
+          </span>
         </div>
 
-        {/* Text outputs inline */}
-        {textOutputs.map((t, i) => (
+        {/* Structured execution metadata parameters details (Expanded State Only) */}
+        {expanded && run.metadata && (
+          <div style={{
+            margin: '10px 0 4px', padding: '6px 12px',
+            background: '#f8fafc', borderRadius: 8,
+            border: '1px solid #e2e8f0',
+            fontSize: '11px',
+            direction: isRTL ? 'rtl' : 'ltr',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {(() => {
+              const entries = Object.entries(run.metadata).filter(([_, val]) => val !== null && val !== undefined && val !== '');
+              return entries.map(([key, val], idx) => {
+                const displayKey = key.replace(/_/g, ' ');
+                return (
+                  <div key={key} style={{
+                    display: 'flex',
+                    fontSize: '11px',
+                    borderBottom: idx === entries.length - 1 ? 'none' : '1px solid #e2e8f0',
+                    padding: '6px 0',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <span style={{
+                      color: '#64748b',
+                      fontWeight: '500',
+                      width: '45%',
+                      flexShrink: 0,
+                      textAlign: isRTL ? 'right' : 'left'
+                    }}>
+                      {t(displayKey) || displayKey}
+                    </span>
+                    <span style={{
+                      color: '#1a2f4d',
+                      fontWeight: '600',
+                      wordBreak: 'break-all',
+                      flex: 1,
+                      textAlign: isRTL ? 'left' : 'right'
+                    }}>
+                      {String(val)}
+                    </span>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        )}
+
+        {expanded && run.hasFeaturesButNoGeom && (
+          <div style={{
+            margin: '8px 0 4px', padding: '10px 12px',
+            background: '#fef2f2', borderRadius: 8,
+            border: '1px solid #fee2e2',
+            fontSize: '11px', color: '#991b1b',
+            display: 'flex', alignItems: 'center', gap: 6,
+            direction: isRTL ? 'rtl' : 'ltr',
+            textAlign: isRTL ? 'right' : 'left'
+          }}>
+            <AlertCircle size={13} style={{ flexShrink: 0 }} />
+            <span>Result record created but no output geometry was generated.</span>
+          </div>
+        )}
+
+        {/* Text outputs inline (Expanded State Only) */}
+        {expanded && textOutputs.map((t, i) => (
           <div key={i} style={{
-            margin: '4px 0 0', padding: '6px 10px',
+            margin: '6px 0 0', padding: '6px 10px',
             background: '#f8fafc', borderRadius: 6,
-            fontSize: 12, color: '#334155', borderLeft: '3px solid #268FFF',
+            fontSize: 11, color: '#334155', borderLeft: isRTL ? 'none' : '3px solid #268FFF', borderRight: isRTL ? '3px solid #268FFF' : 'none',
           }}>
             <strong>{t.label}:</strong> {t.text}
           </div>
