@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, X, Plus, Filter, Trash2, ArrowRight, ArrowLeft, Play, Check, 
-  RotateCcw, SlidersHorizontal, RefreshCw, ZoomIn, Info, AlertTriangle
+  RotateCcw, SlidersHorizontal, RefreshCw, ZoomIn, Info, AlertTriangle, ChevronDown
 } from 'lucide-react';
 import Graphic from '@arcgis/core/Graphic';
 import TreeSelect from './TreeSelect';
@@ -199,16 +199,173 @@ const getFieldUniqueValues = async (layerItem, fieldName) => {
   }
 };
 
-const OPERATORS = [
-  { id: '=', label: '=' },
-  { id: '<>', label: '<>' },
-  { id: '>', label: '>' },
-  { id: '<', label: '<' },
-  { id: '>=', label: '>=' },
-  { id: '<=', label: '<=' },
-  { id: 'LIKE', label: 'LIKE' },
-  { id: 'IN', label: 'IN' }
-];
+const getFieldCategory = (fieldType) => {
+  if (!fieldType) return 'text';
+  const typeLower = fieldType.toLowerCase();
+  
+  if (typeLower.includes('string') || typeLower.includes('guid') || typeLower.includes('globalid') || typeLower === 'string') {
+    return 'text';
+  }
+  
+  if (typeLower.includes('date') || typeLower === 'date') {
+    return 'date';
+  }
+  
+  return 'numeric';
+};
+
+const OPERATORS_BY_CATEGORY = {
+  text: [
+    { id: '=', label: '=' },
+    { id: '<>', label: '<>' },
+    { id: 'LIKE', label: 'LIKE' },
+    { id: 'NOT LIKE', label: 'NOT LIKE' },
+    { id: 'STARTS WITH', label: 'STARTS WITH' },
+    { id: 'ENDS WITH', label: 'ENDS WITH' },
+    { id: 'CONTAINS', label: 'CONTAINS' },
+    { id: 'IN', label: 'IN' },
+    { id: 'NOT IN', label: 'NOT IN' },
+    { id: 'INCLUDE', label: 'INCLUDE' },
+    { id: 'NOT INCLUDE', label: 'NOT INCLUDE' },
+    { id: 'IS NULL', label: 'IS NULL' },
+    { id: 'IS NOT NULL', label: 'IS NOT NULL' }
+  ],
+  numeric: [
+    { id: '=', label: '=' },
+    { id: '<>', label: '<>' },
+    { id: '>', label: '>' },
+    { id: '<', label: '<' },
+    { id: '>=', label: '>=' },
+    { id: '<=', label: '<=' },
+    { id: 'BETWEEN', label: 'BETWEEN' },
+    { id: 'NOT BETWEEN', label: 'NOT BETWEEN' },
+    { id: 'IN', label: 'IN' },
+    { id: 'NOT IN', label: 'NOT IN' },
+    { id: 'INCLUDE', label: 'INCLUDE' },
+    { id: 'NOT INCLUDE', label: 'NOT INCLUDE' },
+    { id: 'IS NULL', label: 'IS NULL' },
+    { id: 'IS NOT NULL', label: 'IS NOT NULL' }
+  ],
+  date: [
+    { id: '=', label: '=' },
+    { id: '>', label: '>' },
+    { id: '<', label: '<' },
+    { id: '>=', label: '>=' },
+    { id: '<=', label: '<=' },
+    { id: 'BETWEEN', label: 'BETWEEN' },
+    { id: 'NOT BETWEEN', label: 'NOT BETWEEN' },
+    { id: 'IS NULL', label: 'IS NULL' },
+    { id: 'IS NOT NULL', label: 'IS NOT NULL' }
+  ]
+};
+
+const UniqueValueCombobox = ({ uniqueValues, value, onChange, placeholder, isRTL }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const clickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickOutside);
+    return () => document.removeEventListener('mousedown', clickOutside);
+  }, []);
+
+  const filtered = (uniqueValues || []).filter(v => 
+    String(v).toLowerCase().includes(String(value || '').toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '100%' }}>
+        <input 
+          type="text" 
+          className="aq-input-text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ 
+            height: '36px', 
+            width: '100%', 
+            boxSizing: 'border-box', 
+            padding: isRTL ? '0 8px 0 32px' : '0 32px 0 8px'
+          }}
+        />
+        <button 
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          style={{ 
+            position: 'absolute', 
+            [isRTL ? 'left' : 'right']: '4px', 
+            background: 'none', 
+            border: 'none', 
+            color: '#64748b', 
+            cursor: 'pointer',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '24px',
+            padding: 0
+          }}
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
+
+      {isOpen && uniqueValues && uniqueValues.length > 0 && (
+        <div className="custom-select-dropdown" style={{ 
+          position: 'absolute', 
+          top: 'calc(100% + 4px)', 
+          left: 0, 
+          width: '100%', 
+          zIndex: 1100, 
+          maxHeight: '160px', 
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0',
+          background: 'white',
+          overflow: 'hidden'
+        }}>
+          <div className="options-list" style={{ padding: '4px 0', maxHeight: '150px', overflowY: 'auto' }}>
+            {(filtered.length > 0 ? filtered : uniqueValues).map((val, idx) => (
+              <div 
+                key={idx} 
+                className="option-item" 
+                onClick={() => {
+                  onChange(String(val));
+                  setIsOpen(false);
+                }}
+                style={{ 
+                  padding: '8px 12px', 
+                  cursor: 'pointer', 
+                  fontSize: '12px',
+                  color: '#475569',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                  e.currentTarget.style.color = '#1a2f4d';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#475569';
+                }}
+              >
+                {String(val)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SELECTION_TYPES = [
   { id: 'NEW', titleEn: 'New Selection', titleAr: 'تحديد جديد' },
@@ -597,21 +754,52 @@ const AdvancedQueryPanel = ({
       
       const fieldItem = fieldsList.find(f => f.name === c.fieldName);
       const isString = fieldItem?.type === 'string' || fieldItem?.type === 'esriFieldTypeString';
+      const isDate = fieldItem?.type === 'date' || fieldItem?.type === 'esriFieldTypeDate';
       
       const chosenVal = c.value.trim();
+      const op = c.operator;
       
       let expr = "";
-      if (hasNoValueInput(c.operator)) {
-        expr = `${c.fieldName} ${c.operator}`;
-      } else if (c.operator === 'LIKE') {
+      if (op === 'IS NULL' || op === 'IS NOT NULL') {
+        expr = `${c.fieldName} ${op}`;
+      } else if (op === 'LIKE' || op === 'CONTAINS') {
         expr = `${c.fieldName} LIKE '%${chosenVal}%'`;
-      } else if (c.operator === 'IN' || c.operator === 'NOT IN') {
-        const parts = chosenVal.split(',').map(p => p.trim());
+      } else if (op === 'NOT LIKE') {
+        expr = `${c.fieldName} NOT LIKE '%${chosenVal}%'`;
+      } else if (op === 'STARTS WITH') {
+        expr = `${c.fieldName} LIKE '${chosenVal}%'`;
+      } else if (op === 'ENDS WITH') {
+        expr = `${c.fieldName} LIKE '%${chosenVal}'`;
+      } else if (op === 'IN' || op === 'NOT IN' || op === 'INCLUDE' || op === 'NOT INCLUDE') {
+        const parts = chosenVal.split(',').map(p => p.trim()).filter(Boolean);
         const formatted = parts.map(p => isString ? `'${p}'` : p).join(', ');
-        expr = `${c.fieldName} ${c.operator} (${formatted})`;
+        const sqlOp = (op === 'INCLUDE' || op === 'IN') ? 'IN' : 'NOT IN';
+        expr = `${c.fieldName} ${sqlOp} (${formatted})`;
+      } else if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+        const parts = chosenVal.split(' AND ').map(p => p.trim());
+        const minVal = parts[0] || '';
+        const maxVal = parts[1] || '';
+        
+        let formattedMin = minVal;
+        let formattedMax = maxVal;
+        
+        if (isString) {
+          formattedMin = `'${minVal}'`;
+          formattedMax = `'${maxVal}'`;
+        } else if (isDate) {
+          formattedMin = `DATE '${minVal}'`;
+          formattedMax = `DATE '${maxVal}'`;
+        }
+        
+        expr = `${c.fieldName} ${op} ${formattedMin} AND ${formattedMax}`;
       } else {
-        const formattedVal = isString ? `'${chosenVal}'` : chosenVal;
-        expr = `${c.fieldName} ${c.operator} ${formattedVal}`;
+        let formattedVal = chosenVal;
+        if (isString) {
+          formattedVal = `'${chosenVal}'`;
+        } else if (isDate) {
+          formattedVal = `DATE '${chosenVal}'`;
+        }
+        expr = `${c.fieldName} ${op} ${formattedVal}`;
       }
       
       if (idx === 0) {
@@ -637,10 +825,18 @@ const AdvancedQueryPanel = ({
   const handleUpdateClause = (clauseId, fieldsToUpdate) => {
     setClauses(prev => prev.map(c => {
       if (c.id === clauseId) {
-        const updated = { ...c, ...fieldsToUpdate };
+        let updated = { ...c, ...fieldsToUpdate };
         if (fieldsToUpdate.fieldName !== undefined && fieldsToUpdate.fieldName !== c.fieldName) {
-          // Field changed, fetch unique values dynamically from service endpoint
+          const fieldItem = fieldsList.find(f => f.name === fieldsToUpdate.fieldName);
+          const category = getFieldCategory(fieldItem?.type);
+          const allowedOps = OPERATORS_BY_CATEGORY[category] || OPERATORS_BY_CATEGORY.text;
+          
+          updated.operator = allowedOps[0]?.id || '=';
+          updated.value = '';
           loadUniqueValuesForClause(clauseId, fieldsToUpdate.fieldName);
+        }
+        if (fieldsToUpdate.operator !== undefined && fieldsToUpdate.operator !== c.operator) {
+          updated.value = '';
         }
         return updated;
       }
@@ -874,9 +1070,14 @@ const AdvancedQueryPanel = ({
             }
           }, 150);
 
-          // Zoom to feature
+          // Zoom to feature with comfortable extent context or padded point zoom
           if (isValidBahrainGeometry(feature.geometry, mapView)) {
-            mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 1000 }).catch(err => {
+            const isPoint = feature.geometry.type === 'point';
+            const goToParams = isPoint 
+              ? { target: feature.geometry, zoom: 12 } 
+              : (feature.geometry.extent ? feature.geometry.extent.expand(2.5) : feature.geometry);
+            
+            mapView.goTo(goToParams, { duration: 1000 }).catch(err => {
               console.warn("Auto zoom failed:", err);
             });
           }
@@ -929,6 +1130,7 @@ const AdvancedQueryPanel = ({
     }
 
     setIsQuerying(false);
+    setStep(3);
   };
 
   // Zoom & highlight helper
@@ -1062,7 +1264,12 @@ const AdvancedQueryPanel = ({
     }, 150);
 
     if (isValidBahrainGeometry(feature.geometry, mapView)) {
-      mapView.goTo({ target: feature.geometry, zoom: 15 }, { duration: 800 }).catch(err => {
+      const isPoint = feature.geometry.type === 'point';
+      const goToParams = isPoint 
+        ? { target: feature.geometry, zoom: 12 } 
+        : (feature.geometry.extent ? feature.geometry.extent.expand(2.5) : feature.geometry);
+
+      mapView.goTo(goToParams, { duration: 800 }).catch(err => {
         console.warn("mapView.goTo failed:", err);
       });
     }
@@ -1167,14 +1374,20 @@ const AdvancedQueryPanel = ({
     <div className={`advanced-query-panel-container ${isRTL ? 'rtl' : 'ltr'}`} style={{ overflow: 'hidden' }}>
       <div className="aq-wizard-container" style={{
         display: 'flex',
-        width: '200%',
+        width: '300%',
         height: '100%',
         transition: 'transform 0.3s ease-in-out',
-        transform: `translateX(${step === 1 ? '0%' : (isRTL ? '50%' : '-50%')})`
+        transform: `translateX(${
+          step === 1 
+            ? '0%' 
+            : step === 2 
+            ? (isRTL ? '33.333%' : '-33.333%') 
+            : (isRTL ? '66.666%' : '-66.666%')
+        })`
       }}>
         
         {/* SCREEN 1: Default Layer & Selection Type view */}
-        <div className="aq-wizard-step" style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+        <div className="aq-wizard-step" style={{ width: '33.333%', height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
           <div style={{ flex: 1, padding: '0px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
             
             {/* Layer Selection */}
@@ -1220,7 +1433,7 @@ const AdvancedQueryPanel = ({
         </div>
 
         {/* SCREEN 2: Query Builder form */}
-        <div className="aq-wizard-step" style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', borderLeft: isRTL ? 'none' : '1px solid #f1f5f9', borderRight: isRTL ? '1px solid #f1f5f9' : 'none' }}>
+        <div className="aq-wizard-step" style={{ width: '33.333%', height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', borderLeft: isRTL ? 'none' : '1px solid #f1f5f9', borderRight: isRTL ? '1px solid #f1f5f9' : 'none' }}>
           
           {/* Query Builder Header with Back Button and Aligned SQL Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0px', borderBottom: 'none', background: 'none', flexShrink: 0, marginBottom: '16px' }}>
@@ -1349,7 +1562,12 @@ const AdvancedQueryPanel = ({
                       <div className="aq-field-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <label className="aq-sublabel" style={{ fontSize: '11px', fontWeight: 600 }}>{isRTL ? 'المعامل' : 'Operator'}</label>
                         <CustomSelect 
-                          options={OPERATORS.map(o => ({ id: o.id, title: o.label }))}
+                          options={(() => {
+                            const fieldItem = fieldsList.find(f => f.name === clause.fieldName);
+                            const category = getFieldCategory(fieldItem?.type);
+                            const allowedOps = OPERATORS_BY_CATEGORY[category] || OPERATORS_BY_CATEGORY.text;
+                            return allowedOps.map(o => ({ id: o.id, title: o.label }));
+                          })()}
                           value={clause.operator}
                           onChange={(val) => handleUpdateClause(clause.id, { operator: val })}
                           placeholder="="
@@ -1358,27 +1576,152 @@ const AdvancedQueryPanel = ({
 
                       <div className="aq-field-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <label className="aq-sublabel" style={{ fontSize: '11px', fontWeight: 600 }}>{isRTL ? 'القيمة' : 'Value'}</label>
-                        {clause.isLoadingValues ? (
-                          <div style={{ height: '36px', display: 'flex', alignItems: 'center', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', color: '#64748b', background: '#f8fafc', boxSizing: 'border-box' }}>
-                            {isRTL ? 'جاري التحميل...' : 'Loading...'}
-                          </div>
-                        ) : clause.uniqueValues && clause.uniqueValues.length > 0 ? (
-                          <CustomSelect 
-                            options={clause.uniqueValues.map(v => ({ id: String(v), title: String(v) }))}
-                            value={clause.value}
-                            onChange={(val) => handleUpdateClause(clause.id, { value: val })}
-                            placeholder={isRTL ? 'اختر القيمة' : 'Select Value'}
-                          />
-                        ) : (
-                          <input 
-                            type="text" 
-                            className="aq-input-text"
-                            placeholder={isRTL ? 'القيمة...' : 'Value...'}
-                            value={clause.value}
-                            onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
-                            style={{ height: '36px', boxSizing: 'border-box' }}
-                          />
-                        )}
+                        {(() => {
+                          if (clause.isLoadingValues) {
+                            return (
+                              <div style={{ height: '36px', display: 'flex', alignItems: 'center', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', color: '#64748b', background: '#f8fafc', boxSizing: 'border-box' }}>
+                                {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                              </div>
+                            );
+                          }
+
+                          const fieldItem = fieldsList.find(f => f.name === clause.fieldName);
+                          const category = getFieldCategory(fieldItem?.type);
+                          const op = clause.operator;
+                          
+                          const isMultiSelect = ['IN', 'NOT IN', 'INCLUDE', 'NOT INCLUDE'].includes(op);
+                          const isRange = ['BETWEEN', 'NOT BETWEEN'].includes(op);
+                          const isNullCheck = ['IS NULL', 'IS NOT NULL'].includes(op);
+                          const isTextSearch = ['LIKE', 'NOT LIKE', 'CONTAINS', 'STARTS WITH', 'ENDS WITH'].includes(op);
+
+                          if (isNullCheck) {
+                            return (
+                              <div style={{ height: '36px', display: 'flex', alignItems: 'center', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', color: '#94a3b8', background: '#f8fafc', boxSizing: 'border-box' }}>
+                                {isRTL ? 'لا توجد قيمة مطلوبة' : 'No value required'}
+                              </div>
+                            );
+                          }
+
+                          if (isRange) {
+                            const rangeParts = clause.value.split(' AND ');
+                            const minVal = rangeParts[0] || '';
+                            const maxVal = rangeParts[1] || '';
+                            
+                            if (category === 'date') {
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <input 
+                                    type="date"
+                                    className="aq-input-text"
+                                    value={minVal}
+                                    onChange={(e) => handleUpdateClause(clause.id, { value: `${e.target.value} AND ${maxVal}` })}
+                                    style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                                  />
+                                  <input 
+                                    type="date"
+                                    className="aq-input-text"
+                                    value={maxVal}
+                                    onChange={(e) => handleUpdateClause(clause.id, { value: `${minVal} AND ${e.target.value}` })}
+                                    style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                                  />
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <input 
+                                  type="number"
+                                  className="aq-input-text"
+                                  placeholder={isRTL ? 'الحد الأدنى...' : 'Min...'}
+                                  value={minVal}
+                                  onChange={(e) => handleUpdateClause(clause.id, { value: `${e.target.value} AND ${maxVal}` })}
+                                  style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                                />
+                                <input 
+                                  type="number"
+                                  className="aq-input-text"
+                                  placeholder={isRTL ? 'الحد الأقصى...' : 'Max...'}
+                                  value={maxVal}
+                                  onChange={(e) => handleUpdateClause(clause.id, { value: `${minVal} AND ${e.target.value}` })}
+                                  style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                                />
+                              </div>
+                            );
+                          }
+
+                          if (isMultiSelect) {
+                            if (clause.uniqueValues && clause.uniqueValues.length > 0) {
+                              return (
+                                <CustomSelect 
+                                  options={clause.uniqueValues.map(v => ({ id: String(v), title: String(v) }))}
+                                  value={clause.value ? clause.value.split(', ') : []}
+                                  onChange={(vals) => handleUpdateClause(clause.id, { value: vals.join(', ') })}
+                                  placeholder={isRTL ? 'اختر قيم متعددة' : 'Select multiple'}
+                                  multi={true}
+                                />
+                              );
+                            }
+                            return (
+                              <input 
+                                type="text" 
+                                className="aq-input-text"
+                                placeholder={isRTL ? 'قيم مفصولة بفواصل...' : 'Values separated by commas...'}
+                                value={clause.value}
+                                onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
+                                style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                              />
+                            );
+                          }
+
+                          if (isTextSearch) {
+                            return (
+                              <input 
+                                type="text" 
+                                className="aq-input-text"
+                                placeholder={isRTL ? 'نص البحث...' : 'Search text...'}
+                                value={clause.value}
+                                onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
+                                style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                              />
+                            );
+                          }
+
+                          if (category === 'date') {
+                            return (
+                              <input 
+                                type="date"
+                                className="aq-input-text"
+                                value={clause.value}
+                                onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
+                                style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                              />
+                            );
+                          }
+
+                          if (clause.uniqueValues && clause.uniqueValues.length > 0) {
+                            return (
+                              <UniqueValueCombobox 
+                                uniqueValues={clause.uniqueValues}
+                                value={clause.value}
+                                onChange={(val) => handleUpdateClause(clause.id, { value: val })}
+                                placeholder={isRTL ? 'القيمة...' : 'Value...'}
+                                isRTL={isRTL}
+                              />
+                            );
+                          }
+
+                          return (
+                            <input 
+                              type="text" 
+                              className="aq-input-text"
+                              placeholder={isRTL ? 'القيمة...' : 'Value...'}
+                              value={clause.value}
+                              onChange={(e) => handleUpdateClause(clause.id, { value: e.target.value })}
+                              style={{ height: '36px', boxSizing: 'border-box', padding: '0 8px' }}
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1392,96 +1735,200 @@ const AdvancedQueryPanel = ({
             )}
           </div>
 
+          {/* Action Bar */}
+          <div className="aq-actions-row" style={{ flexShrink: 0, marginTop: '16px' }}>
+            <button 
+              className="aq-action-btn aq-btn-reset" 
+              onClick={handleResetQuery}
+              disabled={isQuerying}
+              type="button"
+            >
+              <RotateCcw size={14} />
+              <span>{isRTL ? 'إعادة تعيين' : 'Reset Query'}</span>
+            </button>
 
+            <button 
+              className="aq-action-btn aq-btn-apply"
+              onClick={handleApplyQuery}
+              disabled={!activeSqlExpression.trim() || isQuerying || !!validationError}
+              type="button"
+            >
+              {isQuerying ? <RefreshCw size={14} className="aq-spin" /> : <Play size={14} />}
+              <span>{isQuerying ? (isRTL ? 'جاري البحث...' : 'Searching...') : (isRTL ? 'تطبيق الاستعلام' : 'Apply Query')}</span>
+            </button>
+          </div>
 
-            {/* Action Bar */}
-            <div className="aq-actions-row">
+        </div>
+
+        {/* SCREEN 3: Matching Results view */}
+        <div className="aq-wizard-step" style={{ width: '33.333%', height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', borderLeft: isRTL ? 'none' : '1px solid #f1f5f9', borderRight: isRTL ? '1px solid #f1f5f9' : 'none' }}>
+          
+          {/* Header of Step 3: Back Button to Query Builder */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0px', borderBottom: 'none', background: 'none', flexShrink: 0, marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button 
+                onClick={() => setStep(2)} 
+                type="button" 
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: '#1a2f4d', 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                className="aq-header-back-btn"
+              >
+                {isRTL ? <ArrowRight size={18} style={{ color: '#df261c' }} /> : <ArrowLeft size={18} style={{ color: '#df261c' }} />}
+              </button>
+              
+              <span style={{ fontWeight: 700, fontSize: '15px', color: '#1a2f4d' }}>
+                {isRTL ? 'نتائج المطابقة' : 'Matching Results'}
+              </span>
+            </div>
+            
+            {/* Results count badge in header */}
+            <span className="aq-results-badge" style={{
+              background: '#fef2f2',
+              color: '#df261c',
+              padding: '4px 10px',
+              borderRadius: '9999px',
+              fontSize: '12px',
+              fontWeight: 700
+            }}>
+              {isQuerying ? '...' : results.length.toLocaleString()}
+            </span>
+          </div>
+
+          {/* Results Screen Scrollable Content */}
+          <div style={{ flex: 1, padding: '0px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }} className="aq-scrollable-content">
+            
+            {/* Results List */}
+            {results.length === 0 ? (
+              !isQuerying && (
+                <div className="aq-empty-results" style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '32px 16px',
+                  color: '#64748b',
+                  textAlign: 'center',
+                  gap: '8px',
+                  background: '#f8fafc',
+                  borderRadius: '12px',
+                  border: '1px dashed #cbd5e1'
+                }}>
+                  <AlertTriangle size={24} style={{ color: '#94a3b8' }} />
+                  <p style={{ margin: 0, fontSize: '13px' }}>
+                    {isRTL ? 'لا توجد نتائج مطابقة لشروط البحث.' : 'No features match this query expression.'}
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="aq-results-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {results.map((feature, idx) => {
+                  const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+                  const oid = feature.attributes[oidField];
+                  const isHighlighted = highlightedFeatureId === oid;
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`aq-result-item ${isHighlighted ? 'highlighted' : ''}`}
+                      onClick={() => handleFeatureClick(feature)}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        background: isHighlighted ? '#fef2f2' : '#ffffff',
+                        border: isHighlighted ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <div className="aq-result-item-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="aq-result-index" style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: isHighlighted ? '#ef4444' : '#f1f5f9',
+                          color: isHighlighted ? '#ffffff' : '#475569',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '11px',
+                          fontWeight: 700
+                        }}>{idx + 1}</span>
+                        <span className="aq-result-label" style={{
+                          fontSize: '13px',
+                          color: isHighlighted ? '#991b1b' : '#334155',
+                          fontWeight: isHighlighted ? 600 : 500,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: '220px'
+                        }}>{getFeatureLabel(feature)}</span>
+                      </div>
+                      <ZoomIn 
+                        size={14} 
+                        className="aq-zoom-icon" 
+                        style={{
+                          color: isHighlighted ? '#ef4444' : '#64748b',
+                          transition: 'color 0.2s'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFeatureClick(feature);
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Footer for Clear Selection */}
+          {results.length > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              paddingTop: '12px', 
+              background: 'transparent',
+              flexShrink: 0,
+              marginTop: 'auto'
+            }}>
               <button 
                 className="aq-action-btn aq-btn-reset" 
-                onClick={handleResetQuery}
-                disabled={isQuerying}
+                style={{ 
+                  height: '36px', 
+                  borderColor: '#cbd5e1', 
+                  color: '#475569', 
+                  background: '#f8fafc',
+                  padding: '0 16px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                }}
+                onClick={handleClearSelection}
                 type="button"
               >
-                <RotateCcw size={14} />
-                <span>{isRTL ? 'إعادة تعيين' : 'Reset Query'}</span>
-              </button>
-
-              <button 
-                className="aq-action-btn aq-btn-apply"
-                onClick={handleApplyQuery}
-                disabled={!activeSqlExpression.trim() || isQuerying || !!validationError}
-                type="button"
-              >
-                {isQuerying ? <RefreshCw size={14} className="aq-spin" /> : <Play size={14} />}
-                <span>{isQuerying ? (isRTL ? 'جاري البحث...' : 'Searching...') : (isRTL ? 'تطبيق الاستعلام' : 'Apply Query')}</span>
+                <Trash2 size={13} />
+                <span>{isRTL ? 'مسح التحديد الحالي' : 'Clear Selection'}</span>
               </button>
             </div>
-
-            {results.length > 0 && (
-              <div style={{ marginTop: '8px' }}>
-                <button 
-                  className="aq-action-btn aq-btn-reset" 
-                  style={{ width: '100%', height: '36px', borderColor: '#fecaca', color: '#dc2626', background: '#fef2f2' }}
-                  onClick={handleClearSelection}
-                  type="button"
-                >
-                  <Trash2 size={13} />
-                  <span>{isRTL ? 'مسح التحديد الحالي' : 'Clear Selection'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* Matching Results List */}
-            {hasQueried && (
-              <div className="aq-results-container animate-slide-up">
-                <div className="aq-results-header">
-                  <span className="aq-results-title">
-                    {isRTL ? 'المعالم المطابقة' : 'Matching Results'}
-                  </span>
-                  <span className="aq-results-badge">
-                    {isQuerying ? '...' : results.length.toLocaleString()}
-                  </span>
-                </div>
-
-                {results.length === 0 ? (
-                  !isQuerying && (
-                    <div className="aq-empty-results">
-                      <AlertTriangle size={24} />
-                      <p>{isRTL ? 'لا توجد نتائج مطابقة لشروط البحث.' : 'No features match this query expression.'}</p>
-                    </div>
-                  )
-                ) : (
-                  <div className="aq-results-list">
-                    {results.map((feature, idx) => {
-                      const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
-                      const oid = feature.attributes[oidField];
-                      const isHighlighted = highlightedFeatureId === oid;
-                      return (
-                        <div 
-                          key={idx} 
-                          className={`aq-result-item ${isHighlighted ? 'highlighted' : ''}`}
-                          onClick={() => handleFeatureClick(feature)}
-                        >
-                          <div className="aq-result-item-info">
-                            <span className="aq-result-index">{idx + 1}</span>
-                            <span className="aq-result-label">{getFeatureLabel(feature)}</span>
-                          </div>
-                          <ZoomIn 
-                            size={14} 
-                            className="aq-zoom-icon" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFeatureClick(feature);
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
+          )}
         </div>
 
       </div>

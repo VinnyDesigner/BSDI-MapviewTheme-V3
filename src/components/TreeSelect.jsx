@@ -284,7 +284,9 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
           className="custom-select-dropdown" 
           style={{ 
             width: '100%',
-            maxWidth: 'none',
+            minWidth: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
             border: '1px solid #e2e8f0',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             zIndex: 9999,

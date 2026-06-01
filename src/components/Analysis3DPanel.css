@@ -333,6 +333,11 @@
 /* ── RTL support ─────────────────────────────────────────────────────────── */
 [dir="rtl"] .a3d-tools-panel  { left: auto; right: 64px; }
 
+[dir="rtl"] .select-arrow {
+  right: auto !important;
+  left: 12px !important;
+}
+
 @media (max-width: 768px) {
   .a3d-tools-panel {
     top: 64px !important;

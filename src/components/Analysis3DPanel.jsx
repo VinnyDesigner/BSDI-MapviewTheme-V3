@@ -1,7 +1,75 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Scissors, Ruler, Square, Box, ChevronDown } from 'lucide-react';
 import SidePanel from './SidePanel';
+import { useLanguage } from '../context/LanguageContext';
 import './Analysis3DPanel.css';
+
+const TRANSLATIONS = {
+  EN: {
+    title: "3D Analysis",
+    slice: "Slice",
+    distance: "Distance",
+    area: "Area",
+    volume: "Volume",
+    sliceAnalysis: "Slice Analysis",
+    distanceAnalysis: "Distance Analysis",
+    areaAnalysis: "Area Analysis",
+    volumeAnalysis: "Volume Analysis",
+    mode: "Mode",
+    unitSystem: "Unit System",
+    cutFill: "Cut & Fill",
+    cutOnly: "Cut Only",
+    fillOnly: "Fill Only",
+    metric: "Metric",
+    imperial: "Imperial",
+    meters: "Meters",
+    kilometers: "Kilometers",
+    feet: "Feet",
+    miles: "Miles",
+    results: "Results",
+    direct: "Direct",
+    horizontal: "Horizontal",
+    vertical: "Vertical",
+    perimeter: "Perimeter",
+    cutVolume: "Cut Volume",
+    fillVolume: "Fill Volume",
+    netVolume: "Net Volume",
+    emptyState: "Click on the map to start drawing.",
+    newMeasurement: "New Measurement"
+  },
+  AR: {
+    title: "أدوات التحليل ثلاثي الأبعاد",
+    slice: "المقطع",
+    distance: "قياس المسافة",
+    area: "قياس المساحة",
+    volume: "قياس الحجم",
+    sliceAnalysis: "تحليل المقطع",
+    distanceAnalysis: "تحليل قياس المسافة",
+    areaAnalysis: "تحليل قياس المساحة",
+    volumeAnalysis: "تحليل قياس الحجم",
+    mode: "الوضع",
+    unitSystem: "نظام الوحدات",
+    cutFill: "حفر وردم",
+    cutOnly: "حفر فقط",
+    fillOnly: "ردم فقط",
+    metric: "متري",
+    imperial: "إمبراطوري",
+    meters: "أمتار",
+    kilometers: "كيلومترات",
+    feet: "أقدام",
+    miles: "أميال",
+    results: "النتائج",
+    direct: "المباشر",
+    horizontal: "الأفقي",
+    vertical: "الرأسي",
+    perimeter: "المحيط",
+    cutVolume: "حجم الحفر (Cut)",
+    fillVolume: "حجم الردم (Fill)",
+    netVolume: "صافي الحجم (Net)",
+    emptyState: "انقر على الخريطة لبدء الرسم.",
+    newMeasurement: "قياس جديد"
+  }
+};
 
 const TOOLS = [
   { id: 'slice',    icon: <Scissors size={18} />, label: 'Slice'    },
@@ -11,6 +79,9 @@ const TOOLS = [
 ];
 
 const Analysis3DPanel = ({ view, is3D }) => {
+  const { lang } = useLanguage();
+  const currentLang = lang === 'AR' ? 'AR' : 'EN';
+  
   const [activeTool, setActiveTool] = useState(null);
   const [measureData, setMeasureData] = useState(null);
   const widgetRef      = useRef(null);
@@ -168,7 +239,7 @@ const Analysis3DPanel = ({ view, is3D }) => {
 
   if (!is3D) return null;
 
-  const activeLabel = activeTool ? TOOLS.find(t => t.id === activeTool)?.label + ' Analysis' : '';
+  const activeLabel = activeTool ? TRANSLATIONS[currentLang][activeTool + 'Analysis'] : '';
   const isPanelOpen = !!activeTool && activeTool !== 'slice';
 
   const handleNewMeasurement = () => {
@@ -195,7 +266,7 @@ const Analysis3DPanel = ({ view, is3D }) => {
         <div className="measure-content-scroll">
           <div className="measure-section">
             <label className="section-label">
-              {activeTool === 'volume' ? 'Mode' : 'Unit System'}
+              {activeTool === 'volume' ? TRANSLATIONS[currentLang].mode : TRANSLATIONS[currentLang].unitSystem}
             </label>
             <div className="unit-select-wrapper">
               {activeTool === 'volume' ? (
@@ -204,9 +275,9 @@ const Analysis3DPanel = ({ view, is3D }) => {
                   value={measureData?.mode || 'all'}
                   onChange={(e) => { setMeasureData(prev => ({...prev, mode: e.target.value})); }}
                 >
-                  <option value="all">Cut & Fill</option>
-                  <option value="cut">Cut Only</option>
-                  <option value="fill">Fill Only</option>
+                  <option value="all">{TRANSLATIONS[currentLang].cutFill}</option>
+                  <option value="cut">{TRANSLATIONS[currentLang].cutOnly}</option>
+                  <option value="fill">{TRANSLATIONS[currentLang].fillOnly}</option>
                 </select>
               ) : (
                 <select 
@@ -214,12 +285,12 @@ const Analysis3DPanel = ({ view, is3D }) => {
                   defaultValue="metric"
                   onChange={(e) => { vm.unit = e.target.value; }}
                 >
-                  <option value="metric">Metric</option>
-                  <option value="imperial">Imperial</option>
-                  <option value="meters">Meters</option>
-                  <option value="kilometers">Kilometers</option>
-                  <option value="feet">Feet</option>
-                  <option value="miles">Miles</option>
+                  <option value="metric">{TRANSLATIONS[currentLang].metric}</option>
+                  <option value="imperial">{TRANSLATIONS[currentLang].imperial}</option>
+                  <option value="meters">{TRANSLATIONS[currentLang].meters}</option>
+                  <option value="kilometers">{TRANSLATIONS[currentLang].kilometers}</option>
+                  <option value="feet">{TRANSLATIONS[currentLang].feet}</option>
+                  <option value="miles">{TRANSLATIONS[currentLang].miles}</option>
                 </select>
               )}
               <ChevronDown className="select-arrow" size={16} />
@@ -227,21 +298,21 @@ const Analysis3DPanel = ({ view, is3D }) => {
           </div>
 
           <div className="results-card">
-            <span className="section-label">Results</span>
+            <span className="section-label">{TRANSLATIONS[currentLang].results}</span>
             <div className="results-list">
               
               {activeTool === 'distance' && measureData && (
                 <>
                   <div className="result-item">
-                    <span className="res-label">Direct</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].direct}</span>
                     <span className="res-value">{measureData.directDistance?.text || '--'}</span>
                   </div>
                   <div className="result-item">
-                    <span className="res-label">Horizontal</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].horizontal}</span>
                     <span className="res-value">{measureData.horizontalDistance?.text || '--'}</span>
                   </div>
                   <div className="result-item">
-                    <span className="res-label">Vertical</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].vertical}</span>
                     <span className="res-value">{measureData.verticalDistance?.text || '--'}</span>
                   </div>
                 </>
@@ -250,11 +321,11 @@ const Analysis3DPanel = ({ view, is3D }) => {
               {activeTool === 'area' && measureData && (
                 <>
                   <div className="result-item">
-                    <span className="res-label">Area</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].area}</span>
                     <span className="res-value">{measureData.area?.text || '--'}</span>
                   </div>
                   <div className="result-item">
-                    <span className="res-label">Perimeter</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].perimeter}</span>
                     <span className="res-value">{measureData.perimeterLength?.text || '--'}</span>
                   </div>
                 </>
@@ -263,15 +334,15 @@ const Analysis3DPanel = ({ view, is3D }) => {
               {activeTool === 'volume' && (
                 <>
                   <div className="result-item">
-                    <span className="res-label">Cut Volume</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].cutVolume}</span>
                     <span className="res-value">{(measureData?.cutVolume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} m³</span>
                   </div>
                   <div className="result-item">
-                    <span className="res-label">Fill Volume</span>
+                    <span className="res-label">{TRANSLATIONS[currentLang].fillVolume}</span>
                     <span className="res-value">{(measureData?.fillVolume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} m³</span>
                   </div>
                   <div className="result-item" style={{ borderTop: '1px solid #e2e8f0', marginTop: '8px', paddingTop: '8px' }}>
-                    <span className="res-label" style={{ fontWeight: '700', color: '#1a2f4d' }}>Net Volume</span>
+                    <span className="res-label" style={{ fontWeight: '700', color: '#1a2f4d' }}>{TRANSLATIONS[currentLang].netVolume}</span>
                     <span className="res-value" style={{ 
                       fontWeight: '700',
                       color: (measureData?.netVolume ?? 0) < 0 ? '#df261c' : '#10b981' 
@@ -284,7 +355,7 @@ const Analysis3DPanel = ({ view, is3D }) => {
 
               {(!measureData && activeTool !== 'volume') && (
                 <div style={{ fontSize: '13px', color: '#64748b', padding: '10px 0' }}>
-                  Click on the map to start drawing.
+                  {TRANSLATIONS[currentLang].emptyState}
                 </div>
               )}
             </div>
@@ -294,7 +365,7 @@ const Analysis3DPanel = ({ view, is3D }) => {
         <div className="measure-footer-wrapper">
           <div className="measure-footer-content">
             <button className="new-measure-btn" onClick={handleNewMeasurement}>
-              New Measurement
+              {TRANSLATIONS[currentLang].newMeasurement}
             </button>
           </div>
         </div>
@@ -307,18 +378,18 @@ const Analysis3DPanel = ({ view, is3D }) => {
       {/* ── LEFT SIDE: Analysis Tools Panel ── */}
       <div className="a3d-tools-panel">
         <div className="a3d-tools-header">
-          <span>3D Analysis</span>
+          <span>{TRANSLATIONS[currentLang].title}</span>
         </div>
         <div className="a3d-tools-grid">
-          {TOOLS.map(({ id, icon, label }) => (
+          {TOOLS.map(({ id, icon }) => (
             <button
               key={id}
               className={`a3d-tool-btn ${activeTool === id ? 'active' : ''}`}
               onClick={() => activateTool(id)}
-              title={label}
+              title={TRANSLATIONS[currentLang][id]}
             >
               <div className="a3d-tool-icon">{icon}</div>
-              <span className="a3d-tool-label">{label}</span>
+              <span className="a3d-tool-label">{TRANSLATIONS[currentLang][id]}</span>
             </button>
           ))}
         </div>

@@ -24,7 +24,7 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
     if (multi) {
       displayLabel = selectedOptions.length === 1 
         ? (selectedOptions[0].title || selectedOptions[0].label || selectedOptions[0])
-        : `${selectedOptions.length} layers selected`;
+        : `${selectedOptions.length} items selected`;
     } else {
       const selected = selectedOptions[0];
       displayLabel = selected.title || selected.label || selected;
