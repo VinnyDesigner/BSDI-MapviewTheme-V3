@@ -72,15 +72,7 @@ const BottomToolbar = ({
                     title={tool.id === 'split' ? "Swipe Maps" : label}
                     aria-label={label}
                   >
-                    {tool.id === 'split' ? (
-                      <i className="material-icons" style={{ fontSize: '18px' }}>
-                        {swipeMode === 'horizontal' ? 'swap_horiz' : 'swap_vert'}
-                      </i>
-                    ) : tool.id === 'split_view' ? (
-                      <i className="material-icons" style={{ fontSize: '18px' }}>splitscreen</i>
-                    ) : (
-                      <Icon size={18} />
-                    )}
+                    <Icon size={16} />
                   </button>
                 );
               })}

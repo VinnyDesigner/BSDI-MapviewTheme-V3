@@ -25,6 +25,7 @@ import CustomSelect from '../components/CustomSelect';
 import LayersPanel from '../components/LayersPanel';
 import TreeSelect from '../components/TreeSelect';
 import GPPanel from '../geoprocessing/GPPanel';
+import ProjectDataPanel from '../components/ProjectDataPanel';
 import { useLanguage } from '../context/LanguageContext';
 
 // Bahrain geometry safety guard
@@ -1251,6 +1252,7 @@ export const PANEL_REGISTRY = {
   measure: MeasurePanel,
   draw: DrawPanel,
   add_data: AddDataPanel,
+  project_data: ProjectDataPanel,
   print: PrintPanel,
   arcade: ArcadePanel,
   time_compare: TemporalFilterPanel,

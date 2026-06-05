@@ -12,6 +12,7 @@ import DownloadRestrictedModal from './components/DownloadRestrictedModal'
 import Analysis3DPanel from './components/Analysis3DPanel'
 import { getPanelComponent } from './registry/panelRegistry'
 import { layersConfig } from './layers'
+import { TOOL_REGISTRY } from './registry/toolRegistry'
 import { ewaWddTree } from './ewa_wdd_config'
 import { LanguageProvider, useLanguage } from './context/LanguageContext'
 import { translations } from './i18n/translations'
@@ -42,42 +43,21 @@ function AppInner() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const drawerTools = [
-    { id: 'layers', icon: Layers, label: translations[lang].tools.layers ?? 'Layers' },
-    { id: 'time_compare', icon: (props) => (
-      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <polyline points="12 6 12 12 16 14"/>
-        <path d="M16 12h-4V8" opacity="0.3"/>
-        <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
-      </svg>
-    ), label: translations[lang].tools.time_compare ?? 'Timelapse' },
-    { id: 'split', icon: Columns2, label: translations[lang].tools.split ?? 'Swipe' },
-    { id: 'split_view', icon: (props) => <i {...props} className={`material-icons ${props.className || ''}`} style={{ fontSize: '20px' }}>splitscreen</i>, label: translations[lang].tools.split_view ?? 'Split View' },
-    { id: 'blend', icon: (props) => (
-      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <circle cx="8" cy="12" r="7" />
-        <circle cx="16" cy="12" r="7" />
-      </svg>
-    ), label: translations[lang].tools.blend ?? 'Blend' },
-    { id: 'arcade', icon: (props) => (
-      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
-      </svg>
-    ), label: translations[lang].tools.arcade ?? 'Arcade' },
-    { id: 'spatial_analysis', icon: (props) => (
-      <svg {...props} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-        <path d="M22 12A10 10 0 0 0 12 2v10z" />
-      </svg>
-    ), label: translations[lang].tools.spatial_analysis ?? 'Spatial Analysis' },
-    { id: 'navigation', icon: Navigation, label: translations[lang].tools.navigation ?? 'Navigation' },
-    { id: 'measure', icon: Ruler, label: translations[lang].tools.measure ?? 'Measure' },
-    { id: 'draw', icon: Pencil, label: translations[lang].tools.draw ?? 'Draw' },
-    { id: 'data_request', icon: Database, label: translations[lang].tools.data_request ?? 'Data Request' },
-    { id: 'add_data', icon: Globe, label: translations[lang].tools.add_data ?? 'Add Data' },
-    { id: 'print', icon: Printer, label: translations[lang].tools.print ?? 'Print' },
-    { id: 'bookmark', icon: Bookmark, label: translations[lang].tools.bookmark ?? 'Bookmark' },
-    { id: 'geoprocessing', icon: Cpu, label: 'Geoprocessing' }
+    { id: 'layers', icon: TOOL_REGISTRY.layers.icon, label: translations[lang].tools.layers ?? 'Layers' },
+    { id: 'time_compare', icon: TOOL_REGISTRY.time_compare.icon, label: translations[lang].tools.time_compare ?? 'Timelapse' },
+    { id: 'split', icon: TOOL_REGISTRY.split.icon, label: translations[lang].tools.split ?? 'Swipe' },
+    { id: 'split_view', icon: TOOL_REGISTRY.split_view.icon, label: translations[lang].tools.split_view ?? 'Split View' },
+    { id: 'blend', icon: TOOL_REGISTRY.blend.icon, label: translations[lang].tools.blend ?? 'Blend' },
+    { id: 'arcade', icon: TOOL_REGISTRY.arcade.icon, label: translations[lang].tools.arcade ?? 'Arcade' },
+    { id: 'spatial_analysis', icon: TOOL_REGISTRY.spatial_analysis.icon, label: translations[lang].tools.spatial_analysis ?? 'Spatial Analysis' },
+    { id: 'navigation', icon: TOOL_REGISTRY.navigation.icon, label: translations[lang].tools.navigation ?? 'Navigation' },
+    { id: 'measure', icon: TOOL_REGISTRY.measure.icon, label: translations[lang].tools.measure ?? 'Measure' },
+    { id: 'draw', icon: TOOL_REGISTRY.draw.icon, label: translations[lang].tools.draw ?? 'Draw' },
+    { id: 'data_request', icon: TOOL_REGISTRY.data_request.icon, label: translations[lang].tools.data_request ?? 'Data Request' },
+    { id: 'add_data', icon: TOOL_REGISTRY.add_data.icon, label: translations[lang].tools.add_data ?? 'Add Data' },
+    { id: 'print', icon: TOOL_REGISTRY.print.icon, label: translations[lang].tools.print ?? 'Print' },
+    { id: 'bookmark', icon: TOOL_REGISTRY.bookmark.icon, label: translations[lang].tools.bookmark ?? 'Bookmark' },
+    { id: 'geoprocessing', icon: TOOL_REGISTRY.geoprocessing.icon, label: 'Geoprocessing' }
   ];
 
   const handleMobileToolSelect = (toolId) => {
@@ -890,42 +870,10 @@ function AppInner() {
 
   // ── Tool icon lookup ────────────────────────────────────────────────────────
   const getToolIcon = (toolId) => {
-    const icons = {
-      layers: <Layers size={16} />, search: <Search size={16} />,
-      navigation: <Navigation size={16} />, measure: <Ruler size={16} />,
-      draw: <Pencil size={16} />, cad: <Box size={16} />,
-      data_request: <Database size={16} />, add_data: <Globe size={16} />,
-      print: <Printer size={16} />, bookmark: <Bookmark size={16} />,
-      identify:     <Info size={16} />, 
-      split:        <Columns2 size={16} />,
-      split_view:   <i className="material-icons" style={{ fontSize: '16px' }}>splitscreen</i>,
-      blend: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="8" cy="12" r="7" />
-          <circle cx="16" cy="12" r="7" />
-        </svg>
-      ),
-      time_compare: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-          <path d="M16 12h-4V8" opacity="0.3"/>
-          <path d="M12 2a10 10 0 0 1 10 10M12 22A10 10 0 0 1 2 12" strokeDasharray="4 2"/>
-        </svg>
-      ),
-      arcade: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" />
-        </svg>
-      ),
-      spatial_analysis: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-          <path d="M22 12A10 10 0 0 0 12 2v10z" />
-        </svg>
-      )
-    };
-    return icons[toolId] ?? null;
+    const entry = TOOL_REGISTRY[toolId];
+    if (!entry) return null;
+    const IconComponent = entry.icon;
+    return <IconComponent size={16} />;
   }
 
   // ── Panel title — reads from nested panelTitles map ──────────────────────

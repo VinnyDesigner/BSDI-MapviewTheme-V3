@@ -130,8 +130,8 @@ const ArcGISMap = ({
     const view = new MapView({
       container: map2DDiv.current,
       map: map,
-      center: [50.55, 26.22],
-      zoom: 9,
+      center: [50.55, 26.02],
+      zoom: 10.6,
       ui: { components: [] },
       popupEnabled: false
     });
@@ -202,6 +202,22 @@ const ArcGISMap = ({
       if (!is3D) {
         setIsLoading(false);
         if (onViewReady) onViewReady(view);
+
+        // Zoom dynamically to Bahrain boundary layer (gov-time-date) extent if loaded, otherwise center
+        const boundaryLayer = map.findLayerById('gov-time-date');
+        if (boundaryLayer) {
+          boundaryLayer.when(() => {
+            boundaryLayer.queryExtent().then((response) => {
+              if (response && response.extent) {
+                view.goTo(response.extent.expand(0.9));
+              }
+            }).catch(err => {
+              console.warn("[MapView] Dynamic extent query failed, using default Bahrain center", err);
+            });
+          }).catch(err => {
+            console.warn("[MapView] Boundary layer failed to load, using default Bahrain center", err);
+          });
+        }
       }
     });
 
@@ -1899,7 +1915,7 @@ const ArcGISMap = ({
 
       view.map.allLayers.forEach(layer => {
         if (SYSTEM_IDS.has(layer.id)) return;
-        if (!layer.id?.startsWith('uploaded-')) return;
+        if (!layer.id?.startsWith('uploaded-') && !layer.id?.startsWith('project-cad-')) return;
 
         // Respect visibility
         const isVisible = Object.prototype.hasOwnProperty.call(layerVisibility, layer.id)

@@ -9,7 +9,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
   const handleZoomIn  = () => { if (view) view.zoom += 1; };
   const handleZoomOut = () => { if (view) view.zoom -= 1; };
   const handleHome    = () => {
-    if (view) view.goTo({ center: [50.55, 26.22], zoom: 9 });
+    if (view) view.goTo({ center: [50.55, 26.02], zoom: 10.6 });
   };
   
 
@@ -17,7 +17,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
     <div className="map-controls-container">
       {/* 1. Home */}
       <button className="map-control-btn square" onClick={handleHome} title={t('home')}>
-        <Home size={18} />
+        <Home size={15} />
       </button>
 
       {/* 2. Identify */}
@@ -26,7 +26,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
         onClick={() => onToolSelect('identify')}
         title={t('identify')}
       >
-        <Info size={18} />
+        <Info size={15} />
       </button>
 
       {/* 3. 2D / 3D Toggle */}
@@ -46,7 +46,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
           onClick={() => onToolSelect('basemap')} 
           title="Basemap"
         >
-          <Map size={18} />
+          <Map size={15} />
         </button>
       )}
 
@@ -56,7 +56,7 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
         onClick={() => onToolSelect(null)}
         title={t('pan')}
       >
-        <Hand size={18} />
+        <Hand size={15} />
       </button>
 
       <div className="control-divider" />
@@ -64,11 +64,11 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
       {/* 6. Zoom Group */}
       <div className="map-control-group-square">
         <button className="map-control-btn sub-btn" onClick={handleZoomIn} title={t('zoomIn')}>
-          <Plus size={18} />
+          <Plus size={15} />
         </button>
         <div className="inner-divider" />
         <button className="map-control-btn sub-btn" onClick={handleZoomOut} title={t('zoomOut')}>
-          <Minus size={18} />
+          <Minus size={15} />
         </button>
       </div>
     </div>

@@ -10,7 +10,7 @@ export const toolbarConfig = {
     },
     {
       id: 'data',
-      toolIds: ['data_request', 'add_data']
+      toolIds: ['data_request', 'add_data', 'project_data']
     },
     {
       id: 'output',

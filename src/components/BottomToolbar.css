@@ -7,10 +7,10 @@
   --primary-glow: rgba(223, 38, 28, 0.3);
   --btn-bg: #ffffff;
   --btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --icon-size: 44px;
-  --icon-inner: 20px;
-  --group-spacing: 6px; /* Reduced space between categories */
-  --btn-spacing: 6px; /* Also slightly reduced for consistency */
+  --icon-size: 38px;
+  --icon-inner: 16px;
+  --group-spacing: 4px; /* Reduced space between categories */
+  --btn-spacing: 4px; /* Also slightly reduced for consistency */
 }
 
 .bottom-toolbar-container {
@@ -27,7 +27,7 @@
 
 .toolbar-wrapper {
   position: relative;
-  padding: 6px 10px; /* 6px top/bottom, 10px left/right */
+  padding: 4px 8px; /* Reduced padding */
   display: flex;
   align-items: center;
   gap: var(--group-spacing);
@@ -55,8 +55,8 @@
 
 .toolbar-wrapper.has-active-tool::before {
   /* Concave Cut-out Mask centered exactly with the elevated icon */
-  -webkit-mask: radial-gradient(circle 28px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
-  mask: radial-gradient(circle 28px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
+  -webkit-mask: radial-gradient(circle 24px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
+  mask: radial-gradient(circle 24px at var(--notch-x, 50%) 4px, transparent 98%, black 100%);
 }
 
 .toolbar-wrapper::-webkit-scrollbar {
@@ -106,7 +106,7 @@
   ) !important;
   color: white;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  transform: translateY(-26px) scale(1.05);
+  transform: translateY(-22px) scale(1.05);
   border: none !important;
 }
 

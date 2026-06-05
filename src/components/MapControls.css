@@ -16,8 +16,8 @@
 }
 
 .map-control-btn {
-  width: 34px; /* Reduced from 38px */
-  height: 34px; /* Reduced from 38px */
+  width: 30px; /* Reduced from 34px */
+  height: 30px; /* Reduced from 34px */
   background: rgba(255, 255, 255, 0.8); /* Reduced opacity */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -41,8 +41,8 @@
 }
 
 .map-control-btn svg {
-  width: 18px; /* Slightly smaller icons for smaller buttons */
-  height: 18px;
+  width: 15px; /* Reduced from 18px */
+  height: 15px;
 }
 
 .map-control-btn.active {
@@ -74,7 +74,7 @@
 
 .toggle-text {
   font-family: 'Inter', sans-serif;
-  font-size: 13px; /* Slightly smaller text */
+  font-size: 11px; /* Reduced from 13px */
   font-weight: 800;
   letter-spacing: -0.5px;
 }
@@ -97,8 +97,8 @@
 }
 
 .map-control-group-square .sub-btn {
-  width: 34px;
-  height: 34px;
+  width: 30px; /* Reduced from 34px */
+  height: 30px; /* Reduced from 34px */
   background: transparent;
   border: none;
   border-radius: 0;

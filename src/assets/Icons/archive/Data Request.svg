@@ -1,0 +1,10 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="10" cy="6" rx="6" ry="2.5" />
+  <path d="M4 6v11c0 1.4 2.7 2.5 6 2.5c.8 0 1.6-.1 2.3-.2" />
+  <path d="M4 11.5c0 1.4 2.7 2.5 6 2.5c1 0 1.9-.1 2.7-.4" />
+  <path d="M16 6v5" />
+  <line x1="6" y1="8.5" x2="8" y2="8.5" />
+  <line x1="6" y1="14" x2="8" y2="14" />
+  <circle cx="17" cy="17" r="4.5" />
+  <polyline points="15 17 16.5 18.5 19 15" />
+</svg>
