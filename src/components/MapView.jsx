@@ -130,8 +130,13 @@ const ArcGISMap = ({
     const view = new MapView({
       container: map2DDiv.current,
       map: map,
-      center: [50.55, 26.02],
-      zoom: 10.6,
+      extent: {
+        xmin: 50.25,
+        ymin: 25.50,
+        xmax: 50.90,
+        ymax: 26.40,
+        spatialReference: { wkid: 4326 }
+      },
       ui: { components: [] },
       popupEnabled: false
     });
@@ -202,22 +207,6 @@ const ArcGISMap = ({
       if (!is3D) {
         setIsLoading(false);
         if (onViewReady) onViewReady(view);
-
-        // Zoom dynamically to Bahrain boundary layer (gov-time-date) extent if loaded, otherwise center
-        const boundaryLayer = map.findLayerById('gov-time-date');
-        if (boundaryLayer) {
-          boundaryLayer.when(() => {
-            boundaryLayer.queryExtent().then((response) => {
-              if (response && response.extent) {
-                view.goTo(response.extent.expand(0.9));
-              }
-            }).catch(err => {
-              console.warn("[MapView] Dynamic extent query failed, using default Bahrain center", err);
-            });
-          }).catch(err => {
-            console.warn("[MapView] Boundary layer failed to load, using default Bahrain center", err);
-          });
-        }
       }
     });
 

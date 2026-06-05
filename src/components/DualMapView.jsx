@@ -116,8 +116,13 @@ const DualMapView = ({ isSplitView, splitLayers, splitBasemaps, splitModes, base
         return new MapView({
           container,
           map,
-          center: [50.55, 26.22],
-          zoom: 12,
+          extent: {
+            xmin: 50.25,
+            ymin: 25.50,
+            xmax: 50.90,
+            ymax: 26.40,
+            spatialReference: { wkid: 4326 }
+          },
           ui: { components: [] },
           popupEnabled: false
         });

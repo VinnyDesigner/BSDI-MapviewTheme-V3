@@ -72,7 +72,7 @@ const BottomToolbar = ({
                     title={tool.id === 'split' ? "Swipe Maps" : label}
                     aria-label={label}
                   >
-                    <Icon size={16} />
+                    <Icon size={18} />
                   </button>
                 );
               })}
