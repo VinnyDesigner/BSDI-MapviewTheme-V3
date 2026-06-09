@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, X, Plus, Filter, Trash2, ArrowRight, ArrowLeft, Play, Check, 
-  RotateCcw, SlidersHorizontal, RefreshCw, ZoomIn, Info, AlertTriangle, ChevronDown
+  RotateCcw, SlidersHorizontal, RefreshCw, ZoomIn, Info, AlertTriangle, ChevronDown, Pencil
 } from 'lucide-react';
 import Graphic from '@arcgis/core/Graphic';
 import TreeSelect from './TreeSelect';
@@ -378,7 +378,13 @@ const AdvancedQueryPanel = ({
   mapView,
   treeData,
   layersConfig,
-  dynamicMapServerData
+  dynamicMapServerData,
+  results: addDataResults,
+  setResults: setAddDataResults,
+  layerOrder,
+  setLayerOrder,
+  layerVisibility,
+  setLayerVisibility
 }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
@@ -444,6 +450,64 @@ const AdvancedQueryPanel = ({
   const [isQuerying, setIsQuerying] = useState(false);
   const [hasQueried, setHasQueried] = useState(false);
   const [highlightedFeatureId, setHighlightedFeatureId] = useState(null);
+
+  // Selected checkboxes for temporary layer
+  const [checkedOids, setCheckedOids] = useState([]);
+  const [mergeSelected, setMergeSelected] = useState(true);
+  const [toastMessage, setToastMessage] = useState('');
+  const [layersCount, setLayersCount] = useState(0);
+
+  const [customNames, setCustomNames] = useState({});
+  const [editingFeature, setEditingFeature] = useState(null); // { feature, index }
+  const [newNameValue, setNewNameValue] = useState("");
+
+  const getFeatureKey = (feature, index) => {
+    if (!feature || !feature.attributes) return `idx-${index}`;
+    const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+    const oid = feature.attributes[oidField];
+    if (oid !== undefined && oid !== null) {
+      return `oid-${oid}`;
+    }
+    return `idx-${index}`;
+  };
+
+  const handleSaveRename = () => {
+    if (!editingFeature) return;
+    const key = getFeatureKey(editingFeature.feature, editingFeature.index);
+    if (newNameValue.trim()) {
+      setCustomNames(prev => ({
+        ...prev,
+        [key]: newNameValue.trim()
+      }));
+    } else {
+      setCustomNames(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+    setEditingFeature(null);
+  };
+
+  useEffect(() => {
+    if (!mapView || !mapView.map) return;
+    
+    setLayersCount(mapView.map.layers.length);
+
+    const handle = mapView.map.layers.on("change", () => {
+      setLayersCount(mapView.map.layers.length);
+    });
+
+    return () => {
+      handle.remove();
+    };
+  }, [mapView]);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
 
   // Dynamic treeData fallback builder
   const builtTreeData = useMemo(() => {
@@ -537,6 +601,16 @@ const AdvancedQueryPanel = ({
       (selectedLayerId && l.id.startsWith(`${selectedLayerId}_sub_`))
     );
   }, [selectedLayerId, layersList]);
+
+  // Auto-check all query results on query complete
+  useEffect(() => {
+    if (results && results.length > 0) {
+      const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+      setCheckedOids(results.map(f => f.attributes[oidField]).filter(id => id !== undefined && id !== null));
+    } else {
+      setCheckedOids([]);
+    }
+  }, [results, selectedLayerItem]);
 
   // Load active layers on startup and layer updates
   useEffect(() => {
@@ -1133,9 +1207,233 @@ const AdvancedQueryPanel = ({
     setStep(3);
   };
 
+  // Temporary Analysis Layer helpers
+  const getLayerNameForFeature = (feature, index) => {
+    const key = getFeatureKey(feature, index);
+    if (customNames[key]) {
+      return customNames[key];
+    }
+    const attrs = feature.attributes || {};
+    const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+    const oid = attrs[oidField] || (index + 1);
+
+    const candidates = ['governorate', 'name', 'title', 'label', 'block_no', 'block'];
+    for (const key of candidates) {
+      const actualKey = Object.keys(attrs).find(k => k.toLowerCase() === key);
+      if (actualKey && attrs[actualKey]) {
+        const val = attrs[actualKey];
+        if (key === 'governorate') {
+          if (typeof val === 'string' && val.toLowerCase() === 'capital') {
+            return `Selected Feature - Capital`;
+          }
+          return `Governorate_ID_${oid}`;
+        }
+        return `Selected Feature - ${val}`;
+      }
+    }
+    return `Query Result - ${String(oid).padStart(3, '0')}`;
+  };
+
+  const handleAddLayer = async (featuresToAdd, layerName) => {
+    if (!mapView || !featuresToAdd || featuresToAdd.length === 0) return;
+
+    try {
+      const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer');
+      const FeatureLayer = FeatureLayerModule.default || FeatureLayerModule;
+      const SpatialReferenceModule = await import('@arcgis/core/geometry/SpatialReference');
+      const SpatialReference = SpatialReferenceModule.default || SpatialReferenceModule;
+      
+      const mapSR = mapView.spatialReference;
+      const geomType = featuresToAdd[0].geometry?.type || 'point';
+
+      // Pick a color
+      const LAYER_COLORS = [
+        [30, 60, 114],   // Blue
+        [16, 185, 129],  // Emerald Green
+        [245, 158, 11],  // Amber Yellow
+        [139, 92, 246],  // Purple
+        [223, 38, 28],   // Red
+        [236, 72, 153],  // Pink
+        [6, 182, 212],   // Cyan
+        [100, 116, 139]  // Slate
+      ];
+      const color = LAYER_COLORS[Math.floor(Math.random() * LAYER_COLORS.length)];
+
+      const symbol = {
+        point: {
+          type: 'simple-marker',
+          color: color,
+          outline: { color: [255, 255, 255], width: 1 },
+          size: 9
+        },
+        polyline: {
+          type: 'simple-line',
+          color: color,
+          width: 2.5
+        },
+        polygon: {
+          type: 'simple-fill',
+          color: [...color, 0.4],
+          outline: { color: color, width: 1.5 }
+        }
+      }[geomType] || {
+        type: 'simple-marker',
+        color: color,
+        size: 8
+      };
+
+      // Extract attributes and fields
+      const sampleAttrs = featuresToAdd[0].attributes || {};
+      const fields = [
+        { name: "ObjectID", alias: "ObjectID", type: "oid" }
+      ];
+      Object.keys(sampleAttrs).forEach(key => {
+        if (key !== "ObjectID") {
+          let type = "string";
+          if (typeof sampleAttrs[key] === 'number') {
+            type = "double";
+          }
+          fields.push({ name: key, alias: key, type: type });
+        }
+      });
+
+      const graphics = featuresToAdd.map((f, idx) => {
+        const attrs = { ...f.attributes };
+        if (attrs.ObjectID === undefined || attrs.ObjectID === null) {
+          attrs.ObjectID = idx + 1;
+        }
+        return new Graphic({
+          geometry: f.geometry,
+          attributes: attrs
+        });
+      });
+
+      const childLayerId = `uploaded-geojson-child-${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2)}`;
+      const parentId = `uploaded-geojson-parent-${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2)}`;
+
+      const layer = new FeatureLayer({
+        id: childLayerId,
+        title: layerName,
+        source: graphics,
+        geometryType: geomType,
+        objectIdField: "ObjectID",
+        fields: fields,
+        renderer: {
+          type: 'simple',
+          symbol
+        },
+        spatialReference: mapSR,
+        visible: false
+      });
+
+      mapView.map.add(layer);
+      mapView.map.reorder(layer, mapView.map.layers.length - 1);
+
+      // Register layer order and visibility
+      if (setLayerOrder) setLayerOrder(prev => [childLayerId, ...prev]);
+      if (setLayerVisibility) setLayerVisibility(prev => ({ ...prev, [childLayerId]: false, [parentId]: false }));
+
+      const childObj = {
+        id: childLayerId,
+        name: layerName,
+        visible: false,
+        layer,
+        color,
+        geometryType: geomType,
+        featureCount: featuresToAdd.length
+      };
+
+      const resultObj = {
+        id: parentId,
+        name: layerName,
+        date: new Date().toLocaleString(),
+        featureCount: featuresToAdd.length,
+        visible: false,
+        type: 'multi-file',
+        children: [childObj]
+      };
+
+      if (setAddDataResults) {
+        setAddDataResults(prev => [resultObj, ...prev]);
+      }
+
+      showToast(isRTL ? "تمت إضافة المعلم كطبقة تحليل بنجاح." : "Feature successfully added as analysis layer.");
+    } catch (err) {
+      console.error("Failed to add temporary analysis layer:", err);
+      showToast(isRTL ? "فشل في إضافة الطبقة." : "Failed to add layer.");
+    }
+  };
+
+  const isFeatureAdded = (feature, idx) => {
+    if (!mapView || !mapView.map) return false;
+    const layerName = getLayerNameForFeature(feature, idx);
+    return mapView.map.layers.some(l => l.title === layerName);
+  };
+
+  const isBulkAdded = () => {
+    if (!mapView || !mapView.map || checkedOids.length === 0) return false;
+    if (mergeSelected) {
+      const mergedName = `${selectedLayerItem?.title || 'Query Result'} - Merged`;
+      return mapView.map.layers.some(l => l.title === mergedName);
+    } else {
+      const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+      const selectedFeatures = results.filter(f => checkedOids.includes(f.attributes[oidField]));
+      if (selectedFeatures.length === 0) return false;
+      return selectedFeatures.every((feat) => {
+        const idx = results.indexOf(feat);
+        const layerName = getLayerNameForFeature(feat, idx);
+        return mapView.map.layers.some(l => l.title === layerName);
+      });
+    }
+  };
+
+  const handleAddSingleFeature = async (feature, idx) => {
+    // Prevent duplicate addition if it's already added
+    if (isFeatureAdded(feature, idx)) return;
+    const layerName = getLayerNameForFeature(feature, idx);
+    await handleAddLayer([feature], layerName);
+  };
+
+  const handleAddSelectedFeatures = async () => {
+    const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+    const selectedFeatures = results.filter(f => checkedOids.includes(f.attributes[oidField]));
+    
+    if (selectedFeatures.length === 0) {
+      showToast(isRTL ? "الرجاء اختيار ميزات أولاً." : "Please select features first.");
+      return;
+    }
+
+    if (mergeSelected) {
+      const mergedName = `${selectedLayerItem?.title || 'Query Result'} - Merged`;
+      await handleAddLayer(selectedFeatures, mergedName);
+    } else {
+      // Create separate layers
+      for (let i = 0; i < selectedFeatures.length; i++) {
+        const feat = selectedFeatures[i];
+        const layerName = getLayerNameForFeature(feat, i);
+        await handleAddLayer([feat], layerName);
+      }
+    }
+  };
+
   // Zoom & highlight helper
   const handleFeatureClick = async (feature) => {
     if (!mapView || !feature.geometry) return;
+
+    // Show the added layer on Zoom To
+    const idx = results.indexOf(feature);
+    const layerName = getLayerNameForFeature(feature, idx);
+    const mergedName = `${selectedLayerItem?.title || 'Query Result'} - Merged`;
+    if (mapView.map && mapView.map.layers) {
+      mapView.map.layers.forEach(l => {
+        if (l.title === layerName || l.title === mergedName) {
+          l.visible = true;
+          if (setLayerVisibility) {
+            setLayerVisibility(prev => ({ ...prev, [l.id]: true }));
+          }
+        }
+      });
+    }
     
     const oidField = selectedLayerItem.rawLayer.objectIdField || 'OBJECTID';
     const oid = feature.attributes[oidField];
@@ -1355,8 +1653,13 @@ const AdvancedQueryPanel = ({
   };
 
   // Get label preview helper
-  const getFeatureLabel = (feature) => {
-    if (!feature || !feature.attributes) return 'Feature';
+  const getFeatureLabel = (feature, index) => {
+    if (!feature) return 'Feature';
+    const key = getFeatureKey(feature, index);
+    if (customNames[key]) {
+      return customNames[key];
+    }
+    if (!feature.attributes) return 'Feature';
     const attrs = feature.attributes;
     
     const candidates = ['name', 'title', 'label', 'governorate', 'block_no', 'survey_year', 'block', 'id'];
@@ -1807,6 +2110,114 @@ const AdvancedQueryPanel = ({
           {/* Results Screen Scrollable Content */}
           <div style={{ flex: 1, padding: '0px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }} className="aq-scrollable-content">
             
+            {/* Bulk Export Options */}
+            {results.length > 0 && (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                marginBottom: '4px',
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e293b' }}>
+                    {isRTL ? "خيارات التصدير الجماعي" : "Bulk Export Options"}
+                  </span>
+                  <button
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#df261c',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: 0
+                    }}
+                    onClick={() => {
+                      const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
+                      if (checkedOids.length === results.length) {
+                        setCheckedOids([]);
+                      } else {
+                        setCheckedOids(results.map(f => f.attributes[oidField]).filter(id => id !== undefined && id !== null));
+                      }
+                    }}
+                  >
+                    {checkedOids.length === results.length 
+                      ? (isRTL ? "إلغاء تحديد الكل" : "Deselect All") 
+                      : (isRTL ? "تحديد الكل" : "Select All")}
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 500, color: '#475569', userSelect: 'none' }}>
+                    <input 
+                      type="checkbox"
+                      checked={mergeSelected}
+                      onChange={(e) => setMergeSelected(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    {isRTL ? "دمج في طبقة واحدة" : "Merge into single layer"}
+                  </label>
+                  
+                  {isBulkAdded() ? (
+                    <button
+                      disabled
+                      style={{
+                        background: '#10b981',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        cursor: 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'background-color 0.2s',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <Check size={12} />
+                      <span>
+                        {isRTL ? "تمت الإضافة للموقع" : "Added to Map"}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      style={{
+                        background: '#df261c',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'background-color 0.2s',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                      onClick={handleAddSelectedFeatures}
+                    >
+                      <Plus size={12} />
+                      <span>
+                        {isRTL 
+                          ? `إضافة المحدد (${checkedOids.length})` 
+                          : `Add Selected (${checkedOids.length})`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Results List */}
             {results.length === 0 ? (
               !isQuerying && (
@@ -1835,13 +2246,14 @@ const AdvancedQueryPanel = ({
                   const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
                   const oid = feature.attributes[oidField];
                   const isHighlighted = highlightedFeatureId === oid;
+                  const isChecked = checkedOids.includes(oid);
                   return (
                     <div 
                       key={idx} 
                       className={`aq-result-item ${isHighlighted ? 'highlighted' : ''}`}
                       onClick={() => handleFeatureClick(feature)}
                       style={{
-                        padding: '10px 12px',
+                        padding: '8px 10px',
                         borderRadius: '8px',
                         background: isHighlighted ? '#fef2f2' : '#ffffff',
                         border: isHighlighted ? '1px solid #fca5a5' : '1px solid #e2e8f0',
@@ -1853,41 +2265,213 @@ const AdvancedQueryPanel = ({
                         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                       }}
                     >
-                      <div className="aq-result-item-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className="aq-result-item-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <input 
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            if (e.target.checked) {
+                              setCheckedOids(prev => [...prev, oid]);
+                            } else {
+                              setCheckedOids(prev => prev.filter(id => id !== oid));
+                            }
+                          }}
+                          style={{ cursor: 'pointer', marginRight: isRTL ? 0 : '4px', marginLeft: isRTL ? '4px' : 0 }}
+                        />
                         <span className="aq-result-index" style={{
-                          width: '20px',
-                          height: '20px',
+                          width: '18px',
+                          height: '18px',
                           borderRadius: '50%',
                           background: isHighlighted ? '#ef4444' : '#f1f5f9',
                           color: isHighlighted ? '#ffffff' : '#475569',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '11px',
-                          fontWeight: 700
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          flexShrink: 0
                         }}>{idx + 1}</span>
-                        <span className="aq-result-label" style={{
-                          fontSize: '13px',
-                          color: isHighlighted ? '#991b1b' : '#334155',
-                          fontWeight: isHighlighted ? 600 : 500,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          maxWidth: '220px'
-                        }}>{getFeatureLabel(feature)}</span>
+                        {editingFeature && editingFeature.index === idx ? (
+                          <div style={{ flex: 1, minWidth: 0, paddingRight: isRTL ? 0 : '8px', paddingLeft: isRTL ? '8px' : 0 }} onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={newNameValue}
+                              onChange={(e) => setNewNameValue(e.target.value)}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRename();
+                                if (e.key === 'Escape') setEditingFeature(null);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                border: '1.5px solid #cbd5e1',
+                                borderRadius: '4px',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                background: '#ffffff',
+                                color: '#334155'
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <span className="aq-result-label" style={{
+                            fontSize: '12px',
+                            color: isHighlighted ? '#991b1b' : '#334155',
+                            fontWeight: isHighlighted ? 600 : 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            flex: 1
+                          }}>{getFeatureLabel(feature, idx)}</span>
+                        )}
                       </div>
-                      <ZoomIn 
-                        size={14} 
-                        className="aq-zoom-icon" 
-                        style={{
-                          color: isHighlighted ? '#ef4444' : '#64748b',
-                          transition: 'color 0.2s'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFeatureClick(feature);
-                        }}
-                      />
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                        {editingFeature && editingFeature.index === idx ? (
+                          <>
+                            <button
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#10b981',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSaveRename();
+                              }}
+                              title={isRTL ? "حفظ" : "Save"}
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingFeature(null);
+                              }}
+                              title={isRTL ? "إلغاء" : "Cancel"}
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isHighlighted ? '#ef4444' : '#64748b',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingFeature({ feature, index: idx });
+                                setNewNameValue(customNames[getFeatureKey(feature, idx)] || getFeatureLabel(feature, idx));
+                              }}
+                              title={isRTL ? "إعادة تسمية" : "Rename"}
+                            >
+                              <Pencil size={13} />
+                            </button>
+
+                            <button
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isHighlighted ? '#ef4444' : '#64748b',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                                transition: 'all 0.2s'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFeatureClick(feature);
+                              }}
+                              title={isRTL ? "تكبير" : "Zoom To"}
+                            >
+                              <ZoomIn size={13} />
+                            </button>
+                            
+                            {isFeatureAdded(feature, idx) ? (
+                              <button
+                                disabled
+                                style={{
+                                  background: '#ecfdf5',
+                                  border: '1px solid #a7f3d0',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  fontSize: '10px',
+                                  fontWeight: '600',
+                                  color: '#047857',
+                                  cursor: 'not-allowed',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '2px',
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                <Check size={10} />
+                                <span>{isRTL ? "تمت الإضافة" : "Added"}</span>
+                              </button>
+                            ) : (
+                              <button
+                                style={{
+                                  background: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '4px',
+                                  padding: '4px 6px',
+                                  fontSize: '10px',
+                                  fontWeight: '600',
+                                  color: '#1a2f4d',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '2px',
+                                  transition: 'all 0.2s'
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddSingleFeature(feature, idx);
+                                }}
+                                title={isRTL ? "إضافة كطبقة تحليل" : "Add as analysis layer"}
+                              >
+                                <Plus size={10} />
+                                <span>{isRTL ? "إضافة" : "Add"}</span>
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1930,6 +2514,29 @@ const AdvancedQueryPanel = ({
             </div>
           )}
         </div>
+
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div style={{
+            position: 'absolute',
+            bottom: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#1e293b',
+            color: '#ffffff',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: '600',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+            animation: 'fade-in 0.2s ease-out',
+            textAlign: 'center'
+          }}>
+            {toastMessage}
+          </div>
+        )}
 
       </div>
     </div>

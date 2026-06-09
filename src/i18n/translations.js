@@ -220,6 +220,14 @@ export const translations = {
     gpYes: 'Yes',
     gpNo: 'No',
     gpAddValue: '+ Add Value',
+    enterBufferDistance: 'Enter Distance',
+    selectDistanceUnit: 'Select Distance Unit',
+    selectMethod: 'Select Method',
+    selectDissolveType: 'Select Dissolve Type',
+    selectDissolveField: 'Select Dissolve Field',
+    'none': 'None',
+    'all': 'All',
+    'by-field': 'Field',
     
     // Default GP Tools
     'Buffer Analysis': 'Buffer Analysis',
@@ -253,6 +261,7 @@ export const translations = {
 
     // Legacy Spatial Analysis
     'Analysis': 'Analysis',
+    'Choose Analysis...': 'Choose Analysis...',
     'Select Analysis Tool': 'Select Analysis Tool',
     'Intersecting Layer': 'Intersecting Layer',
     'Select by Location': 'Select by Location',
@@ -270,6 +279,10 @@ export const translations = {
     'Running': 'Running',
     'Ready: Click any point on the map': 'Ready: Click any point on the map',
     'Start Tracking': 'Start Tracking',
+    'Submitting': 'Submitting',
+    'Executing': 'Executing',
+    'Generating Results': 'Generating Results',
+    'Completed': 'Completed',
 
     // ── Arcade Panel ──────────────────────────────────────
     'Symbology / Renderer': 'Symbology / Renderer',
@@ -347,6 +360,8 @@ export const translations = {
     view2D:            '2D View',
     view3D:            '3D View',
     view3DDisabled:    '3D view is not available in this mode',
+    compass:           'Reset Orientation to North',
+    compassLabel:      'Compass',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'Close panel',
@@ -668,6 +683,14 @@ export const translations = {
     gpYes: 'نعم',
     gpNo: 'لا',
     gpAddValue: '+ إضافة قيمة',
+    enterBufferDistance: 'أدخل المسافة',
+    selectDistanceUnit: 'اختر وحدة المسافة',
+    selectMethod: 'اختر الطريقة',
+    selectDissolveType: 'اختر نوع الدمج',
+    selectDissolveField: 'اختر حقل الدمج',
+    'none': 'بلا',
+    'all': 'الكل',
+    'by-field': 'حقل',
 
     // Default GP Tools
     'Buffer Analysis': 'تحليل الحرم (Buffer)',
@@ -701,6 +724,7 @@ export const translations = {
 
     // Legacy Spatial Analysis
     'Analysis': 'التحليل',
+    'Choose Analysis...': 'اختر التحليل...',
     'Select Analysis Tool': 'تحديد أداة التحليل',
     'Intersecting Layer': 'الطبقة المتقاطعة',
     'Select by Location': 'تحديد حسب الموقع',
@@ -718,6 +742,10 @@ export const translations = {
     'Running': 'جارٍ تشغيل',
     'Ready: Click any point on the map': 'جاهز: انقر على أي نقطة على الخريطة',
     'Start Tracking': 'بدء التتبع',
+    'Submitting': 'جارٍ الإرسال...',
+    'Executing': 'جارٍ التنفيذ...',
+    'Generating Results': 'جارٍ إنشاء النتائج...',
+    'Completed': 'اكتمل',
 
     // ── Arcade Panel ──────────────────────────────────────
     'Symbology / Renderer': 'الترميز / العارض',
@@ -795,6 +823,8 @@ export const translations = {
     view2D:            'عرض ثنائي الأبعاد',
     view3D:            'عرض ثلاثي الأبعاد',
     view3DDisabled:    'العرض ثلاثي الأبعاد غير متوفر في هذا الوضع',
+    compass:           'إعادة تعيين الاتجاه إلى الشمال',
+    compassLabel:      'البوصلة',
 
     // ── Side Panel ───────────────────────────────────────
     closePanel:     'إغلاق اللوحة',

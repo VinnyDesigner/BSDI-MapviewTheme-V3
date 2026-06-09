@@ -905,9 +905,9 @@
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  padding: 12px 0;
+  padding: 16px 8px !important;
   border-top: 1px solid rgba(0, 0, 0, 0.05);
-  background: transparent;
+  background: transparent !important;
   margin-top: auto;
 }
 
@@ -1103,7 +1103,7 @@
   margin-bottom: 0 !important;
 }
 
-.tool-fixed-footer, .arcade-footer, .draw-panel-footer, .measure-panel-footer {
+.arcade-footer, .draw-panel-footer, .measure-panel-footer {
   padding: 10px 0 !important;
   gap: 8px !important;
 }

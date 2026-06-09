@@ -107,15 +107,18 @@ function AppInner() {
     showDebug: false
   });
   const [spatialSettings, setSpatialSettings] = useState({
-    subTool: 'Buffer Analysis',
-    layerId: 'heritage-sites',
+    subTool: '',
+    layerId: '',
     bufferDistance: 1000,
     bufferUnit: 'meters',
     proximityPoint: null,
     distanceResult: null,
     isWaitingForClick: false,
     status: '',
-    lastRun: null
+    lastRun: null,
+    gpValues: {},
+    gpStatus: null,
+    history: []
   });
 
   const [dynamicMapServerData, setDynamicMapServerData] = useState({});
@@ -942,36 +945,50 @@ function AppInner() {
   }
 
   // ── Unified Reactive Layer Tree (Single Source of Truth) ──
-  const unifiedTreeData = React.useMemo(() => {
-    const combinedLayers = [...layersConfig];
-
+  const dynamicLayersConfig = React.useMemo(() => {
+    const combined = [...layersConfig];
+    
     if (addDataResults && Array.isArray(addDataResults)) {
       addDataResults.forEach(r => {
         if (r.children && r.children.length > 0) {
           r.children.forEach(c => {
-            if (!combinedLayers.some(l => l.id === c.id)) {
-              combinedLayers.push({
+            if (!combined.some(l => l.id === c.id)) {
+              combined.push({
                 id: c.id,
                 title: c.name,
-                type: 'feature',
-                isDynamic: true,
-                rawLayer: c.layer
+                type: 'feature'
               });
             }
           });
         } else {
-          if (!combinedLayers.some(l => l.id === r.id)) {
-            combinedLayers.push({
+          if (!combined.some(l => l.id === r.id)) {
+            combined.push({
               id: r.id,
               title: r.name,
-              type: 'feature',
-              isDynamic: true,
-              rawLayer: r.layer
+              type: 'feature'
             });
           }
         }
       });
     }
+
+    if (spatialSettings.history && Array.isArray(spatialSettings.history)) {
+      spatialSettings.history.forEach(item => {
+        if (!combined.some(l => l.id === item.id)) {
+          combined.push({
+            id: item.id,
+            title: item.title,
+            type: 'feature'
+          });
+        }
+      });
+    }
+
+    return combined;
+  }, [layersConfig, addDataResults, spatialSettings.history]);
+
+  const unifiedTreeData = React.useMemo(() => {
+    const combinedLayers = [...dynamicLayersConfig];
 
     const ordered = [];
     if (layerOrder && Array.isArray(layerOrder)) {
@@ -1063,7 +1080,7 @@ function AppInner() {
     });
 
     return tree;
-  }, [layersConfig, dynamicMapServerData, layerOrder, addDataResults]);
+  }, [dynamicLayersConfig, dynamicMapServerData, layerOrder]);
 
   // ── Panel content ──────────────────────────────────────────────────────────
   // ✅ All t() calls are for STATIC UI strings only.
@@ -1089,7 +1106,7 @@ function AppInner() {
       basemaps,
       currentBasemap,
       setCurrentBasemap,
-      layersConfig,
+      layersConfig: dynamicLayersConfig,
       layerPanelMode,
       setLayerPanelMode,
       activeLayerEdit,
@@ -1194,6 +1211,8 @@ function AppInner() {
           blendSettings={activeTool === 'blend' ? blendSettings : null}
           arcadeSettings={activeTool === 'arcade' ? arcadeSettings : null}
           spatialSettings={activeTool === 'spatial_analysis' ? spatialSettings : null}
+          setSpatialSettings={setSpatialSettings}
+          setLayerVisibility={setLayerVisibility}
           timelapseSettings={activeTool === 'time_compare' ? timelapseSettings : null}
           isSplitView={activeTool === 'time_compare' && timeCompareTab === 'swipe'}
           onTimelapseYearChange={(year) => setTimelapseSettings(prev => ({ 
@@ -1214,10 +1233,16 @@ function AppInner() {
                     id: data.id, 
                     title: data.title, 
                     count: data.count, 
+                    inputFeatureCount: data.inputFeatureCount,
+                    outputFeatureCount: data.outputFeatureCount,
+                    geometryType: data.geometryType,
                     distance: data.distance, 
                     unit: data.unit,
                     date: new Date().toLocaleString(),
-                    visible: true
+                    visible: true,
+                    color: data.color,
+                    analysisType: data.analysisType,
+                    executionTime: data.executionTime
                   }
                 ],
                 distanceResult: data.distanceResult !== undefined ? data.distanceResult : prev.distanceResult,

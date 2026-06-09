@@ -22,6 +22,9 @@ import Basemap from '@arcgis/core/Basemap';
 import TimeExtent from '@arcgis/core/time/TimeExtent';
 import FeatureFilter from '@arcgis/core/layers/support/FeatureFilter';
 import { layersConfig } from '../layers';
+import { GPExecutionEngine } from '../geoprocessing/gpEngine';
+import { renderGPResults } from '../geoprocessing/gpResultRenderer';
+import DEFAULT_MANIFESTS from '../geoprocessing/defaultManifests';
 
 // Import ArcGIS CSS
 import '@arcgis/core/assets/esri/themes/light/main.css';
@@ -88,7 +91,7 @@ esriConfig.request.useIdentity = false;
 const ArcGISMap = ({ 
   layerVisibility, onViewReady, isSplitMode, splitLayers, splitBasemaps,
   blendSettings, arcadeSettings, onArcadePreview, 
-  spatialSettings, onSpatialResult, 
+  spatialSettings, setSpatialSettings, onSpatialResult, setLayerVisibility,
   timelapseSettings, onTimelapseYearChange, 
   basemap, is3D, swipeMode = 'vertical', onSwipePositionChange,
   activeTool, identifySettings, onIdentifyResults, onIdentifyQueryStart,
@@ -1257,6 +1260,20 @@ const ArcGISMap = ({
           }
         }
       });
+
+      // Sync graphics inside spatial-analysis-layer based on layerVisibility
+      const saLayer = currentView.map.findLayerById('spatial-analysis-layer');
+      if (saLayer && saLayer.graphics) {
+        saLayer.graphics.forEach(g => {
+          const runId = g.attributes?.runId;
+          if (runId && layerVisibility[runId] !== undefined) {
+            const isVisible = !!layerVisibility[runId];
+            if (g.visible !== isVisible) {
+              g.visible = isVisible;
+            }
+          }
+        });
+      }
     } catch (err) {
       console.error('Visibility sync error:', err);
     }
@@ -1440,10 +1457,228 @@ const ArcGISMap = ({
     if (!view || !spatialSettings?.lastRun || activeTool !== 'spatial_analysis') return;
 
     const runAnalysis = async () => {
+      const startTime = performance.now();
       const { subTool, layerId, bufferDistance, bufferUnit, lastRun } = spatialSettings;
-      if (!layerId || !lastRun) return;
+      if (!lastRun) return;
+
+      const ANALYSIS_PALETTE = [
+        '#268fff', // Blue
+        '#28a745', // Green
+        '#ffc107', // Amber
+        '#dc3545', // Red
+        '#6f42c1', // Purple
+        '#17a2b8', // Cyan
+        '#fd7e14', // Orange
+        '#e83e8c', // Pink
+        '#20c997'  // Teal
+      ];
+      const colourIndex = (spatialSettings.history?.length || 0) % ANALYSIS_PALETTE.length;
+      const resultColour = ANALYSIS_PALETTE[colourIndex];
+      const hexToRgb = (hex) => {
+        if (!hex) return [38, 143, 255];
+        const clean = hex.replace('#', '');
+        return [
+          parseInt(clean.substring(0, 2), 16),
+          parseInt(clean.substring(2, 4), 16),
+          parseInt(clean.substring(4, 6), 16)
+        ];
+      };
+      const rgb = hexToRgb(resultColour);
+
+      const getGpManifest = (sub) => {
+        if (sub === 'Buffer Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_buffer');
+        if (sub === 'Clip Features') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_clip');
+        if (sub === 'Summarize Within') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_summarize_within');
+        if (sub === 'Viewshed Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_viewshed');
+        return null;
+      };
+      
+      const gpManifest = getGpManifest(subTool);
+      if (!gpManifest && !layerId) return;
+
+      // Calculate Input Feature Count
+      let inputFeatureCount = 0;
+      const inputFeaturesLayerId = gpManifest ? (spatialSettings.gpValues?.Input_Features || spatialSettings.gpValues?.inputFeatures || layerId) : layerId;
+      if (inputFeaturesLayerId) {
+        let inputLayer = null;
+        if (inputFeaturesLayerId.includes('_sub_')) {
+          const [parentId, subId] = inputFeaturesLayerId.split('_sub_');
+          const parent = view?.map?.findLayerById(parentId);
+          if (parent) {
+            const sub = parent.allSublayers?.find(s => s.id === parseInt(subId));
+            if (sub) {
+              const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer');
+              const FeatureLayer = FeatureLayerModule.default || FeatureLayerModule;
+              inputLayer = new FeatureLayer({ url: `${parent.url}/${subId}` });
+              await inputLayer.load();
+            }
+          }
+        } else {
+          inputLayer = view?.map?.findLayerById(inputFeaturesLayerId);
+        }
+        if (inputLayer) {
+          try {
+            if (inputLayer.queryFeatureCount) {
+              const q = inputLayer.createQuery();
+              q.where = '1=1';
+              inputFeatureCount = await inputLayer.queryFeatureCount(q);
+            } else if (inputLayer.graphics) {
+              inputFeatureCount = inputLayer.graphics.length;
+            }
+          } catch (err) {
+            console.warn("Failed to get input feature count:", err);
+          }
+        }
+      }
 
       try {
+        if (gpManifest) {
+          const paramValues = spatialSettings.gpValues || {};
+
+          // Validate required parameters
+          const missingParams = [];
+          for (const param of gpManifest.parameters) {
+            if (param.required) {
+              const val = paramValues[param.name];
+              if (val === undefined || val === null || val === '') {
+                missingParams.push(param.label || param.name);
+              }
+            }
+          }
+
+          if (missingParams.length > 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: `Required parameters missing: ${missingParams.join(', ')}`, progress: null },
+              status: `Validation failed: Required parameters missing: ${missingParams.join(', ')}`
+            }));
+            return;
+          }
+          
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 },
+            status: 'Submitting job...'
+          }));
+
+          const engine = new GPExecutionEngine(gpManifest);
+          const result = await engine.run(paramValues, {
+            onStatusUpdate: (update) => {
+              let displayStatus = 'executing';
+              let displayMessage = 'Executing';
+              let progress = update.progress ?? 50;
+
+              if (update.status === 'submitting' || update.status === 'submitted') {
+                displayStatus = 'submitting';
+                displayMessage = 'Submitting';
+                progress = update.progress ?? 15;
+              } else {
+                displayStatus = 'executing';
+                displayMessage = 'Executing';
+                if (update.progress !== null && update.progress !== undefined) {
+                  progress = Math.round(20 + (update.progress * 0.6));
+                }
+              }
+
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: {
+                  status: displayStatus,
+                  message: displayMessage,
+                  progress: progress
+                },
+                status: update.message || 'Executing...'
+              }));
+            },
+            view
+          });
+
+          if (!result.success) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: result.error || 'Execution failed', progress: null },
+              status: `Failed: ${result.error || 'Execution failed'}`
+            }));
+            return;
+          }
+
+          const colour = resultColour;
+          const outputLayerName = paramValues.Output_Layer_Name || gpManifest.meta.name;
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
+          }));
+
+          // Small delay to make the UX transition visible
+          await new Promise(resolve => setTimeout(resolve, 350));
+
+          const rendered = await renderGPResults({
+            result,
+            outputDefs: gpManifest.outputs || [],
+            view,
+            runId: lastRun,
+            toolName: outputLayerName,
+            colour
+          });
+
+          // Make input layers visible when analysis succeeds
+          if (view?.map && paramValues) {
+            Object.values(paramValues).forEach(val => {
+              if (typeof val === 'string') {
+                const layer = view.map.findLayerById(val);
+                if (layer) {
+                  layer.visible = true;
+                  if (typeof setLayerVisibility === 'function') {
+                    setLayerVisibility(prev => ({ ...prev, [val]: true }));
+                  }
+                }
+              }
+            });
+          }
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 },
+            status: 'Analysis complete'
+          }));
+
+          if (typeof onSpatialResult === 'function') {
+            const mapLayerResult = rendered.find(r => r.renderMode === 'MapLayer');
+            const layer = mapLayerResult ? view.map.findLayerById(mapLayerResult.layerId) : null;
+            
+            onSpatialResult({
+              id: lastRun,
+              title: outputLayerName,
+              count: mapLayerResult?.featureCount || 0,
+              inputFeatureCount: inputFeatureCount,
+              outputFeatureCount: mapLayerResult?.featureCount || 0,
+              geometryType: mapLayerResult?.geometryType || 'Polygon',
+              distance: paramValues.Distance || 0,
+              unit: paramValues.Unit || '',
+              layer: layer,
+              toolType: gpManifest.toolId,
+              color: colour,
+              analysisType: subTool,
+              executionTime: Math.round(performance.now() - startTime)
+            });
+          }
+          return;
+        }
+        if (!layerId) {
+          setSpatialSettings(prev => ({
+            ...prev,
+            status: 'Validation failed: Please select a Target Layer.'
+          }));
+          return;
+        }
+        if (['Select by Location', 'Overlay (Intersect)'].includes(subTool) && !spatialSettings.secondaryLayerId) {
+          setSpatialSettings(prev => ({
+            ...prev,
+            status: 'Validation failed: Please select an Intersecting Layer.'
+          }));
+          return;
+        }
         const unitMap = { 'meters': 'meters', 'kilometers': 'kilometers', 'miles': 'miles' };
 
         const getGeometryExtent = (geom) => {
@@ -1519,6 +1754,18 @@ const ArcGISMap = ({
         }
 
         if (subTool === 'Buffer Analysis') {
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'executing', message: 'Executing', progress: 50 }
+          }));
+
           const query = targetLayer.createQuery();
           query.where = '1=1';
           query.outSpatialReference = view.spatialReference;
@@ -1527,15 +1774,28 @@ const ArcGISMap = ({
           
           const results = await targetLayer.queryFeatures(query);
           const features = results.features;
-          if (features.length === 0) return;
+          if (features.length === 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'No features found in target layer', progress: null }
+            }));
+            return;
+          }
 
           const geometries = features.map(f => f.geometry);
           const unit = unitMap[bufferUnit] || 'meters';
           
           const bufferedGeometries = geometryEngine.buffer(geometries, bufferDistance, unit);
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 350));
           
           let fullExtent = null;
-          const fillSymbol = { type: "simple-fill", color: [38, 143, 255, 0.4], outline: { color: [38, 143, 255, 1], width: 2, style: "dash" } };
+          const fillSymbol = { type: "simple-fill", color: [rgb[0], rgb[1], rgb[2], 0.4], outline: { color: [rgb[0], rgb[1], rgb[2], 1], width: 2, style: "dash" } };
 
           bufferedGeometries.forEach((geom) => {
             if (!geom) return;
@@ -1552,55 +1812,130 @@ const ArcGISMap = ({
 
           if (fullExtent) {
             const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
-            console.log("Extent:", ext);
-            console.log("Spatial Reference:", ext.spatialReference);
-            console.log("Scale:", view.scale);
             view.goTo({ target: ext });
           }
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
+          }));
+
           if (typeof onSpatialResult === 'function') {
-             onSpatialResult({ id: lastRun, title: `${title} - Buffer`, count: features.length, distance: bufferDistance, unit: unit });
+             let isMultipart = false;
+             if (bufferedGeometries.length > 0) {
+               for (const g of bufferedGeometries) {
+                 if (g && g.rings && g.rings.length > 1) { isMultipart = true; break; }
+               }
+             }
+             const geometryTypeLabel = isMultipart ? "Multipart Polygon" : "Polygon";
+
+             onSpatialResult({
+               id: lastRun,
+               title: `${title} - Buffer`,
+               count: features.length,
+               inputFeatureCount: features.length,
+               outputFeatureCount: bufferedGeometries.length,
+               geometryType: geometryTypeLabel,
+               distance: bufferDistance,
+               unit: unit,
+               color: resultColour,
+               analysisType: subTool,
+               executionTime: Math.round(performance.now() - startTime)
+             });
           }
         } 
         else if (subTool === 'Select by Location' || subTool === 'Overlay (Intersect)') {
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'executing', message: 'Executing', progress: 50 }
+          }));
+
           const secQuery = secondaryLayer.createQuery();
           secQuery.where = '1=1';
           secQuery.returnGeometry = true;
           secQuery.outSpatialReference = view.spatialReference;
           const secResults = await secondaryLayer.queryFeatures(secQuery);
-          if (!secResults || secResults.features.length === 0) return;
+          if (!secResults || secResults.features.length === 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'No features found in intersecting layer', progress: null }
+            }));
+            return;
+          }
           
           const secGeometries = secResults.features.map(f => f.geometry).filter(Boolean);
-          if (secGeometries.length === 0) return;
+          if (secGeometries.length === 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'No valid geometries in intersecting layer', progress: null }
+            }));
+            return;
+          }
           
           let unionedSecGeometry = secGeometries[0];
           if (secGeometries.length > 1) {
             unionedSecGeometry = geometryEngine.union(secGeometries);
           }
           
-          if (!unionedSecGeometry) return;
+          if (!unionedSecGeometry) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'Failed to union intersecting geometries', progress: null }
+            }));
+            return;
+          }
 
           const tQuery = targetLayer.createQuery();
           tQuery.where = '1=1';
           tQuery.returnGeometry = true;
           tQuery.outSpatialReference = view.spatialReference;
           
-          // For Select by Location, we can do the heavy lifting on the server if supported
           if (subTool === 'Select by Location') {
              tQuery.geometry = unionedSecGeometry;
              tQuery.spatialRelationship = 'intersects';
           }
           
           const tResults = await targetLayer.queryFeatures(tQuery);
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 350));
+
           if (!tResults || tResults.features.length === 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
+            }));
+
             if (typeof onSpatialResult === 'function') {
-               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle} (No Match)`, count: 0 });
+               onSpatialResult({
+                 id: lastRun,
+                 title: `${title} x ${secondaryTitle} (No Match)`,
+                 count: 0,
+                 inputFeatureCount: inputFeatureCount,
+                 outputFeatureCount: 0,
+                 geometryType: 'Polygon',
+                 color: resultColour,
+                 analysisType: subTool,
+                 executionTime: Math.round(performance.now() - startTime)
+               });
             }
             return;
           }
 
           let fullExtent = null;
           let resultCount = 0;
-          const color = subTool === 'Select by Location' ? [255, 193, 7] : [40, 167, 69];
+          const color = rgb;
           const fillSymbol = { type: "simple-fill", color: [color[0], color[1], color[2], 0.4], outline: { color: [color[0], color[1], color[2], 1], width: 2 } };
           const pointSymbol = { type: "simple-marker", color: [color[0], color[1], color[2], 0.8], size: 8, outline: { color: [color[0], color[1], color[2], 1], width: 1 } };
           const lineSymbol = { type: "simple-line", color: [color[0], color[1], color[2], 1], width: 3 };
@@ -1609,7 +1944,7 @@ const ArcGISMap = ({
             if (!f.geometry) return;
             let resultGeom = null;
             if (subTool === 'Select by Location') {
-              resultGeom = f.geometry; // Already filtered by server
+              resultGeom = f.geometry; 
             } else {
               resultGeom = geometryEngine.intersect(f.geometry, unionedSecGeometry);
             }
@@ -1636,35 +1971,109 @@ const ArcGISMap = ({
           if (resultCount > 0) {
             if (fullExtent) {
               const ext = fullExtent.expand ? fullExtent.expand(1.2) : fullExtent;
-              console.log("Extent:", ext);
-              console.log("Spatial Reference:", ext.spatialReference);
-              console.log("Scale:", view.scale);
               view.goTo({ target: ext });
             }
+            
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
+            }));
+
             if (typeof onSpatialResult === 'function') {
-               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle}`, count: resultCount });
+               let isMultipart = false;
+               let geomType = 'Polygon';
+               if (tResults.features.length > 0) {
+                 const firstGeom = tResults.features[0].geometry;
+                 if (firstGeom) {
+                   geomType = firstGeom.type.charAt(0).toUpperCase() + firstGeom.type.slice(1);
+                   for (const f of tResults.features) {
+                     const g = f.geometry;
+                     if (g) {
+                       if (g.rings && g.rings.length > 1) { isMultipart = true; break; }
+                       if (g.paths && g.paths.length > 1) { isMultipart = true; break; }
+                       if (g.points && g.points.length > 1) { isMultipart = true; break; }
+                     }
+                   }
+                 }
+               }
+               const geometryTypeLabel = isMultipart ? `Multipart ${geomType}` : geomType;
+
+               onSpatialResult({
+                 id: lastRun,
+                 title: `${title} x ${secondaryTitle}`,
+                 count: resultCount,
+                 inputFeatureCount: inputFeatureCount,
+                 outputFeatureCount: resultCount,
+                 geometryType: geometryTypeLabel,
+                 color: resultColour,
+                 analysisType: subTool,
+                 executionTime: Math.round(performance.now() - startTime)
+               });
             }
           } else {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
+            }));
+
             if (typeof onSpatialResult === 'function') {
-               onSpatialResult({ id: lastRun, title: `${title} x ${secondaryTitle} (No Overlap)`, count: 0 });
+               onSpatialResult({
+                 id: lastRun,
+                 title: `${title} x ${secondaryTitle} (No Overlap)`,
+                 count: 0,
+                 inputFeatureCount: inputFeatureCount,
+                 outputFeatureCount: 0,
+                 geometryType: 'Polygon',
+                 color: resultColour,
+                 analysisType: subTool,
+                 executionTime: Math.round(performance.now() - startTime)
+               });
             }
           }
         }
         else if (subTool === 'Heatmap Density') {
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'executing', message: 'Executing', progress: 50 }
+          }));
+
           const query = targetLayer.createQuery();
           query.where = '1=1';
           query.outSpatialReference = view.spatialReference;
           query.returnGeometry = true;
           const results = await targetLayer.queryFeatures(query);
           const features = results.features;
-          if (features.length === 0) return;
+          if (features.length === 0) {
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'No features found in target layer', progress: null }
+            }));
+            return;
+          }
 
           // Only points make sense for heatmaps
           const pointFeatures = features.filter(f => f.geometry && (f.geometry.type === 'point' || f.geometry.type === 'multipoint'));
           if (pointFeatures.length === 0) {
-            console.warn("Heatmap requires point features.");
+            setSpatialSettings(prev => ({
+              ...prev,
+              gpStatus: { status: 'failed', message: 'Heatmap requires point features.', progress: null }
+            }));
             return;
           }
+
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
+          }));
+
+          await new Promise(resolve => setTimeout(resolve, 350));
 
           // Add invisible graphics so export works
           pointFeatures.forEach(f => {
@@ -1722,21 +2131,47 @@ const ArcGISMap = ({
                 xmax: Math.max(...xs), ymax: Math.max(...ys),
                 spatialReference: view.spatialReference
               };
-              console.log("Extent:", fullExtent);
-              console.log("Spatial Reference:", fullExtent.spatialReference);
-              console.log("Scale:", view.scale);
               view.goTo({ target: fullExtent });
             }
           }
 
+          setSpatialSettings(prev => ({
+            ...prev,
+            gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
+          }));
+
           if (typeof onSpatialResult === 'function') {
-             onSpatialResult({ id: lastRun, title: `${title} - Heatmap`, count: pointFeatures.length });
+             onSpatialResult({
+               id: lastRun,
+               title: `${title} - Heatmap`,
+               count: pointFeatures.length,
+               inputFeatureCount: pointFeatures.length,
+               outputFeatureCount: pointFeatures.length,
+               geometryType: 'Polygon',
+               color: resultColour,
+               analysisType: subTool,
+               executionTime: Math.round(performance.now() - startTime)
+             });
           }
         }
         else if (subTool === 'Proximity (Nearest)') {
            view.cursor = 'crosshair';
            view.once('click', async (event) => {
              view.cursor = 'default';
+             
+             setSpatialSettings(prev => ({
+               ...prev,
+               isWaitingForClick: false,
+               gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 }
+             }));
+
+             await new Promise(resolve => setTimeout(resolve, 300));
+
+             setSpatialSettings(prev => ({
+               ...prev,
+               gpStatus: { status: 'executing', message: 'Executing', progress: 50 }
+             }));
+
              const clickGeom = event.mapPoint;
 
              const query = targetLayer.createQuery();
@@ -1759,6 +2194,13 @@ const ArcGISMap = ({
                }
              });
 
+             setSpatialSettings(prev => ({
+               ...prev,
+               gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
+             }));
+
+             await new Promise(resolve => setTimeout(resolve, 300));
+
              if (nearestFeature) {
                const centerX = nearestFeature.geometry.extent ? nearestFeature.geometry.extent.center.x : (nearestFeature.geometry.x || nearestFeature.geometry.longitude);
                const centerY = nearestFeature.geometry.extent ? nearestFeature.geometry.extent.center.y : (nearestFeature.geometry.y || nearestFeature.geometry.latitude);
@@ -1770,33 +2212,70 @@ const ArcGISMap = ({
 
                const lineGraphic = new Graphic({
                  geometry: lineGeom,
-                 symbol: { type: "simple-line", color: [220, 53, 69, 1], width: 2, style: "dash" },
+                 symbol: { type: "simple-line", color: [rgb[0], rgb[1], rgb[2], 1], width: 2, style: "dash" },
                  attributes: { title: "Distance Line", runId: lastRun }
                });
 
                const featureGraphic = new Graphic({
                  geometry: nearestFeature.geometry,
-                 symbol: { type: "simple-fill", color: [220, 53, 69, 0.4], outline: { color: [220, 53, 69, 1], width: 2 } },
+                 symbol: { type: "simple-fill", color: [rgb[0], rgb[1], rgb[2], 0.4], outline: { color: [rgb[0], rgb[1], rgb[2], 1], width: 2 } },
                  attributes: { ...nearestFeature.attributes, title: `Nearest Feature`, runId: lastRun }
                });
                
                if (nearestFeature.geometry.type === 'point' || nearestFeature.geometry.type === 'multipoint') {
-                 featureGraphic.symbol = { type: "simple-marker", color: [220, 53, 69, 0.8], size: 10, outline: { color: [220, 53, 69, 1], width: 1 } };
+                 featureGraphic.symbol = { type: "simple-marker", color: [rgb[0], rgb[1], rgb[2], 0.8], size: 10, outline: { color: [rgb[0], rgb[1], rgb[2], 1], width: 1 } };
                } else if (nearestFeature.geometry.type === 'polyline') {
-                 featureGraphic.symbol = { type: "simple-line", color: [220, 53, 69, 1], width: 3 };
+                 featureGraphic.symbol = { type: "simple-line", color: [rgb[0], rgb[1], rgb[2], 1], width: 3 };
                }
 
                spatialGraphicsLayer.current.addMany([lineGraphic, featureGraphic]);
                view.goTo([featureGraphic, lineGraphic]);
 
+               setSpatialSettings(prev => ({
+                 ...prev,
+                 gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 },
+                 distanceResult: `${nearestDist.toFixed(2)} m`
+               }));
+
                if (typeof onSpatialResult === 'function') {
-                  onSpatialResult({ id: lastRun, title: `${title} - Nearest`, count: 1, distanceResult: `${nearestDist.toFixed(2)} m` });
+                  let isMultipart = false;
+                  if (nearestFeature.geometry) {
+                    const g = nearestFeature.geometry;
+                    if (g.rings && g.rings.length > 1) isMultipart = true;
+                    if (g.paths && g.paths.length > 1) isMultipart = true;
+                    if (g.points && g.points.length > 1) isMultipart = true;
+                  }
+                  const gType = nearestFeature.geometry ? (nearestFeature.geometry.type.charAt(0).toUpperCase() + nearestFeature.geometry.type.slice(1)) : 'Polygon';
+                  const geometryTypeLabel = isMultipart ? `Multipart ${gType}` : gType;
+
+                  onSpatialResult({
+                     id: lastRun,
+                     title: `${title} - Nearest`,
+                     count: 1,
+                     inputFeatureCount: features.length,
+                     outputFeatureCount: 1,
+                     geometryType: geometryTypeLabel,
+                     distanceResult: `${nearestDist.toFixed(2)} m`,
+                     color: resultColour,
+                     analysisType: subTool,
+                     executionTime: Math.round(performance.now() - startTime)
+                  });
                }
+             } else {
+               setSpatialSettings(prev => ({
+                 ...prev,
+                 gpStatus: { status: 'failed', message: 'No nearest feature found', progress: null }
+               }));
              }
            });
         }
       } catch (err) {
         console.error('Spatial Analysis run error:', err);
+        setSpatialSettings(prev => ({
+          ...prev,
+          gpStatus: { status: 'failed', message: err.message || 'Execution error', progress: null },
+          status: `Failed: ${err.message || 'Execution error'}`
+        }));
       }
     };
     

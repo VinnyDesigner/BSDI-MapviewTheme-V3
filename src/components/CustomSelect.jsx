@@ -74,8 +74,29 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
           <div className="options-list">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, index) => {
-                const val = opt.value || opt.id || opt;
                 const label = opt.title || opt.label || opt;
+                if (opt.isHeader) {
+                  return (
+                    <div 
+                      key={index} 
+                      className="option-group-header"
+                      style={{ 
+                        padding: '6px 12px', 
+                        fontWeight: '700', 
+                        color: '#64748b', 
+                        fontSize: '10px', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.05em', 
+                        background: '#f8fafc',
+                        borderBottom: '1px solid #f1f5f9',
+                        pointerEvents: 'none' 
+                      }}
+                    >
+                      {label}
+                    </div>
+                  );
+                }
+                const val = opt.value || opt.id || opt;
                 const isSelected = multi 
                   ? (Array.isArray(value) && value.includes(val))
                   : val === value;

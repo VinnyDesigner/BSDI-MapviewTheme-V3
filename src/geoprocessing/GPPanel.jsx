@@ -172,103 +172,6 @@ const GPPanel = ({
     return items;
   }, [view, treeData, runs]);
 
-  // ── Dynamic Parameter Fields & Options based on selection ───────────────
-  const modifiedParameters = useMemo(() => {
-    if (!selectedManifest) return [];
-    if (selectedManifest.toolId !== 'gp_buffer') return selectedManifest.parameters;
-
-    const params = selectedManifest.parameters.map(p => ({ ...p }));
-    const dissolveTypeParam = params.find(p => p.name === 'Dissolve_Type');
-    const dissolveFieldParam = params.find(p => p.name === 'Dissolve_Field');
-
-    const selectedInputLayerId = paramValues.Input_Features;
-    const selectedDissolveType = paramValues.Dissolve_Type || 'none';
-
-    // 1. Hide Dissolve Field if dissolve type is not 'by-field'
-    let filteredParams = params;
-    if (selectedDissolveType !== 'by-field') {
-      filteredParams = params.filter(p => p.name !== 'Dissolve_Field');
-    }
-
-    // 2. Query fields for the selected layer to dynamically fill Dissolve Field
-    if (selectedInputLayerId && dissolveFieldParam) {
-      let targetLayer = null;
-      if (view?.map) {
-        if (selectedInputLayerId.includes('_sub_')) {
-          const [parentId, subId] = selectedInputLayerId.split('_sub_');
-          const parent = view.map.findLayerById(parentId);
-          if (parent && parent.allSublayers) {
-            targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
-          }
-        } else {
-          targetLayer = view.map.findLayerById(selectedInputLayerId);
-        }
-      }
-
-      let fields = [];
-      if (targetLayer) {
-        if (targetLayer.fields) {
-          fields = targetLayer.fields.map(f => f.name);
-        } else if (targetLayer.layer?.fields) {
-          fields = targetLayer.layer.fields.map(f => f.name);
-        } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
-          const firstGraphic = targetLayer.graphics.getItemAt(0);
-          if (firstGraphic && firstGraphic.attributes) {
-            fields = Object.keys(firstGraphic.attributes);
-          }
-        }
-      }
-
-      if (fields.length > 0) {
-        dissolveFieldParam.choiceList = fields;
-      } else {
-        dissolveFieldParam.choiceList = [];
-      }
-    }
-
-    return filteredParams;
-  }, [selectedManifest, paramValues.Input_Features, paramValues.Dissolve_Type, view, dynamicTreeData]);
-
-  // ── Auto-select first dissolve field option if available ───────────────────
-  useEffect(() => {
-    if (selectedToolId !== 'gp_buffer') return;
-    const selectedInputLayerId = paramValues.Input_Features;
-    const selectedDissolveType = paramValues.Dissolve_Type || 'none';
-    
-    if (selectedDissolveType === 'by-field' && selectedInputLayerId) {
-      let targetLayer = null;
-      if (view?.map) {
-        if (selectedInputLayerId.includes('_sub_')) {
-          const [parentId, subId] = selectedInputLayerId.split('_sub_');
-          const parent = view.map.findLayerById(parentId);
-          if (parent && parent.allSublayers) {
-            targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
-          }
-        } else {
-          targetLayer = view.map.findLayerById(selectedInputLayerId);
-        }
-      }
-
-      let fields = [];
-      if (targetLayer) {
-        if (targetLayer.fields) {
-          fields = targetLayer.fields.map(f => f.name);
-        } else if (targetLayer.layer?.fields) {
-          fields = targetLayer.layer.fields.map(f => f.name);
-        } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
-          const firstGraphic = targetLayer.graphics.getItemAt(0);
-          if (firstGraphic && firstGraphic.attributes) {
-            fields = Object.keys(firstGraphic.attributes);
-          }
-        }
-      }
-
-      if (fields.length > 0 && !fields.includes(paramValues.Dissolve_Field)) {
-        setParamValues(prev => ({ ...prev, Dissolve_Field: fields[0] }));
-      }
-    }
-  }, [selectedToolId, paramValues.Input_Features, paramValues.Dissolve_Type, view]);
-
 
   // ── Tool selection ────────────────────────────────────────────────────────
   const selectTool = (toolId) => {
@@ -279,6 +182,23 @@ const GPPanel = ({
   // ── Run analysis ──────────────────────────────────────────────────────────
   const handleRunTool = useCallback(async () => {
     if (!selectedManifest || isRunning) return;
+
+    // Validate required fields
+    const missingFields = selectedManifest.parameters.filter(p => {
+      if (p.direction === 'esriGPParameterDirectionOutput') return false;
+      if (p.name === 'Dissolve_Field' && paramValues.Dissolve_Type !== 'by-field') return false;
+      return p.required && (paramValues[p.name] == null || paramValues[p.name] === '');
+    });
+
+    if (missingFields.length > 0) {
+      setJobStatus({
+        status: 'failed',
+        message: isRTL 
+          ? `يرجى إدخال جميع الحقول المطلوبة: ${missingFields.map(p => t(p.label)).join(', ')}`
+          : `Please enter all required fields: ${missingFields.map(p => t(p.label)).join(', ')}`
+      });
+      return;
+    }
 
     const runId   = `gp-run-${Date.now()}`;
     const colour = selectedManifest.toolId === 'gp_viewshed'
@@ -648,7 +568,10 @@ const GPPanel = ({
 
   // ── Validate required params before run ───────────────────────────────────
   const missingRequired = selectedManifest?.parameters
-    .filter(p => p.required && (paramValues[p.name] == null || paramValues[p.name] === ''))
+    .filter(p => {
+      if (p.name === 'Dissolve_Field' && paramValues.Dissolve_Type !== 'by-field') return false;
+      return p.required && (paramValues[p.name] == null || paramValues[p.name] === '');
+    })
     .map(p => p.label) || [];
 
   // ── RENDER ────────────────────────────────────────────────────────────────
@@ -764,10 +687,11 @@ const GPPanel = ({
             }}>
               {/* Dynamic form */}
               <GPFormRenderer
-                params={modifiedParameters}
+                params={selectedManifest.parameters}
                 values={paramValues}
                 onChange={(name, val) => setParamValues(prev => ({ ...prev, [name]: val }))}
                 treeData={dynamicTreeData}
+                view={view}
               />
 
               {/* Status */}
@@ -937,7 +861,7 @@ const GPPanel = ({
 
           {/* ── Results tab ── */}
           {activeTab === 'results' && (
-            <div className="results-list">
+            <div className="results-list" style={{ padding: '0px', gap: '4px' }}>
               {runs.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-card">
@@ -975,8 +899,6 @@ const GPPanel = ({
             <button
               className="primary-btn"
               onClick={handleRunTool}
-              disabled={missingRequired.length > 0}
-              style={{ opacity: missingRequired.length > 0 ? 0.5 : 1 }}
             >
               {t('gpBtnRun')}
             </button>

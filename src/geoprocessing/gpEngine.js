@@ -92,6 +92,9 @@ export class GPExecutionEngine {
     const dissolveType = paramValues.Dissolve_Type || 'none';
     const dissolveField = paramValues.Dissolve_Field;
 
+    console.log('[GP Service Client Buffer] Input Layer ID:', inputLayerId);
+    console.log('[GP Service Client Buffer] Parameters - Distance:', distance, 'Unit:', unit, 'Method:', method, 'Dissolve:', dissolveType);
+
     if (!inputLayerId) throw new Error('Input Features layer is required.');
     if (isNaN(distance) || distance <= 0) throw new Error('Buffer Distance must be a positive number.');
 
@@ -140,6 +143,10 @@ export class GPExecutionEngine {
     if (!features || features.length === 0) {
       throw new Error('The selected input layer contains no features.');
     }
+
+    const detectedGeomType = features[0]?.geometry?.type || 'unknown';
+    console.log('[GP Service Client Buffer] Input Geometry Type:', detectedGeomType);
+    console.log('[GP Service Client Buffer] Total Features Fetched:', features.length);
 
     onStatusUpdate({ status: 'esriJobExecuting', message: 'Processing buffer geometries…', progress: 60 });
 
@@ -264,6 +271,9 @@ export class GPExecutionEngine {
 
     const executionTime = `${(Date.now() - this._startTime).toFixed(0)} ms`;
 
+    console.log('[GP Service Client Buffer] Completed successfully. Total buffered features:', serializedFeatures.length);
+    console.log('[GP Service Client Buffer] Output FeatureSet:', outputFeatureSet);
+
     return {
       success: true,
       outputs: [
@@ -331,6 +341,7 @@ export class GPExecutionEngine {
   async _runAsync(serviceUrl, paramValues, onStatusUpdate) {
     // 1. Submit job
     const body = this._buildFormBody(paramValues);
+    console.log('[GP Service] Submitting job to URL:', `${serviceUrl}/submitJob`);
     const submitResp = await fetch(`${serviceUrl}/submitJob`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -351,9 +362,11 @@ export class GPExecutionEngine {
       throw new Error(`GP submitJob failed: ${submitResp.status}`);
     }
     const submitJson = await submitResp.json();
+    console.log('[GP Service] submitJob response:', submitJson);
     if (submitJson.error) throw new Error(submitJson.error.message || 'GP submitJob error');
 
     const jobId = submitJson.jobId;
+    console.log('[GP Service] Received Job ID:', jobId);
     onStatusUpdate({ status: 'submitted', jobId, message: `Job submitted (${jobId})`, progress: 0 });
 
     // 2. Poll status
@@ -364,15 +377,21 @@ export class GPExecutionEngine {
     const outputs = [];
     for (const out of outputDefs) {
       try {
+        console.log(`[GP Service] Fetching result for output parameter: ${out.name}`);
         const outResp = await fetch(
           `${serviceUrl}/jobs/${jobId}/results/${out.name}?f=pjson`,
           { signal: this._abortController?.signal }
         );
         if (outResp.ok) {
           const outJson = await outResp.json();
+          console.log(`[GP Service] Result retrieved successfully for ${out.name}:`, outJson);
           outputs.push({ name: out.name, value: outJson.value, paramType: outJson.paramType });
+        } else {
+          console.error(`[GP Service] Result retrieval failed for ${out.name} (HTTP ${outResp.status})`);
         }
-      } catch (_) { /* skip failed output */ }
+      } catch (err) {
+        console.error(`[GP Service] Error fetching result for ${out.name}:`, err);
+      }
     }
 
     return {
@@ -410,7 +429,10 @@ export class GPExecutionEngine {
       const messages = statusJson.messages || [];
       progress = Math.min(progress + 10, 90);
 
-      onStatusUpdate({ status: jobStatus, jobId, messages, progress });
+      const latestMsg = messages[messages.length - 1]?.description || `Job status: ${jobStatus}`;
+      console.log(`[GP Service] jobStatus polling:`, jobStatus, `| Progress: ${progress}% | Message: ${latestMsg}`);
+
+      onStatusUpdate({ status: jobStatus, jobId, messages, progress, message: latestMsg });
 
       if (jobStatus === 'esriJobSucceeded') return jobStatus;
       if (

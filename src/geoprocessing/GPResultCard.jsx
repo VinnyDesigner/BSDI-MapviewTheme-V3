@@ -77,7 +77,7 @@ const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
             </span>
           </div>
 
-          <div className="result-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+          <div className="result-actions" style={{ display: 'flex', alignItems: 'center', gap: 3, position: 'relative' }}>
             {hasMapLayer && (
               <button className="action-btn" onClick={() => onZoom(run.id)} title="Zoom to result">
                 <Maximize2 size={14} />

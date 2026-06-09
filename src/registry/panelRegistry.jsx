@@ -27,6 +27,9 @@ import TreeSelect from '../components/TreeSelect';
 import GPPanel from '../geoprocessing/GPPanel';
 import ProjectDataPanel from '../components/ProjectDataPanel';
 import { useLanguage } from '../context/LanguageContext';
+import DEFAULT_MANIFESTS from '../geoprocessing/defaultManifests';
+import GPFormRenderer from '../geoprocessing/GPFormRenderer';
+import { toggleGPResultLayer, removeGPResultLayer } from '../geoprocessing/gpResultRenderer';
 
 // Bahrain geometry safety guard
 const isValidBahrainGeometry = (geom, view) => {
@@ -534,21 +537,70 @@ export const SpatialAnalysisPanel = ({
   dynamicMapServerData,
   spatialSettings, 
   setSpatialSettings,
-  treeData
+  treeData,
+  is3D,
+  setIs3D,
+  layerVisibility,
+  setLayerVisibility
 }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
   
   const [activeTab, setActiveTab] = React.useState('analysis');
   const [exportMenuState, setExportMenuState] = React.useState(null);
+  const [expandedResults, setExpandedResults] = React.useState([]);
+
+  const getGpManifest = (subTool) => {
+    if (subTool === 'Buffer Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_buffer');
+    if (subTool === 'Clip Features') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_clip');
+    if (subTool === 'Summarize Within') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_summarize_within');
+    if (subTool === 'Viewshed Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_viewshed');
+    return null;
+  };
+
+  const handleGpChange = (name, val) => {
+    setSpatialSettings(prev => ({
+      ...prev,
+      gpValues: {
+        ...(prev.gpValues || {}),
+        [name]: val
+      }
+    }));
+  };
+
+  const handleTargetLayerChange = (val) => {
+    const manifest = getGpManifest(spatialSettings.subTool);
+    const nextGpValues = { ...(spatialSettings.gpValues || {}) };
+    if (manifest) {
+      const layerParam = manifest.parameters.find(p => p.widgetType === 'LayerPicker');
+      if (layerParam) {
+        nextGpValues[layerParam.name] = val;
+      }
+    }
+    setSpatialSettings(prev => ({
+      ...prev,
+      layerId: val,
+      gpValues: nextGpValues
+    }));
+  };
 
   const history = spatialSettings.history || [];
   
+  const [newResultId, setNewResultId] = React.useState(null);
   const prevHistoryLenRef = React.useRef(history.length);
 
   React.useEffect(() => {
     if (history.length > prevHistoryLenRef.current) {
-      setActiveTab('results');
+      const latest = history[history.length - 1];
+      if (latest) {
+        setNewResultId(latest.id);
+        setExpandedResults(prev => [...prev, latest.id]);
+        setActiveTab('results');
+        const timer = setTimeout(() => {
+          setNewResultId(null);
+        }, 4000);
+        return () => clearTimeout(timer);
+      }
     }
     prevHistoryLenRef.current = history.length;
   }, [history.length]);
@@ -639,6 +691,14 @@ export const SpatialAnalysisPanel = ({
 
       const hmLayer = view.map.findLayerById(`heatmap-${runId}`);
       if (hmLayer) hmLayer.visible = nextVisible;
+
+      toggleGPResultLayer(view, runId, nextVisible);
+    }
+    if (setLayerVisibility) {
+      setLayerVisibility(prev => ({
+        ...prev,
+        [runId]: prev[runId] !== undefined ? !prev[runId] : false
+      }));
     }
   };
 
@@ -655,6 +715,15 @@ export const SpatialAnalysisPanel = ({
       }
       const hmLayer = view.map.findLayerById(`heatmap-${runId}`);
       if (hmLayer) view.map.remove(hmLayer);
+
+      removeGPResultLayer(view, runId);
+    }
+    if (setLayerVisibility) {
+      setLayerVisibility(prev => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
     }
   };
 
@@ -665,6 +734,31 @@ export const SpatialAnalysisPanel = ({
         const graphics = layer.graphics.toArray().filter(g => g.attributes?.runId === runId);
         if (graphics.length > 0) {
            view.goTo(graphics);
+           return;
+        }
+      }
+
+      const hmLayer = view.map.findLayerById(`heatmap-${runId}`);
+      if (hmLayer && hmLayer.fullExtent) {
+        view.goTo(hmLayer.fullExtent);
+        return;
+      }
+
+      const prefix = `gp-result-${runId}`;
+      const gpLayers = view.map.layers.filter(l => l.id && l.id.startsWith(prefix)).toArray();
+      if (gpLayers.length > 0) {
+        let fullExtent = null;
+        gpLayers.forEach(l => {
+          if (l.fullExtent) {
+            if (!fullExtent) {
+              fullExtent = l.fullExtent.clone();
+            } else {
+              fullExtent = fullExtent.union(l.fullExtent);
+            }
+          }
+        });
+        if (fullExtent) {
+          view.goTo(fullExtent.expand(1.5));
         }
       }
     }
@@ -692,6 +786,23 @@ export const SpatialAnalysisPanel = ({
 
   return (
     <div className="add-data-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', direction: isRTL ? 'rtl' : 'ltr' }}>
+      <style>{`
+        @keyframes result-fade-highlight {
+          0% {
+            background-color: rgba(30, 60, 114, 0.15);
+            box-shadow: 0 0 12px rgba(30, 60, 114, 0.3);
+            border-color: #1e3c72;
+          }
+          100% {
+            background-color: white;
+            box-shadow: none;
+            border-color: #e2e8f0;
+          }
+        }
+        .result-newly-generated {
+          animation: result-fade-highlight 4s forwards;
+        }
+      `}</style>
       {/* Tabs */}
       <div className="tool-tabs" style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
         <button className={`tool-tab ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>
@@ -702,86 +813,134 @@ export const SpatialAnalysisPanel = ({
         </button>
       </div>
 
-      <div className="panel-content-scroll" style={{ padding: '6px 0' }}>
+      <div className="panel-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
         {activeTab === 'analysis' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 8px' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>{t('Select Analysis Tool')}</label>
               <CustomSelect 
                 options={[
+                  { label: t('2D Analysis') || '2D Analysis', isHeader: true },
                   { label: t('Buffer Analysis'), value: "Buffer Analysis" },
+                  { label: t('Clip Features') || 'Clip Features', value: "Clip Features" },
+                  { label: t('Summarize Within') || 'Summarize Within', value: "Summarize Within" },
                   { label: t('Select by Location'), value: "Select by Location" },
                   { label: t('Overlay (Intersect)'), value: "Overlay (Intersect)" },
                   { label: t('Proximity (Nearest)'), value: "Proximity (Nearest)" },
-                  { label: t('Heatmap Density'), value: "Heatmap Density" }
+                  { label: t('Heatmap Density'), value: "Heatmap Density" },
+                  { label: t('3D Analysis') || '3D Analysis', isHeader: true },
+                  { label: t('Viewshed Analysis') || 'Viewshed Analysis', value: "Viewshed Analysis" }
                 ]}
                 value={spatialSettings.subTool}
-                onChange={(val) => setSpatialSettings({...spatialSettings, subTool: val})}
+                placeholder={t('Choose Analysis...') || 'Choose Analysis...'}
+                onChange={(val) => {
+                  if (val === 'Viewshed Analysis') {
+                    if (!is3D) {
+                      setIs3D(true);
+                    }
+                  }
+                  
+                  // Initialize/fill target layer if selected
+                  const manifest = getGpManifest(val);
+                  const nextGpValues = { ...(spatialSettings.gpValues || {}) };
+                  if (manifest) {
+                    const layerParam = manifest.parameters.find(p => p.widgetType === 'LayerPicker');
+                    if (layerParam && spatialSettings.layerId) {
+                      nextGpValues[layerParam.name] = spatialSettings.layerId;
+                    }
+                  }
+
+                  setSpatialSettings(prev => ({
+                    ...prev,
+                    subTool: val,
+                    gpValues: nextGpValues,
+                    gpStatus: null
+                  }));
+                }}
               />
             </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>{t('Target Layer')}</label>
-              <TreeSelect 
-                treeData={treeData}
-                value={spatialSettings.layerId}
-                onChange={(val) => setSpatialSettings({...spatialSettings, layerId: val})}
-                placeholder={`${t('gpSelectPlaceholder')} ${t('Target Layer')}...`}
-                showAllOption={false}
-              />
-            </div>
-
-            {['Select by Location', 'Overlay (Intersect)'].includes(spatialSettings.subTool) && (
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>{t('Intersecting Layer')}</label>
-                <TreeSelect 
+            {spatialSettings.subTool && (
+              getGpManifest(spatialSettings.subTool) ? (
+                <GPFormRenderer 
+                  params={getGpManifest(spatialSettings.subTool).parameters} 
+                  values={spatialSettings.gpValues || {}} 
+                  onChange={handleGpChange} 
                   treeData={treeData}
-                  value={spatialSettings.secondaryLayerId}
-                  onChange={(val) => setSpatialSettings({...spatialSettings, secondaryLayerId: val})}
-                  placeholder={`${t('gpSelectPlaceholder')} ${t('Intersecting Layer')}...`}
-                  showAllOption={false}
+                  view={view} 
                 />
-              </div>
+              ) : (
+                <>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>{t('Target Layer')}</label>
+                    <TreeSelect 
+                      treeData={treeData}
+                      value={spatialSettings.layerId}
+                      onChange={handleTargetLayerChange}
+                      placeholder={`${t('gpSelectPlaceholder')} ${t('Target Layer')}...`}
+                      showAllOption={false}
+                    />
+                  </div>
+
+                  {['Select by Location', 'Overlay (Intersect)'].includes(spatialSettings.subTool) && (
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>{t('Intersecting Layer')}</label>
+                      <TreeSelect 
+                        treeData={treeData}
+                        value={spatialSettings.secondaryLayerId}
+                        onChange={(val) => setSpatialSettings({...spatialSettings, secondaryLayerId: val})}
+                        placeholder={`${t('gpSelectPlaceholder')} ${t('Intersecting Layer')}...`}
+                        showAllOption={false}
+                      />
+                    </div>
+                  )}
+
+                  {spatialSettings.subTool === 'Proximity (Nearest)' && (
+                    <div className="instruction-box">
+                      <span className="box-title">{t('Instructions:')}</span>
+                      <p>{t('Click any point on the map to find the nearest feature in the selected layer.')}</p>
+                    </div>
+                  )}
+                </>
+              )
             )}
 
-            {spatialSettings.subTool === 'Buffer Analysis' && (
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <div style={{ flex: 2 }}>
-                    <label>{t('Distance')}</label>
-                    <input 
-                      type="number" 
-                      className="tool-input" 
-                      value={spatialSettings.bufferDistance}
-                      onChange={(e) => setSpatialSettings({...spatialSettings, bufferDistance: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label>{t('Unit')}</label>
-                    <CustomSelect 
-                      options={[
-                        { label: 'm', value: 'meters' },
-                        { label: 'km', value: 'kilometers' },
-                        { label: 'mi', value: 'miles' }
-                      ]}
-                      value={spatialSettings.bufferUnit}
-                      onChange={(val) => setSpatialSettings({...spatialSettings, bufferUnit: val})}
-                    />
-                  </div>
+            {spatialSettings.gpStatus && (
+              <div className="gp-running-card" style={{
+                marginTop: '16px',
+                background: 'rgba(30, 60, 114, 0.05)',
+                border: '1px solid rgba(30, 60, 114, 0.1)',
+                borderRadius: '8px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px'
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e3c72' }}>
+                  {t(spatialSettings.subTool)}
                 </div>
+                <div style={{ fontSize: '12px', color: '#475569' }}>
+                  Status: <span style={{ fontWeight: '600', color: '#1e3c72' }}>{t(spatialSettings.gpStatus.message)}</span>
+                </div>
+                {spatialSettings.gpStatus.progress !== null && (
+                  <>
+                    <div style={{ fontSize: '12px', color: '#475569' }}>
+                      Progress: <span style={{ fontWeight: '600', color: '#1e3c72' }}>{spatialSettings.gpStatus.progress}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden', marginTop: '4px' }}>
+                      <div style={{
+                        width: `${spatialSettings.gpStatus.progress}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #df261c, #002D5D)',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {spatialSettings.subTool === 'Proximity (Nearest)' && (
-              <div className="instruction-box">
-                <span className="box-title">{t('Instructions:')}</span>
-                <p>{t('Click any point on the map to find the nearest feature in the selected layer.')}</p>
-              </div>
-            )}
-
-
-
-            {spatialSettings.status && (
+            {spatialSettings.status && !spatialSettings.status.includes('Running') && !(spatialSettings.gpStatus && ['submitting', 'executing', 'generating_results'].includes(spatialSettings.gpStatus.status)) && (
               <div className={`status-box ${spatialSettings.status.includes('Click') ? 'waiting' : 'success'}`}>
                 {spatialSettings.status.includes('Click') ? '📍 ' : '✔ '} {spatialSettings.status}
               </div>
@@ -795,7 +954,7 @@ export const SpatialAnalysisPanel = ({
             )}
           </div>
         ) : (
-          <div className="results-list">
+          <div className="results-list" style={{ padding: '0px', gap: '4px' }}>
             {history.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-card">
@@ -805,41 +964,104 @@ export const SpatialAnalysisPanel = ({
                 </div>
               </div>
             ) : (
-              history.map(item => (
-                <div key={item.id} className="result-tree-node">
-                  <div className={`result-row ${item.visible ? '' : 'hidden-layer'}`}>
-                    <div className="result-row-first">
-                      <div className="result-info">
+              history.map(item => {
+                const isVisible = layerVisibility && layerVisibility[item.id] !== undefined ? layerVisibility[item.id] : (item.visible ?? true);
+                const getRgba = (hex, alpha) => {
+                  if (!hex) return `rgba(38, 143, 255, ${alpha})`;
+                  const cleanHex = hex.replace('#', '');
+                  const r = parseInt(cleanHex.substring(0, 2), 16);
+                  const g = parseInt(cleanHex.substring(2, 4), 16);
+                  const b = parseInt(cleanHex.substring(4, 6), 16);
+                  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                };
+                const isNew = item.id === newResultId;
+                const isExpanded = expandedResults.includes(item.id);
+
+                return (
+                  <div 
+                    key={item.id} 
+                    className={`result-tree-node ${isNew ? 'result-newly-generated' : ''}`}
+                    style={{ 
+                      border: '1px solid #e2e8f0', 
+                      borderRadius: '8px', 
+                      marginBottom: '0px', 
+                      background: isExpanded ? '#f8fafc' : 'white', 
+                      overflow: 'hidden',
+                      transition: isNew ? 'none' : 'background-color 0.2s ease, border-color 0.2s ease',
+                      animation: isNew ? 'result-fade-highlight 4s forwards' : 'none'
+                    }}
+                  >
+                    {/* Collapsed State / Accordion Header */}
+                    <div 
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px 16px', 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        background: 'transparent', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        textAlign: isRTL ? 'right' : 'left'
+                      }}
+                      onClick={() => setExpandedResults(prev => 
+                        isExpanded ? prev.filter(id => id !== item.id) : [...prev, item.id]
+                      )}
+                    >
+                      {/* Left Side: Expand, Toggle, Color, Stacked Name & Features */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexDirection: isRTL ? 'row-reverse' : 'row', flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                          {isExpanded ? <ChevronDown size={16} /> : (isRTL ? <ChevronLeft size={16} /> : <ChevronRight size={16} />)}
+                        </div>
                         <input
                           type="checkbox"
                           className="custom-checkbox"
-                          checked={item.visible}
-                          onChange={() => handleToggle(item.id)}
+                          checked={isVisible}
+                          onChange={(e) => { e.stopPropagation(); handleToggle(item.id); }}
+                          onClick={(e) => e.stopPropagation()}
                         />
-                        <div className="child-symbol-wrapper" style={{ margin: '0 4px' }}>
+                        <div className="child-symbol-wrapper" style={{ margin: '0 2px' }}>
                           <div 
                             className="legend-symbol polygon-symbol" 
                             style={{
                               width: '14px',
                               height: '10px',
-                              backgroundColor: 'rgba(38, 143, 255, 0.4)',
-                              border: `1.5px dashed rgba(38, 143, 255, 1)`,
+                              backgroundColor: getRgba(item.color, 0.4),
+                              border: `1.5px dashed ${getRgba(item.color, 1)}`,
                               borderRadius: '2px',
                               boxSizing: 'border-box'
                             }}
                           />
                         </div>
-                        <span className="result-name" title={item.title}>{item.title}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}>
+                          <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.title}>
+                            {item.title}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
+                            {item.outputFeatureCount ?? item.count} {t('Features') || 'Features'}
+                          </span>
+                        </div>
                       </div>
-                      
-                      <div className="result-actions" style={{ position: 'relative' }}>
-                        <button className="action-btn" onClick={() => handleZoom(item.id)} title="Zoom to layer">
-                          <Maximize2 size={15} />
+
+                      {/* Right Side: Icon Actions (Zoom, Download, Delete) */}
+                      <div 
+                        style={{ display: 'flex', alignItems: 'center', gap: '3px', flexDirection: isRTL ? 'row-reverse' : 'row' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button 
+                          className="action-btn" 
+                          onClick={(e) => { e.stopPropagation(); handleZoom(item.id); }} 
+                          title={t('Zoom To') || "Zoom To"}
+                          style={{ margin: 0, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Maximize2 size={14} />
                         </button>
                         
                         <button 
                           className="action-btn" 
                           onClick={(e) => {
+                            e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
                             setExportMenuState(exportMenuState?.id === item.id ? null : {
                               id: item.id,
@@ -847,79 +1069,128 @@ export const SpatialAnalysisPanel = ({
                               y: rect.bottom
                             });
                           }} 
-                          title="Export"
+                          title={t('Download') || "Download"}
+                          style={{ margin: 0, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                          <Download size={15} />
+                          <Download size={14} />
                         </button>
 
-                        <button className="action-btn delete-btn" onClick={() => handleDelete(item.id)} title="Delete result">
-                          <Trash2 size={15} />
+                        <button 
+                          className="action-btn delete-btn" 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} 
+                          title={t('Delete') || "Delete"}
+                          style={{ margin: 0, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Trash2 size={14} />
                         </button>
-
-                        {exportMenuState?.id === item.id && createPortal(
-                          <div 
-                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99998 }}
-                            onClick={(e) => { e.stopPropagation(); setExportMenuState(null); }}
-                          >
-                            <div style={{ 
-                              position: 'absolute', 
-                              top: exportMenuState.y + 4, 
-                              left: exportMenuState.x - 110,
-                              background: 'white', 
-                              border: '1px solid #e2e8f0', 
-                              borderRadius: '6px',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-                              zIndex: 99999, 
-                              minWidth: '140px',
-                              display: 'flex', 
-                              flexDirection: 'column'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            >
-                              {['GeoJSON', 'Shapefile ZIP', 'CSV', 'Excel', 'Image'].map(fmt => (
-                                <button 
-                                  key={fmt}
-                                  style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: 'transparent', border: 'none', textAlign: 'left', width: '100%', color: '#1e293b' }}
-                                  onClick={(e) => { e.stopPropagation(); handleExport(fmt, item.id); }}
-                                >
-                                  {fmt}
-                                </button>
-                              ))}
-                            </div>
-                          </div>,
-                          document.body
-                        )}
                       </div>
                     </div>
-                    <div className="result-row-second">
-                      <span className="result-feature-count">
-                        {item.count} {t('gpFeatures')}
-                      </span>
-                      <span className="result-upload-date">
-                        {item.date}
-                      </span>
-                    </div>
+
+                    {/* Expanded State */}
+                    {isExpanded && (
+                      <div style={{ 
+                        padding: '12px 16px', 
+                        borderTop: '1px solid #edf2f7', 
+                        background: 'white',
+                        boxSizing: 'border-box'
+                      }}>
+                        <div className="attributes-grid" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
+                          </div>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.outputFeatureCount ?? item.count}</span>
+                          </div>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Geometry Type') || 'Geometry Type'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.geometryType ?? 'Polygon'}</span>
+                          </div>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Analysis Type') || 'Analysis Type'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{t(item.analysisType) || item.analysisType || 'N/A'}</span>
+                          </div>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Execution Time') || 'Execution Time'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.executionTime !== undefined ? `${item.executionTime} ms` : 'N/A'}</span>
+                          </div>
+                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Created On') || 'Created On'}</span>
+                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.date || new Date(item.id).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {exportMenuState?.id === item.id && createPortal(
+                      <div 
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99998 }}
+                        onClick={(e) => { e.stopPropagation(); setExportMenuState(null); }}
+                      >
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: exportMenuState.y + 4, 
+                          left: exportMenuState.x - 110,
+                          background: 'white', 
+                          border: '1px solid #e2e8f0', 
+                          borderRadius: '6px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                          zIndex: 99999, 
+                          minWidth: '140px',
+                          display: 'flex', 
+                          flexDirection: 'column'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        >
+                          {['GeoJSON', 'Shapefile ZIP', 'CSV', 'Excel', 'Image'].map(fmt => (
+                            <button 
+                              key={fmt}
+                              style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: 'transparent', border: 'none', textAlign: isRTL ? 'right' : 'left', width: '100%', color: '#1e293b' }}
+                              onClick={(e) => { e.stopPropagation(); handleExport(fmt, item.id); }}
+                            >
+                              {fmt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>,
+                      document.body
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
       </div>
 
       {activeTab === 'analysis' && (
-        <div className="tool-fixed-footer">
+        <div className="tool-fixed-footer" style={{ borderTop: '1px solid rgba(0, 0, 0, 0.05)', flexShrink: 0, marginTop: 0 }}>
           <button 
             className="secondary-btn"
+            disabled={spatialSettings.gpStatus && ['submitting', 'executing', 'generating_results'].includes(spatialSettings.gpStatus.status)}
             onClick={() => {
-              setSpatialSettings({...spatialSettings, status: '', lastRun: null, distanceResult: null, isWaitingForClick: false, history: []});
+              setSpatialSettings({
+                ...spatialSettings,
+                status: '',
+                lastRun: null,
+                distanceResult: null,
+                isWaitingForClick: false,
+                history: [],
+                gpValues: {},
+                gpStatus: null
+              });
               if (view && view.map) {
                 const layer = view.map.findLayerById('spatial-analysis-layer');
                 if (layer && layer.removeAll) layer.removeAll();
                 
-                const layersToRemove = view.map.layers.filter(l => l.id && l.id.startsWith('heatmap-')).toArray();
+                const layersToRemove = view.map.layers.filter(l => l.id && (l.id.startsWith('heatmap-') || l.id.startsWith('gp-result-'))).toArray();
                 if (layersToRemove.length > 0) {
                   view.map.removeMany(layersToRemove);
+                }
+
+                if (view.analyses) {
+                  view.analyses.removeAll();
                 }
               }
             }}
@@ -928,15 +1199,28 @@ export const SpatialAnalysisPanel = ({
           </button>
           <button 
             className="primary-btn" 
+            disabled={
+              !spatialSettings.subTool || 
+              spatialSettings.isWaitingForClick || 
+              (spatialSettings.gpStatus && ['submitting', 'executing', 'generating_results'].includes(spatialSettings.gpStatus.status))
+            }
             onClick={() => {
+              if (spatialSettings.gpStatus && ['submitting', 'executing', 'generating_results'].includes(spatialSettings.gpStatus.status)) {
+                return;
+              }
               const isProximity = spatialSettings.subTool === 'Proximity (Nearest)';
               
               setSpatialSettings({
                 ...spatialSettings, 
                 lastRun: Date.now(), 
                 isWaitingForClick: isProximity,
-                status: isProximity ? t('Ready: Click any point on the map') || 'Ready: Click any point on the map' : `${t('Running')} ${t(spatialSettings.subTool)}...`,
-                distanceResult: null
+                status: isProximity 
+                  ? t('Ready: Click any point on the map') || 'Ready: Click any point on the map' 
+                  : `${t('Running')} ${t(spatialSettings.subTool)}...`,
+                distanceResult: null,
+                gpStatus: isProximity 
+                  ? null 
+                  : { status: 'submitting', message: 'Submitting', progress: 10 }
               });
             }}
           >

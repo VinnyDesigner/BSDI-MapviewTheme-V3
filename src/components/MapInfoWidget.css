@@ -1,7 +1,39 @@
-.map-info-widget {
+.map-info-widget-wrapper {
   position: absolute;
   bottom: 30px;
   left: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px; /* 12px-16px gap between Compass and panel */
+  pointer-events: none; /* Let pointer events fall through to map, except on active children */
+  box-sizing: border-box;
+}
+
+.standalone-compass-widget {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  pointer-events: auto;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.standalone-compass-widget:hover {
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.map-info-widget {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -9,7 +41,6 @@
   border-radius: 6px;
   padding: 4px 8px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  z-index: 900;
   display: flex;
   flex-direction: column; /* Stack rows vertically */
   align-items: flex-start;
@@ -177,8 +208,55 @@
   top: -1px;
 }
 
+/* Compass reference styling */
+.info-widget-divider {
+  width: 100%;
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.08);
+  margin: 2px 0;
+}
+
+.compass-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.compass-reference-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+}
+
+.compass-ref-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1C1C1C;
+  border-radius: 50%;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 28px;
+  height: 28px;
+}
+
+.compass-ref-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(1.05);
+}
+
+.compass-ref-btn svg {
+  display: block;
+}
+
 /* ── RTL overrides ──────────────────────────────────────── */
-[dir="rtl"] .map-info-widget {
+[dir="rtl"] .map-info-widget-wrapper {
   left: auto;
   right: 16px;
 }
@@ -194,16 +272,20 @@
 
 /* Mobile responsive view: hidden or minimized */
 @media (max-width: 768px) {
-  .map-info-widget {
+  .map-info-widget-wrapper {
     bottom: 12px !important;
     left: 12px !important;
     gap: 8px !important;
-    padding: 4px 8px !important;
   }
   
-  [dir="rtl"] .map-info-widget {
+  [dir="rtl"] .map-info-widget-wrapper {
     left: auto !important;
     right: 12px !important;
+  }
+
+  .map-info-widget {
+    padding: 4px 8px !important;
+    gap: 8px !important;
   }
 
   .info-item-label,
@@ -229,18 +311,21 @@
 
 /* Tablet view styling: float below in lower-left area */
 @media (min-width: 768px) and (max-width: 1024px) {
-  .map-info-widget {
+  .map-info-widget-wrapper {
     bottom: 120px !important;
     top: auto !important;
     left: 16px !important;
-    padding: 8px 12px !important;
-    gap: 8px !important;
     max-width: 320px !important;
-    border-radius: 8px !important;
   }
 
-  [dir="rtl"] .map-info-widget {
+  [dir="rtl"] .map-info-widget-wrapper {
     left: auto !important;
     right: 16px !important;
+  }
+
+  .map-info-widget {
+    padding: 8px 12px !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
   }
 }

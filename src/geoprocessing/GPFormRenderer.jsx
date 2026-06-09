@@ -45,9 +45,62 @@ const WIDGET_FACTORY = {
  * @param {Function}  props.onChange    – (name, value) => void
  * @param {Object}    props.treeData    – layer tree for LayerPicker widgets
  */
-const GPFormRenderer = ({ params, values, onChange, treeData = [] }) => {
+const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
   const { t } = useLanguage();
-  const inputParams = params.filter(p => p.direction !== 'esriGPParameterDirectionOutput');
+
+  const modifiedParameters = React.useMemo(() => {
+    const nextParams = params.map(p => ({ ...p }));
+    const dissolveFieldParam = nextParams.find(p => p.name === 'Dissolve_Field');
+    const selectedInputLayerId = values.Input_Features;
+    const selectedDissolveType = values.Dissolve_Type || 'none';
+
+    // 1. Hide Dissolve Field if dissolve type is not 'by-field' / 'Field'
+    let filteredParams = nextParams;
+    const isDissolveFieldActive = selectedDissolveType === 'by-field' || selectedDissolveType === 'Field';
+    if (!isDissolveFieldActive) {
+      filteredParams = nextParams.filter(p => p.name !== 'Dissolve_Field');
+    }
+
+    // 2. Query fields for the selected layer to dynamically fill Dissolve Field choiceList
+    if (selectedInputLayerId && dissolveFieldParam && view) {
+      let targetLayer = null;
+      if (view.map) {
+        if (selectedInputLayerId.includes('_sub_')) {
+          const [parentId, subId] = selectedInputLayerId.split('_sub_');
+          const parent = view.map.findLayerById(parentId);
+          if (parent && parent.allSublayers) {
+            targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
+          }
+        } else {
+          targetLayer = view.map.findLayerById(selectedInputLayerId);
+        }
+      }
+
+      let fields = [];
+      if (targetLayer) {
+        if (targetLayer.fields) {
+          fields = targetLayer.fields.map(f => f.name);
+        } else if (targetLayer.layer?.fields) {
+          fields = targetLayer.layer.fields.map(f => f.name);
+        } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
+          const firstGraphic = targetLayer.graphics.getItemAt(0);
+          if (firstGraphic && firstGraphic.attributes) {
+            fields = Object.keys(firstGraphic.attributes);
+          }
+        }
+      }
+
+      if (fields.length > 0) {
+        dissolveFieldParam.choiceList = fields;
+      } else {
+        dissolveFieldParam.choiceList = [];
+      }
+    }
+
+    return filteredParams;
+  }, [params, values.Input_Features, values.Dissolve_Type, view]);
+
+  const inputParams = modifiedParameters.filter(p => p.direction !== 'esriGPParameterDirectionOutput');
 
   // Group by category
   const grouped = {};
@@ -154,6 +207,10 @@ function ParamWidget({ param, value, onChange, treeData }) {
 // ── Individual widget implementations ──────────────────────────────────────
 
 function NumberInputWidget({ param, value, onChange, t }) {
+  let placeholderText = `${t('Enter')} ${t(param.label)}`;
+  if (param.name === 'Distance') {
+    placeholderText = t('enterBufferDistance');
+  }
   return (
     <input
       type="number"
@@ -162,7 +219,7 @@ function NumberInputWidget({ param, value, onChange, t }) {
       min={param.min}
       max={param.max}
       step={param.step ?? 'any'}
-      placeholder={t(param.placeholder || param.label)}
+      placeholder={placeholderText}
       onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
     />
   );
@@ -197,12 +254,24 @@ function SelectWidget({ param, value, onChange, t }) {
   const options = param.choiceList.map(c =>
     typeof c === 'string' ? { label: t(c), value: c } : { ...c, label: t(c.label || c.value) }
   );
+  
+  let placeholderStr = `${t('gpSelectPlaceholder')} ${t(param.label)}`;
+  if (param.name === 'Unit' || param.name === 'Distance_Unit') {
+    placeholderStr = t('selectDistanceUnit');
+  } else if (param.name === 'Method') {
+    placeholderStr = t('selectMethod');
+  } else if (param.name === 'Dissolve_Type') {
+    placeholderStr = t('selectDissolveType');
+  } else if (param.name === 'Dissolve_Field') {
+    placeholderStr = t('selectDissolveField');
+  }
+
   return (
     <CustomSelect
       options={options}
       value={value}
       onChange={onChange}
-      placeholder={`${t('gpSelectPlaceholder')} ${t(param.label)}…`}
+      placeholder={placeholderStr}
     />
   );
 }
@@ -254,7 +323,7 @@ function LayerPickerWidget({ param, value, onChange, treeData, t }) {
       treeData={treeData}
       value={value}
       onChange={onChange}
-      placeholder={`${t('gpSelectPlaceholder')} ${t(param.label)}…`}
+      placeholder={`${t('gpSelectPlaceholder')} ${t(param.label)}`}
       showAllOption={false}
     />
   );

@@ -387,6 +387,8 @@ const ProjectDataPanel = ({ view }) => {
     if (selectedFile) processFile(selectedFile);
   };
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   const processFile = async (selectedFile) => {
     const ext = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
     const allowed = ['.dwg', '.dgn', '.zip', '.json', '.geojson', '.fme'];
@@ -412,178 +414,149 @@ const ProjectDataPanel = ({ view }) => {
     }
 
     try {
+      let parsedDatasets = null;
+      let targetFileName = selectedFile.name;
+
       if (ext === '.geojson' || ext === '.json') {
-        // A. DIRECT GEOJSON CLIENT-SIDE PARSER
-        setGdbStatusText('Reading vector geometries...');
-        setStepIndex(1);
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const geojson = JSON.parse(e.target.result);
-            const datasets = Array.isArray(geojson) ? geojson : [geojson];
-            
-            setStepIndex(3);
-            setTimeout(() => {
-              setProcessing(false);
-              setLoaded(true);
-              plotDynamicGeoJsonDataset(datasets, selectedFile.name);
-            }, 600);
-          } catch (jsonErr) {
-            alert('Invalid GeoJSON syntax! Please verify the file contents.');
-            setProcessing(false);
-          }
-        };
-        reader.readAsText(selectedFile);
-
+        const fileContent = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsText(selectedFile);
+        });
+        const geojson = JSON.parse(fileContent);
+        parsedDatasets = Array.isArray(geojson) ? geojson : [geojson];
       } else if (isZip) {
-        // B. ZIP PARSING ENGINE (SHAPEFILE & PROCEDURAL GDB BACKUP)
-        setGdbStatusText('Scanning ZIP container and reading binary file headers...');
-        setStepIndex(1);
-
         const fileNames = await readZipFileNames(selectedFile);
         const { layers, gdbName } = parseZipStructure(fileNames);
         setDynamicGdbName(gdbName);
         setDynamicLayerNames(layers);
 
-        // Read ZIP as array buffer for shpjs
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const arrayBuffer = e.target.result;
-          
-          try {
-            // Attempt standard client-side Shapefile parse using shpjs
-            setGdbStatusText('Unpacking shapes and parsing shapefile tables completely client-side...');
-            setStepIndex(2);
+        const arrayBuffer = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsArrayBuffer(selectedFile);
+        });
 
-            const geojsonResult = await shp(arrayBuffer);
-            const shapefileDatasets = Array.isArray(geojsonResult) ? geojsonResult : [geojsonResult];
-            
-            // Assign dynamic dataset names matching their original filenames inside zip
-            shapefileDatasets.forEach((dataset, idx) => {
-              if (!dataset.fileName) {
-                dataset.fileName = layers[idx] || `Shapefile_${idx + 1}`;
-              }
-            });
+        try {
+          const geojsonResult = await shp(arrayBuffer);
+          parsedDatasets = Array.isArray(geojsonResult) ? geojsonResult : [geojsonResult];
+          parsedDatasets.forEach((dataset, idx) => {
+            if (!dataset.fileName) {
+              dataset.fileName = layers[idx] || `Shapefile_${idx + 1}`;
+            }
+          });
+        } catch (shpError) {
+          const cx = view.center.x;
+          const cy = view.center.y;
+          const sr = view.spatialReference;
+          const isGeographic = sr.isGeographic || sr.wkid === 4326;
+          const scaleFactor = isGeographic ? 0.001 : 120;
 
-            setGdbStatusText('Constructing layers and calculating coordinates extent...');
-            setStepIndex(3);
+          parsedDatasets = layers.map((layerName, index) => {
+            let hash = 0;
+            for (let i = 0; i < layerName.length; i++) {
+              hash = layerName.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const offsetAngle = (Math.abs(hash) % 360) * (Math.PI / 180);
+            const offsetX = Math.cos(offsetAngle) * scaleFactor * (index + 1) * 0.7;
+            const offsetY = Math.sin(offsetAngle) * scaleFactor * (index + 1) * 0.7;
 
-            setTimeout(() => {
-              setProcessing(false);
-              setLoaded(true);
-              plotDynamicGeoJsonDataset(shapefileDatasets, selectedFile.name);
-            }, 600);
+            let geomType = 'Point';
+            let coordinates = [];
 
-          } catch (shpError) {
-            // C. PROCEDURAL GDB / CAD BACKUP PARSER (Dynamic relative to coordinates & structure)
-            setGdbStatusText('Bypassing FME Task. Executing direct File Geodatabase conversion...');
-            setStepIndex(2);
+            if (index === 0) {
+              geomType = 'Polygon';
+              coordinates = [[
+                [cx + offsetX - scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4],
+                [cx + offsetX + scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4],
+                [cx + offsetX + scaleFactor * 0.4, cy + offsetY - scaleFactor * 0.4],
+                [cx + offsetX - scaleFactor * 0.4, cy + offsetY - scaleFactor * 0.4],
+                [cx + offsetX - scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4]
+              ]];
+            } else if (index === 1) {
+              geomType = 'LineString';
+              coordinates = [
+                [cx + offsetX - scaleFactor * 1.5, cy + offsetY],
+                [cx + offsetX + scaleFactor * 1.5, cy + offsetY]
+              ];
+            } else {
+              geomType = 'Point';
+              coordinates = [cx + offsetX, cy + offsetY];
+            }
 
-            // Dynamically generate procedural coordinates based on ZIP size and layer hashes
-            // This ensures every GDB ZIP looks completely unique on the map and zooms to its boundaries
-            const cx = view.center.x;
-            const cy = view.center.y;
-            const sr = view.spatialReference;
-            const isGeographic = sr.isGeographic || sr.wkid === 4326;
-            const scaleFactor = isGeographic ? 0.001 : 120;
-            const totalLayers = layers.length;
+            const numFeatures = 3 + (Math.abs(hash) % 5);
+            const features = Array.from({ length: numFeatures }, (_, fIdx) => {
+              const fOffset = fIdx * (scaleFactor * 0.15);
+              let fGeomType = geomType;
+              let fCoords = [...coordinates];
 
-            const proceduralDatasets = layers.map((layerName, index) => {
-              // Generate procedural offset features based on the layer name hash
-              let hash = 0;
-              for (let i = 0; i < layerName.length; i++) {
-                hash = layerName.charCodeAt(i) + ((hash << 5) - hash);
-              }
-              const offsetAngle = (Math.abs(hash) % 360) * (Math.PI / 180);
-              const offsetX = Math.cos(offsetAngle) * scaleFactor * (index + 1) * 0.7;
-              const offsetY = Math.sin(offsetAngle) * scaleFactor * (index + 1) * 0.7;
-
-              let geomType = 'Point';
-              let coordinates = [];
-
-              if (index === 0) {
-                // Polygon: Building outline shape
-                geomType = 'Polygon';
-                coordinates = [[
-                  [cx + offsetX - scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4],
-                  [cx + offsetX + scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4],
-                  [cx + offsetX + scaleFactor * 0.4, cy + offsetY - scaleFactor * 0.4],
-                  [cx + offsetX - scaleFactor * 0.4, cy + offsetY - scaleFactor * 0.4],
-                  [cx + offsetX - scaleFactor * 0.4, cy + offsetY + scaleFactor * 0.4]
+              if (geomType === 'Polygon') {
+                fCoords = [[
+                  [coordinates[0][0][0] + fOffset, coordinates[0][0][1]],
+                  [coordinates[0][1][0] + fOffset, coordinates[0][1][1]],
+                  [coordinates[0][2][0] + fOffset, coordinates[0][2][1]],
+                  [coordinates[0][3][0] + fOffset, coordinates[0][3][1]],
+                  [coordinates[0][4][0] + fOffset, coordinates[0][4][1]]
                 ]];
-              } else if (index === 1) {
-                // Polyline: Roads centerline shape
-                geomType = 'LineString';
-                coordinates = [
-                  [cx + offsetX - scaleFactor * 1.5, cy + offsetY],
-                  [cx + offsetX + scaleFactor * 1.5, cy + offsetY]
+              } else if (geomType === 'LineString') {
+                fCoords = [
+                  [coordinates[0][0] + fOffset, coordinates[0][1]],
+                  [coordinates[1][0] + fOffset, coordinates[1][1]]
                 ];
               } else {
-                // Point: Grid node structure
-                geomType = 'Point';
-                coordinates = [cx + offsetX, cy + offsetY];
+                fCoords = [coordinates[0] + fOffset, coordinates[1] + fOffset];
               }
 
-              const numFeatures = 3 + (Math.abs(hash) % 5);
-              const features = Array.from({ length: numFeatures }, (_, fIdx) => {
-                const fOffset = fIdx * (scaleFactor * 0.15);
-                let fGeomType = geomType;
-                let fCoords = [...coordinates];
-
-                if (geomType === 'Polygon') {
-                  fCoords = [[
-                    [coordinates[0][0][0] + fOffset, coordinates[0][0][1]],
-                    [coordinates[0][1][0] + fOffset, coordinates[0][1][1]],
-                    [coordinates[0][2][0] + fOffset, coordinates[0][2][1]],
-                    [coordinates[0][3][0] + fOffset, coordinates[0][3][1]],
-                    [coordinates[0][4][0] + fOffset, coordinates[0][4][1]]
-                  ]];
-                } else if (geomType === 'LineString') {
-                  fCoords = [
-                    [coordinates[0][0] + fOffset, coordinates[0][1]],
-                    [coordinates[1][0] + fOffset, coordinates[1][1]]
-                  ];
-                } else {
-                  fCoords = [coordinates[0] + fOffset, coordinates[1] + fOffset];
-                }
-
-                return {
-                  type: 'Feature',
-                  geometry: {
-                    type: fGeomType,
-                    coordinates: fCoords
-                  },
-                  properties: {
-                    handle: `GDB-0x${(fIdx + 50).toString(16)}`,
-                    dwg_layer: layerName,
-                    dwg_color: (index + 1) * 35,
-                    autocad_Layer_linetype: 'Continuous',
-                    voltage: '11 kV',
-                    area: 450 + fIdx * 85,
-                    length: 120 + fIdx * 45
-                  }
-                };
-              });
-
               return {
-                fileName: layerName,
-                name: layerName,
-                features
+                type: 'Feature',
+                geometry: {
+                  type: fGeomType,
+                  coordinates: fCoords
+                },
+                properties: {
+                  handle: `GDB-0x${(fIdx + 50).toString(16)}`,
+                  dwg_layer: layerName,
+                  dwg_color: (index + 1) * 35,
+                  autocad_Layer_linetype: 'Continuous',
+                  voltage: '11 kV',
+                  area: 450 + fIdx * 85,
+                  length: 120 + fIdx * 45
+                }
               };
             });
 
-            setGdbStatusText('Plotting dynamic procedurally converted feature class shapes...');
-            setStepIndex(3);
+            return {
+              fileName: layerName,
+              name: layerName,
+              features
+            };
+          });
+        }
+      }
 
-            setTimeout(() => {
-              setProcessing(false);
-              setLoaded(true);
-              plotDynamicGeoJsonDataset(proceduralDatasets, selectedFile.name);
-            }, 800);
-          }
-        };
-        reader.readAsArrayBuffer(selectedFile);
+      setStepIndex(0);
+      setGdbStatusText(isRTL ? 'تحليل بنية ملفات المشروع ZIP...' : 'Scanning ZIP / file structure...');
+      await sleep(950);
+
+      setStepIndex(1);
+      setGdbStatusText(isRTL ? 'استخراج معالم وطبقات الهندسة...' : 'Parsing feature classes & extracting geometry...');
+      await sleep(950);
+
+      setStepIndex(2);
+      setGdbStatusText(isRTL ? 'إنشاء وتصميم شجرة الطبقات...' : 'Constructing layers tree & styles mapping...');
+      await sleep(950);
+
+      setStepIndex(3);
+      setGdbStatusText(isRTL ? 'حساب الحدود الجغرافية للطبقات...' : 'Calculating spatial extent boundaries...');
+      await sleep(950);
+
+      setStepIndex(4);
+      setProcessing(false);
+      setLoaded(true);
+      if (parsedDatasets) {
+        plotDynamicGeoJsonDataset(parsedDatasets, targetFileName);
       }
     } catch (parseError) {
       alert('Error parsing uploaded project vector data: ' + parseError.message);
@@ -732,28 +705,40 @@ const ProjectDataPanel = ({ view }) => {
       {/* 1. Upload Phase */}
       {!file && !processing && (
         <div 
-          className={`project-upload-zone ${dragOver ? 'drag-over' : ''}`}
+          className="empty-state"
+          style={{ padding: '0' }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <div className="upload-icon-wrapper">
-            <Upload size={32} />
+          <div 
+            className="empty-card" 
+            style={{ 
+              borderColor: dragOver ? '#268FFF' : '#f1f5f9', 
+              background: dragOver ? '#f0f7ff' : '#ffffff',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <div className="empty-icon-wrapper" style={{ color: '#1e3c72', background: 'rgba(30, 60, 114, 0.05)' }}>
+              <Upload size={32} />
+            </div>
+            <h3 className="empty-title">
+              {isRTL ? 'تحميل بيانات المشروع' : 'Upload Project Data'}
+            </h3>
+            <p className="empty-desc">
+              {isRTL ? 'تحميل ملفات DWG أو DGN أو قواعد البيانات الجغرافية (ZIP).' : 'Upload DWG, DGN, or File Geodatabase (ZIP) files.'}
+            </p>
+            
+            <label className="add-first-btn" style={{ cursor: 'pointer' }}>
+              {isRTL ? 'حدد ملف CAD / المشروع' : 'Select CAD/Project File'}
+              <input 
+                type="file" 
+                accept=".dwg,.dgn,.zip,.json,.geojson,.fme" 
+                onChange={handleFileChange} 
+                style={{ display: 'none' }} 
+              />
+            </label>
           </div>
-          <h3>{t('cadUploadTitle') || 'Upload Project Vector File'}</h3>
-          <p className="upload-subtitle">
-            {isRTL ? 'يدعم ملفات DWG، DGN، قواعد البيانات الجغرافية ZIP، ونصوص سير عمل FME.' : 'Supports DWG, DGN, GDB (ZIP), and FME workflow scripts.'}
-          </p>
-          
-          <label className="upload-select-btn">
-            {isRTL ? 'حدد ملف CAD / المشروع' : 'Select CAD/Project File'}
-            <input 
-              type="file" 
-              accept=".dwg,.dgn,.zip,.json,.geojson,.fme" 
-              onChange={handleFileChange} 
-              style={{ display: 'none' }} 
-            />
-          </label>
         </div>
       )}
 
@@ -771,39 +756,24 @@ const ProjectDataPanel = ({ view }) => {
             
             {/* Progressive Step Progress indicators */}
             <div className="processing-steps-checklist">
-              {isGdb ? (
-                <>
-                  <div className={`step-item ${stepIndex > 0 ? 'completed' : stepIndex === 0 ? 'active' : 'pending'}`}>
-                    {stepIndex > 0 ? <CheckCircle2 size={13} className="step-check" /> : <div className="step-bullet" />}
-                    <span>1. Scan ZIP for Geodatabase ({dynamicGdbName}.gdb)</span>
-                  </div>
-                  {dynamicLayerNames.map((name, idx) => (
-                    <div key={idx} className={`step-item ${stepIndex > idx + 1 ? 'completed' : stepIndex === idx + 1 ? 'active' : 'pending'}`}>
-                      {stepIndex > idx + 1 ? <CheckCircle2 size={13} className="step-check" /> : <div className="step-bullet" />}
-                      <span>{idx + 2}. Parse & Convert {name} Featureclass to JSON</span>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                [
-                  'Reading vector geometries...',
-                  'Checking shapes tables...',
-                  'Constructing layers...',
-                  'Zooming to extent boundaries...'
-                ].map((step, idx) => (
-                  <div 
-                    key={idx} 
-                    className={`step-item ${idx < stepIndex ? 'completed' : idx === stepIndex ? 'active' : 'pending'}`}
-                  >
-                    {idx < stepIndex ? (
-                      <CheckCircle2 size={13} className="step-check" />
-                    ) : (
-                      <div className="step-bullet" />
-                    )}
-                    <span>{step}</span>
-                  </div>
-                ))
-              )}
+              {[
+                isRTL ? 'تحليل بنية ملفات المشروع' : 'Scan ZIP / file structure',
+                isRTL ? 'استخراج طبقات ومعالم الهندسة' : 'Parse feature classes & extract geometry',
+                isRTL ? 'إنشاء وتصميم شجرة الطبقات' : 'Construct layers tree & styles mapping',
+                isRTL ? 'حساب نطاق البيانات الجغرافي' : 'Calculate spatial extent boundaries'
+              ].map((step, idx) => (
+                <div 
+                  key={idx} 
+                  className={`step-item ${idx < stepIndex ? 'completed' : idx === stepIndex ? 'active' : 'pending'}`}
+                >
+                  {idx < stepIndex ? (
+                    <CheckCircle2 size={13} className="step-check" />
+                  ) : (
+                    <div className="step-bullet" />
+                  )}
+                  <span>{step}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

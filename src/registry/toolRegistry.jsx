@@ -277,7 +277,7 @@ export const TOOL_REGISTRY = {
   geoprocessing: {
     id: 'geoprocessing',
     supportedModes: ['2d', '3d'],
-    toolbar: true,
+    toolbar: false,
     icon: GearLocationMarkerIcon
   },
   advanced_query: {

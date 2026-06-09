@@ -2,7 +2,7 @@ export const toolbarConfig = {
   groups: [
     {
       id: 'explore',
-      toolIds: ['layers', 'time_compare', 'split', 'split_view', 'blend', 'arcade', 'spatial_analysis', 'geoprocessing']
+      toolIds: ['layers', 'time_compare', 'split', 'split_view', 'blend', 'arcade', 'spatial_analysis']
     },
     {
       id: 'analysis',

@@ -11,7 +11,6 @@ const MapControls = ({ view, activeTool, onToolSelect, is3D, onToggle3D, is3DDis
   const handleHome    = () => {
     if (view) view.goTo({ center: [50.55, 26.22], zoom: 9 });
   };
-  
 
   return (
     <div className="map-controls-container">

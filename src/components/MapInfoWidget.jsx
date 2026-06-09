@@ -168,6 +168,7 @@ const MapInfoWidget = ({ view }) => {
   const [scaleBar, setScaleBar] = useState({ value: 0, unitKey: 'unitKm' });
   const [coordFormat, setCoordFormat] = useState(COORD_FORMATS.WEBMERCATOR);
   const [isProjLoaded, setIsProjLoaded] = useState(false);
+  const [heading, setHeading] = useState(0);
   const lastUpdate = useRef(0);
 
   // Load projection engine for DLTM support
@@ -239,9 +240,50 @@ const MapInfoWidget = ({ view }) => {
     };
   }, [view]);
 
+  useEffect(() => {
+    if (!view) return;
+
+    let initialHeading = 0;
+    const is3D = view.type === "3d";
+    if (is3D) {
+      initialHeading = view.camera ? view.camera.heading : 0;
+    } else {
+      initialHeading = view.rotation || 0;
+    }
+    setHeading(initialHeading);
+
+    let watchHandle;
+    if (is3D) {
+      watchHandle = view.watch("camera", (newCamera) => {
+        if (newCamera) {
+          setHeading(newCamera.heading || 0);
+        }
+      });
+    } else {
+      watchHandle = view.watch("rotation", (newRotation) => {
+        setHeading(newRotation || 0);
+      });
+    }
+
+    return () => {
+      if (watchHandle) {
+        watchHandle.remove();
+      }
+    };
+  }, [view]);
+
   const handleScaleChange = (newScale) => {
     if (view) {
       view.scale = newScale;
+    }
+  };
+
+  const handleResetHeading = () => {
+    if (!view) return;
+    if (view.type === "3d") {
+      view.goTo({ heading: 0 });
+    } else {
+      view.goTo({ rotation: 0 });
     }
   };
 
@@ -321,35 +363,83 @@ const MapInfoWidget = ({ view }) => {
   }));
 
   const formattedCoords = getFormattedCoords();
+  const showCompass = view && (view.type === "3d" || view.constraints?.rotationEnabled !== false);
 
   return (
-    <div className="map-info-widget">
-      {/* Row 1: Coordinates Selector */}
-      <div className="info-row-item coords-row">
-        <span className="info-item-label">{t('coordinates') || 'Coords'}:</span>
-        <MiniSelect
-          options={coordOptions}
-          value={coordFormat}
-          displayValue={formattedCoords.display}
-          onChange={setCoordFormat}
-        />
-      </div>
+    <div className="map-info-widget-wrapper">
+      {showCompass && (
+        <div className="standalone-compass-widget">
+          <button 
+            className="compass-ref-btn" 
+            onClick={handleResetHeading}
+            title={t('compass') || 'Reset Orientation to North'}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{
+                transform: `rotate(${-heading}deg)`,
+                transition: 'transform 0.1s ease-out'
+              }}
+            >
+              {/* Outer circle */}
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+              
+              {/* North arrowhead (split into light/dark half for 3D look) */}
+              <polygon points="12,7 15,16 12,13" fill="#df261c" />
+              <polygon points="12,7 9,16 12,13" fill="#b51e16" />
+              
+              {/* "N" text indicating North */}
+              <text
+                x="12"
+                y="5.5"
+                fontSize="6"
+                fontFamily="system-ui, -apple-system, sans-serif"
+                fontWeight="900"
+                fill="#df261c"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={{ userSelect: 'none' }}
+              >
+                N
+              </text>
+            </svg>
+          </button>
+        </div>
+      )}
 
-      {/* Row 2: Scale Selector & Scale Bar */}
-      <div className="info-row-item scale-row">
-        <div className="info-item">
-          <span className="info-item-label">{t('scale') || 'Scale'}:</span>
-          <ScaleSelect
-            options={scaleOptions}
-            value={scale}
-            onChange={handleScaleChange}
+      <div className="map-info-widget">
+        {/* Row 1: Coordinates Selector */}
+        <div className="info-row-item coords-row">
+          <span className="info-item-label">{t('coordinates') || 'Coords'}:</span>
+          <MiniSelect
+            options={coordOptions}
+            value={coordFormat}
+            displayValue={formattedCoords.display}
+            onChange={setCoordFormat}
           />
         </div>
-        <div className="info-item scale-bar-item">
-          <div className="scale-bar-segment">
-            <div className="scale-bar-label-inner" style={{ display: 'flex', alignItems: 'center', gap: '4px', direction: 'ltr' }}>
-              <span dir="ltr">{scaleBar.value}</span>
-              <span dir={lang === 'AR' ? 'rtl' : 'ltr'}>{t(scaleBar.unitKey)}</span>
+
+        <div className="info-widget-divider" />
+
+        {/* Row 2: Scale Selector & Scale Bar */}
+        <div className="info-row-item scale-row">
+          <div className="info-item">
+            <span className="info-item-label">{t('scale') || 'Scale'}:</span>
+            <ScaleSelect
+              options={scaleOptions}
+              value={scale}
+              onChange={handleScaleChange}
+            />
+          </div>
+          <div className="info-item scale-bar-item">
+            <div className="scale-bar-segment">
+              <div className="scale-bar-label-inner" style={{ display: 'flex', alignItems: 'center', gap: '4px', direction: 'ltr' }}>
+                <span dir="ltr">{scaleBar.value}</span>
+                <span dir={lang === 'AR' ? 'rtl' : 'ltr'}>{t(scaleBar.unitKey)}</span>
+              </div>
             </div>
           </div>
         </div>

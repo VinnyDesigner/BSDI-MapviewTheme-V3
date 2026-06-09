@@ -493,7 +493,16 @@ export const LayersPanel = ({
     );
   }
 
-  const orderedLayers = layerOrder.map(id => layersConfig.find(l => l.id === id)).filter(Boolean);
+  const orderedLayers = [];
+  layerOrder.forEach(id => {
+    const found = layersConfig.find(l => l.id === id);
+    if (found) orderedLayers.push(found);
+  });
+  layersConfig.forEach(l => {
+    if (!orderedLayers.some(o => o.id === l.id)) {
+      orderedLayers.push(l);
+    }
+  });
   const filteredLayers = orderedLayers.filter(l =>
     l.title.toLowerCase().includes(layerSearch.toLowerCase())
   );

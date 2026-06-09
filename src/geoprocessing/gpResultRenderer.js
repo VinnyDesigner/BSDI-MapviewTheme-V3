@@ -33,6 +33,7 @@ function nextColour() {
   return RESULT_COLOURS[_colourIndex++ % RESULT_COLOURS.length];
 }
 
+
 /**
  * Main entry — processes all outputs from a GP job and dispatches to sub-renderers.
  *
@@ -216,6 +217,33 @@ async function _renderMapLayer(out, def, view, runId, toolName, rgbColour) {
       featureCount++;
     }
 
+    let isMultipart = false;
+    let geomType = 'Polygon'; // Fallback
+    if (features.length > 0) {
+      const firstGeom = _esriGeomToGraphic(features[0].geometry || features[0]);
+      if (firstGeom) {
+        const type = firstGeom.type || (firstGeom.rings ? 'polygon' : (firstGeom.paths ? 'polyline' : 'point'));
+        geomType = type.charAt(0).toUpperCase() + type.slice(1);
+        
+        for (const f of features) {
+          const g = _esriGeomToGraphic(f.geometry || f);
+          if (g) {
+            if (g.rings && g.rings.length > 1) {
+              isMultipart = true;
+              break;
+            } else if (g.paths && g.paths.length > 1) {
+              isMultipart = true;
+              break;
+            } else if (g.points && g.points.length > 1) {
+              isMultipart = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+    const geometryTypeLabel = isMultipart ? `Multipart ${geomType}` : geomType;
+
     view.map.add(graphicsLayer);
 
     return {
@@ -226,6 +254,7 @@ async function _renderMapLayer(out, def, view, runId, toolName, rgbColour) {
       featureCount,
       extent: fullExtent,
       type: 'graphics',
+      geometryType: geometryTypeLabel
     };
   }
 
