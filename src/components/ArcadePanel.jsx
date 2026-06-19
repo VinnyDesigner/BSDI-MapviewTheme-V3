@@ -3,7 +3,7 @@ import {
   Database, Play, RotateCcw, ChevronRight, ChevronLeft,
   CheckCircle2, AlertTriangle, Layers, Type, MessageSquare,
   Filter, Eye, Calculator, Search, Code, FolderOpen, Folder,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Check
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import CustomSelect from './CustomSelect';
@@ -55,6 +55,31 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
   const isLoadingLayers = false;
   const [isFunctionsExpanded, setIsFunctionsExpanded] = useState(false);
   const editorRef = useRef(null);
+
+  // States and refs for searchable field dropdown
+  const [selectedField, setSelectedField] = useState('');
+  const [fieldSearchTerm, setFieldSearchTerm] = useState('');
+  const [isFieldDropdownOpen, setIsFieldDropdownOpen] = useState(false);
+  const fieldDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (fieldDropdownRef.current && !fieldDropdownRef.current.contains(event.target)) {
+        setIsFieldDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (fields.length > 0) {
+      const defaultField = fields.find(f => f.name.toLowerCase() === 'objectid' || f.name.toLowerCase() === 'fid' || f.name.toLowerCase() === 'id') || fields[0];
+      setSelectedField(defaultField.name);
+    } else {
+      setSelectedField('');
+    }
+  }, [fields]);
 
   const expressionTypes = [
     { value: 'Styling',    title: t('Symbology / Renderer') || 'Symbology / Renderer' },
@@ -110,43 +135,76 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
       setFields([]);
 
       try {
-        const parts = selectedLayerId.split(':::');
-        const parentId = parts[0];
-        const subIdStr = parts[2];
-        const parentLayer = view.map.findLayerById(parentId);
+        let parentId = selectedLayerId;
+        let subIdStr = null;
+
+        if (selectedLayerId.includes(':::sub:::')) {
+          const parts = selectedLayerId.split(':::sub:::');
+          parentId = parts[0];
+          subIdStr = parts[1];
+        } else if (selectedLayerId.includes('_sub_')) {
+          const parts = selectedLayerId.split('_sub_');
+          parentId = parts[0];
+          subIdStr = parts[1];
+        } else if (selectedLayerId.includes(':::')) {
+          const parts = selectedLayerId.split(':::');
+          parentId = parts[0];
+          subIdStr = parts[2];
+        }
+
+        const parentLayer = view.map.allLayers.find(l => l.id === parentId) || view.map.findLayerById(parentId);
 
         if (!parentLayer) {
-          setLoadError('Service not found.');
+          setLoadError('Service layer not found in map.');
           return;
         }
 
+        // Execute load
+        await parentLayer.load();
+
         let targetFields = [];
-        if (parentLayer.type === 'map-image' && subIdStr) {
-          const subId = parseInt(subIdStr, 10);
-          const findSub = (subs) => {
-            const arr = subs.toArray ? subs.toArray() : Array.from(subs);
-            for (const s of arr) {
-              if (s.id === subId) return s;
-              if (s.sublayers) {
-                const found = findSub(s.sublayers);
-                if (found) return found;
-              }
-            }
-            return null;
-          };
-          const sublayer = findSub(parentLayer.sublayers);
-          if (sublayer) {
-            await sublayer.load();
-            targetFields = sublayer.fields || [];
-          }
-        } else if (parentLayer.type === 'feature') {
-          await parentLayer.load();
+        if (subIdStr) {
+          const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer');
+          const FeatureLayer = FeatureLayerModule.default || FeatureLayerModule;
+          const sublayerUrl = `${parentLayer.url}/${subIdStr}`;
+          
+          const tempFeatureLayer = new FeatureLayer({
+            url: sublayerUrl
+          });
+          
+          await tempFeatureLayer.load();
+          targetFields = tempFeatureLayer.fields || [];
+        } else {
           targetFields = parentLayer.fields || [];
         }
 
+        console.log("Selected Layer:", parentLayer.title || parentLayer.name);
+        console.log("Layer ID:", parentLayer.id);
+        const targetUrl = subIdStr ? `${parentLayer.url}/${subIdStr}` : parentLayer.url;
+        console.log("Layer URL:", targetUrl);
+        console.log("Total Fields:", targetFields.length);
+        console.log("Fields Returned:", targetFields);
+
         setFields(targetFields);
       } catch (err) {
-        setLoadError('Failed to load schema.');
+        console.error("Arcade Panel: Failed to load layer metadata.", err);
+        let parentId = selectedLayerId;
+        let subIdStr = null;
+        if (selectedLayerId.includes('_sub_')) {
+          const parts = selectedLayerId.split('_sub_');
+          parentId = parts[0];
+          subIdStr = parts[1];
+        } else if (selectedLayerId.includes(':::sub:::')) {
+          const parts = selectedLayerId.split(':::sub:::');
+          parentId = parts[0];
+          subIdStr = parts[1];
+        }
+        const parentLayer = view.map.allLayers.find(l => l.id === parentId) || view.map.findLayerById(parentId);
+        const failingUrl = parentLayer 
+          ? (subIdStr ? `${parentLayer.url}/${subIdStr}` : parentLayer.url)
+          : 'Unknown URL';
+        console.error("Failing URL:", failingUrl);
+        setLoadError(`Failed to load schema for URL: ${failingUrl}.`);
       } finally {
         setIsLoadingFields(false);
       }
@@ -229,29 +287,71 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
         </div>
 
         {/* Available Fields */}
-        <div className="editor-section-v3">
-          <div className="section-header-v3">
+        <div className="editor-section-v3" ref={fieldDropdownRef}>
+          <div className="section-header-v3" style={{ marginBottom: '4px' }}>
             <span>{t('Available Fields') || 'Available Fields'}</span>
           </div>
-          <div className="white-box-container">
-            <div className="fields-chip-container">
-              {isLoadingFields ? (
-                <div className="loading-text">{t('Loading') || 'Fetching fields...'}</div>
-              ) : fields.length > 0 ? (
-                fields.map(f => (
-                  <button 
-                    key={f.name} 
-                    className="field-chip-v3"
-                    onClick={() => insertAtCursor(`$feature.${f.name}`)}
-                    title={f.alias || f.name}
-                  >
-                    {f.alias || f.name}
-                  </button>
-                ))
-              ) : (
-                <div className="empty-text">{t('Select a layer to see fields') || 'Select a layer to see fields'}</div>
-              )}
+          <div className="custom-select-container">
+            <div 
+              className={`custom-select-trigger ${isFieldDropdownOpen ? 'active' : ''} ${fields.length === 0 ? 'disabled' : ''}`}
+              onClick={() => {
+                if (fields.length > 0) {
+                  setIsFieldDropdownOpen(!isFieldDropdownOpen);
+                }
+              }}
+            >
+              <span className="selected-value" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
+                {fields.length > 0 ? `[ ${selectedField || 'select field'} ]` : `[ ${t('Select a layer to see fields') || 'Select a layer to see fields'} ]`}
+              </span>
+              <ChevronDown size={16} className={`chevron ${isFieldDropdownOpen ? 'open' : ''}`} />
             </div>
+
+            {isFieldDropdownOpen && (
+              <div className="custom-select-dropdown" style={{ maxHeight: '130px' }}>
+                {/* Search Input */}
+                <div className="select-search-wrapper">
+                  <Search size={14} className="search-icon" />
+                  <input
+                    type="text"
+                    className="select-search-input"
+                    placeholder={t('Search fields...') || 'Search fields...'}
+                    value={fieldSearchTerm}
+                    onChange={(e) => setFieldSearchTerm(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Fields List */}
+                <div className="options-list" style={{ maxHeight: '90px' }}>
+                  {fields
+                    .filter(f => f.name.toLowerCase().includes(fieldSearchTerm.toLowerCase()))
+                    .map((f, index) => {
+                      const isSelected = f.name === selectedField;
+                      return (
+                        <div
+                          key={f.name || index}
+                          className={`option-item ${isSelected ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedField(f.name);
+                            insertAtCursor(`$feature.${f.name}`);
+                            setIsFieldDropdownOpen(false);
+                            setFieldSearchTerm('');
+                          }}
+                          style={{ fontFamily: 'monospace' }}
+                        >
+                          <span>{f.name}</span>
+                          {isSelected && <Check size={14} className="check-icon" />}
+                        </div>
+                      );
+                    })}
+                  {fields.filter(f => f.name.toLowerCase().includes(fieldSearchTerm.toLowerCase())).length === 0 && (
+                    <div className="no-options">
+                      {t('No fields found') || 'No fields found'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

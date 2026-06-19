@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronRight, ChevronLeft, Check, Search } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer...", showAllOption = false, multi = false }) => {
+const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer...", showAllOption = false, multi = false, maxHeight = "140px", openDirection = "auto" }) => {
   const { t, lang } = useLanguage();
   const isRTL = lang === 'AR';
 
@@ -19,6 +19,7 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
   const [expandedNodes, setExpandedNodes] = useState({});
+  const [openUpward, setOpenUpward] = useState(false);
 
   const allOptionId = typeof showAllOption === 'string' ? showAllOption : 'all';
   const allOptionLabel = 'All Visible Layers';
@@ -72,6 +73,26 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      if (openDirection === 'up') {
+        setOpenUpward(true);
+        return;
+      }
+      if (openDirection === 'down') {
+        setOpenUpward(false);
+        return;
+      }
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 260 && rect.top > 260) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen, openDirection]);
+
   const findSelectedTitle = () => {
     if (multi) {
       if (!Array.isArray(value) || value.length === 0) return null;
@@ -91,8 +112,7 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
       
       const titles = findTitles(treeData, value);
       if (titles.length === 0) return null;
-      if (titles.length === 1) return titles[0];
-      return `${titles.length} layers selected`;
+      return titles.join(', ');
     } else {
       if (showAllOption && value === allOptionId) return allOptionLabel;
       const findTitle = (nodes) => {
@@ -205,7 +225,8 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             userSelect: 'none',
-            flex: 1
+            flex: 1,
+            minWidth: 0
           }}
         >
           {node.title}
@@ -283,16 +304,22 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
         <div 
           className="custom-select-dropdown" 
           style={{ 
+            position: 'absolute',
+            top: openUpward ? 'auto' : 'calc(100% + 4px)',
+            bottom: openUpward ? 'calc(100% + 4px)' : 'auto',
+            left: 0,
             width: '100%',
             minWidth: '100%',
             maxWidth: '100%',
             boxSizing: 'border-box',
             border: '1px solid #e2e8f0',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
             zIndex: 9999,
             direction: isRTL ? 'rtl' : 'ltr',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            backgroundColor: 'white',
+            borderRadius: '8px'
           }}
         >
           <div style={{ padding: '8px 8px 0', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'white' }}>
@@ -314,7 +341,7 @@ const TreeSelect = ({ value, onChange, treeData, placeholder = "Select Layer..."
               />
             </div>
           </div>
-          <div className="options-list" style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
+          <div className="options-list" style={{ maxHeight: maxHeight, overflowY: 'auto', overflowX: 'hidden', padding: '8px' }}>
             {showAllOption && (
               <div 
                 style={{

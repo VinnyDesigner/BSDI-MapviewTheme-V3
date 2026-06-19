@@ -1386,7 +1386,18 @@ const ArcGISMap = ({
           parentId = parts[0];
           subIdStr = parts[1];
 
-          const parentLayer = view.map.findLayerById(parentId);
+          const parentLayer = view.map.findLayerById(parentId) || view.map.allLayers.find(l => l.id === parentId);
+          if (!parentLayer) {
+            console.warn('Arcade: Parent layer not found:', parentId);
+            return;
+          }
+          serviceUrl = parentLayer.url;
+        } else if (rawId.includes('_sub_')) {
+          const parts = rawId.split('_sub_');
+          parentId = parts[0];
+          subIdStr = parts[1];
+
+          const parentLayer = view.map.findLayerById(parentId) || view.map.allLayers.find(l => l.id === parentId);
           if (!parentLayer) {
             console.warn('Arcade: Parent layer not found:', parentId);
             return;
@@ -1394,7 +1405,7 @@ const ArcGISMap = ({
           serviceUrl = parentLayer.url;
         } else {
           // Direct feature layer
-          targetFL = view.map.findLayerById(rawId);
+          targetFL = view.map.findLayerById(rawId) || view.map.allLayers.find(l => l.id === rawId);
           if (!targetFL) {
             console.warn('Arcade: Layer not found:', rawId);
             return;
@@ -1439,6 +1450,7 @@ const ArcGISMap = ({
 
   // ── Spatial Analysis Engine ──────────────────────────────────────────────
   const spatialGraphicsLayer = useRef(new GraphicsLayer({ id: 'spatial-analysis-layer' }));
+  const processedLastRunRef = useRef(null);
   
   useEffect(() => {
     const view = viewRef.current;
@@ -1456,10 +1468,17 @@ const ArcGISMap = ({
     const view = viewRef.current;
     if (!view || !spatialSettings?.lastRun || activeTool !== 'spatial_analysis') return;
 
+    if (processedLastRunRef.current === spatialSettings.lastRun) {
+      return;
+    }
+
     const runAnalysis = async () => {
+      processedLastRunRef.current = spatialSettings.lastRun;
       const startTime = performance.now();
       const { subTool, layerId, bufferDistance, bufferUnit, lastRun } = spatialSettings;
       if (!lastRun) return;
+
+      console.log('Analysis Started:', subTool, 'ID:', lastRun);
 
       const ANALYSIS_PALETTE = [
         '#268fff', // Blue
@@ -1490,6 +1509,7 @@ const ArcGISMap = ({
         if (sub === 'Clip Features') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_clip');
         if (sub === 'Summarize Within') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_summarize_within');
         if (sub === 'Viewshed Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_viewshed');
+        if (sub === 'Heatmap Density') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_heatmap_density');
         return null;
       };
       
@@ -1552,6 +1572,288 @@ const ArcGISMap = ({
               gpStatus: { status: 'failed', message: `Required parameters missing: ${missingParams.join(', ')}`, progress: null },
               status: `Validation failed: Required parameters missing: ${missingParams.join(', ')}`
             }));
+            return;
+          }
+
+          if (gpManifest.toolId === 'gp_summarize_within') {
+            const statType = paramValues.Statistics_Type || 'Count';
+            if (statType !== 'Count') {
+              const summaryField = paramValues.Field;
+              if (!summaryField) {
+                setSpatialSettings(prev => ({
+                  ...prev,
+                  gpStatus: { status: 'failed', message: `Summary Field is required for statistic type '${statType}'.`, progress: null },
+                  status: `Validation failed: Summary Field is required for statistic type '${statType}'.`
+                }));
+                return;
+              }
+
+              const summaryLayerId = paramValues.Summary_Layer;
+              if (summaryLayerId && view) {
+                let targetLayer = null;
+                if (view.map) {
+                  if (summaryLayerId.includes('_sub_')) {
+                    const [parentId, subId] = summaryLayerId.split('_sub_');
+                    const parent = view.map.findLayerById(parentId);
+                    if (parent && parent.allSublayers) {
+                      targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
+                    }
+                  } else {
+                    targetLayer = view.map.findLayerById(summaryLayerId);
+                  }
+                }
+
+                if (targetLayer) {
+                  let fields = [];
+                  if (targetLayer.fields) {
+                    fields = targetLayer.fields;
+                  } else if (targetLayer.layer?.fields) {
+                    fields = targetLayer.layer.fields;
+                  }
+
+                  const NUMERIC_FIELD_TYPES = ['small-integer', 'integer', 'single', 'double', 'long', 'number', 'oid'];
+                  const numericFieldNames = fields
+                    .filter(f => NUMERIC_FIELD_TYPES.includes(f.type?.toLowerCase()))
+                    .map(f => f.name);
+
+                  if (numericFieldNames.length === 0 && targetLayer.graphics && targetLayer.graphics.length > 0) {
+                    const firstGraphic = targetLayer.graphics.getItemAt(0);
+                    if (firstGraphic && firstGraphic.attributes) {
+                      Object.keys(firstGraphic.attributes).forEach(key => {
+                        if (typeof firstGraphic.attributes[key] === 'number') {
+                          numericFieldNames.push(key);
+                        }
+                      });
+                    }
+                  }
+
+                  if (!numericFieldNames.includes(summaryField)) {
+                    setSpatialSettings(prev => ({
+                      ...prev,
+                      gpStatus: { status: 'failed', message: `Selected Summary Field '${summaryField}' is not a numeric field on Features to Summarize layer.`, progress: null },
+                      status: `Validation failed: Selected Summary Field '${summaryField}' is not a numeric field on Features to Summarize layer.`
+                    }));
+                    return;
+                  }
+                }
+              }
+            }
+          }
+
+          if (gpManifest.toolId === 'gp_heatmap_density') {
+            const radius = Number(paramValues.Radius ?? 25);
+            const intensity = Number(paramValues.Intensity ?? 100);
+            const colorRamp = paramValues.Color_Ramp ?? 'Blue to Red';
+            const densityMethod = paramValues.Density_Method ?? 'Kernel Density';
+
+            // Timeout handler (10 seconds)
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Analysis timed out after 10 seconds.')), 10000)
+            );
+
+            const executeHeatmap = async () => {
+              console.log('Heatmap Density: Analysis Started');
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: { status: 'submitting', message: 'Analysis Started', progress: 15 },
+                status: 'Analysis Started'
+              }));
+
+              const selectedInputLayerId = paramValues.Input_Points;
+              if (!selectedInputLayerId) {
+                throw new Error('No input point layer selected.');
+              }
+
+              let targetLayer = null;
+              let layerTitle = "Layer";
+              let layerUrl = "";
+              let isSublayer = false;
+
+              if (view.map) {
+                if (selectedInputLayerId.includes('_sub_')) {
+                  isSublayer = true;
+                  const [parentId, subId] = selectedInputLayerId.split('_sub_');
+                  const parent = view.map.findLayerById(parentId);
+                  if (parent && parent.type === 'map-image') {
+                    const sub = parent.allSublayers?.find(s => s.id === parseInt(subId));
+                    layerTitle = sub ? sub.title : layerTitle;
+                    layerUrl = `${parent.url}/${subId}`;
+                    const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer');
+                    const FeatureLayer = FeatureLayerModule.default || FeatureLayerModule;
+                    targetLayer = new FeatureLayer({ url: layerUrl });
+                    await targetLayer.load();
+                  }
+                } else {
+                  const tempLayer = view.map.findLayerById(selectedInputLayerId);
+                  if (tempLayer) {
+                    targetLayer = tempLayer;
+                    layerTitle = tempLayer.title || layerTitle;
+                    layerUrl = tempLayer.url || "";
+                    if (!targetLayer.loaded) {
+                      await targetLayer.load();
+                    }
+                  }
+                }
+              }
+
+              if (!targetLayer) {
+                throw new Error('Selected target layer could not be found.');
+              }
+
+              // Verify the geometry type returned from ArcGIS layer metadata
+              const geomType = targetLayer.geometryType;
+
+              // Log: Selected Layer Name, Layer ID, Service URL, Geometry Type
+              console.log(`Selected Layer: ${layerTitle}`);
+              console.log(`Layer ID: ${selectedInputLayerId}`);
+              console.log(`Service URL: ${layerUrl || 'N/A'}`);
+              console.log(`Geometry Type: ${geomType}`);
+
+              // Display geometry type in console exactly as required
+              console.log(`Selected Layer: ${layerTitle}\nGeometry Type: ${geomType}`);
+
+              // Verify validation logic accepts: geometryType === "point" or "multipoint"
+              const isPoint = geomType === 'point' || geomType === 'multipoint';
+              if (!isPoint) {
+                console.log(`Heatmap execution disabled. Selected layer is not point geometry: ${geomType}`);
+                throw new Error(`Heatmap Density requires a point feature layer. Detected: ${geomType}`);
+              }
+
+              // Step 1: Query features count (lightweight)
+              console.log('Heatmap Density: Querying features...');
+              const countQuery = targetLayer.createQuery();
+              countQuery.where = '1=1';
+              const count = await targetLayer.queryFeatureCount(countQuery);
+              console.log(`Heatmap Density: Features Queried. Count: ${count}`);
+
+              // Log: Selected Layer, Geometry Type, Total Feature Count
+              console.log(`Selected Layer: ${layerTitle}`);
+              console.log(`Geometry Type: ${geomType}`);
+              console.log(`Total Feature Count: ${count}`);
+
+              // Validation checks
+              if (count === 0) {
+                throw new Error('No features found in target layer.');
+              }
+
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: { status: 'executing', message: 'Density Calculation Started', progress: 50 },
+                status: 'Density Calculation Started'
+              }));
+
+              // Step 2: Density Calculation / Renderer setup
+              console.log('Heatmap Density: Density Calculation Started');
+              
+              let stops = [];
+              if (colorRamp === 'Purple to Yellow') {
+                stops = [
+                  { color: "rgba(128, 0, 128, 0)", ratio: 0 },
+                  { color: "rgba(128, 0, 128, 0.25)", ratio: 0.1 },
+                  { color: "rgba(255, 20, 147, 0.6)", ratio: 0.55 },
+                  { color: "rgba(255, 255, 0, 0.95)", ratio: 1.0 }
+                ];
+              } else {
+                stops = [
+                  { color: "rgba(0, 0, 255, 0)", ratio: 0 },
+                  { color: "rgba(0, 0, 255, 0.25)", ratio: 0.1 },
+                  { color: "rgba(0, 255, 0, 0.55)", ratio: 0.45 },
+                  { color: "rgba(255, 255, 0, 0.8)", ratio: 0.75 },
+                  { color: "rgba(255, 0, 0, 0.95)", ratio: 1.0 }
+                ];
+              }
+
+              const heatmapRenderer = {
+                type: "heatmap",
+                colorStops: stops,
+                blurRadius: radius,
+                maxPixelIntensity: intensity,
+                minPixelIntensity: 0
+              };
+
+              console.log('Heatmap Density: Density Calculation Completed');
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: { status: 'generating_results', message: 'Density Calculation Completed', progress: 80 },
+                status: 'Density Calculation Completed'
+              }));
+
+              // Step 3: Apply renderer directly to point layer if standard FeatureLayer, otherwise add new client-side FeatureLayer
+              console.log('Heatmap Density: Applying renderer...');
+              if (!isSublayer) {
+                targetLayer.renderer = heatmapRenderer;
+                if (typeof targetLayer.refresh === 'function') {
+                  targetLayer.refresh();
+                }
+              } else {
+                // If it is a sublayer of MapImageLayer, create a new feature layer pointing to its URL and render it
+                const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer');
+                const FeatureLayer = FeatureLayerModule.default || FeatureLayerModule;
+                const heatmapLayer = new FeatureLayer({
+                  id: `heatmap-${lastRun}`,
+                  title: `Heatmap: ${layerTitle}`,
+                  url: layerUrl,
+                  renderer: heatmapRenderer
+                });
+                view.map.add(heatmapLayer);
+              }
+
+              console.log('Heatmap Density: Result Layer Added');
+              return { count, targetLayer };
+            };
+
+            try {
+              // Race the execution against 10 second timeout
+              const { count, targetLayer } = await Promise.race([executeHeatmap(), timeoutPromise]);
+
+              let warningMsg = null;
+              if (count === 1) {
+                warningMsg = 'Only 1 point found. Heatmap density works best with 10 or more points.';
+              } else if (count > 1 && count < 10) {
+                warningMsg = `Only ${count} points found. Heatmap density works best with 10 or more points.`;
+              }
+
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: { 
+                  status: 'succeeded', 
+                  message: warningMsg ? `Warning: ${warningMsg}` : 'Completed', 
+                  progress: 100 
+                },
+                status: warningMsg ? `Warning: ${warningMsg}` : 'Completed'
+              }));
+
+              // Zoom to target layer
+              if (targetLayer.fullExtent) {
+                view.goTo({ target: targetLayer.fullExtent });
+              }
+
+              if (typeof onSpatialResult === 'function') {
+                 onSpatialResult({
+                   id: lastRun,
+                   title: `${targetLayer.title || 'Layer'} - Heatmap`,
+                   count: count,
+                   inputFeatureCount: count,
+                   outputFeatureCount: count,
+                   geometryType: 'Point',
+                   color: resultColour,
+                   analysisType: subTool,
+                   executionTime: Math.round(performance.now() - startTime),
+                   raw: {
+                     Heatmap_Radius: radius,
+                     Color_Ramp: colorRamp,
+                     Density_Method: densityMethod
+                   }
+                 });
+              }
+            } catch (error) {
+              console.error('Heatmap Density failed:', error);
+              setSpatialSettings(prev => ({
+                ...prev,
+                gpStatus: { status: 'failed', message: error.message || 'Heatmap Density failed', progress: null },
+                status: `Failed: ${error.message || 'Heatmap Density failed'}`
+              }));
+            }
             return;
           }
           
@@ -1637,10 +1939,12 @@ const ArcGISMap = ({
             });
           }
 
+          console.log('Analysis Completed:', subTool, 'Status: Success');
+
           setSpatialSettings(prev => ({
             ...prev,
-            gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 },
-            status: 'Analysis complete'
+            gpStatus: { status: 'succeeded', message: result.warning ? `Warning: ${result.warning}` : 'Completed', progress: 100 },
+            status: result.warning ? `Warning: ${result.warning}` : 'Analysis complete'
           }));
 
           if (typeof onSpatialResult === 'function') {
@@ -1650,9 +1954,9 @@ const ArcGISMap = ({
             onSpatialResult({
               id: lastRun,
               title: outputLayerName,
-              count: mapLayerResult?.featureCount || 0,
-              inputFeatureCount: inputFeatureCount,
-              outputFeatureCount: mapLayerResult?.featureCount || 0,
+              count: result.raw?.Output_Count ?? mapLayerResult?.featureCount ?? 0,
+              inputFeatureCount: result.raw?.Input_Count ?? inputFeatureCount,
+              outputFeatureCount: result.raw?.Output_Count ?? mapLayerResult?.featureCount ?? 0,
               geometryType: mapLayerResult?.geometryType || 'Polygon',
               distance: paramValues.Distance || 0,
               unit: paramValues.Unit || '',
@@ -1660,7 +1964,8 @@ const ArcGISMap = ({
               toolType: gpManifest.toolId,
               color: colour,
               analysisType: subTool,
-              executionTime: Math.round(performance.now() - startTime)
+              executionTime: Math.round(performance.now() - startTime),
+              raw: result.raw
             });
           }
           return;
@@ -2031,129 +2336,6 @@ const ArcGISMap = ({
             }
           }
         }
-        else if (subTool === 'Heatmap Density') {
-          setSpatialSettings(prev => ({
-            ...prev,
-            gpStatus: { status: 'submitting', message: 'Submitting', progress: 10 }
-          }));
-
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          setSpatialSettings(prev => ({
-            ...prev,
-            gpStatus: { status: 'executing', message: 'Executing', progress: 50 }
-          }));
-
-          const query = targetLayer.createQuery();
-          query.where = '1=1';
-          query.outSpatialReference = view.spatialReference;
-          query.returnGeometry = true;
-          const results = await targetLayer.queryFeatures(query);
-          const features = results.features;
-          if (features.length === 0) {
-            setSpatialSettings(prev => ({
-              ...prev,
-              gpStatus: { status: 'failed', message: 'No features found in target layer', progress: null }
-            }));
-            return;
-          }
-
-          // Only points make sense for heatmaps
-          const pointFeatures = features.filter(f => f.geometry && (f.geometry.type === 'point' || f.geometry.type === 'multipoint'));
-          if (pointFeatures.length === 0) {
-            setSpatialSettings(prev => ({
-              ...prev,
-              gpStatus: { status: 'failed', message: 'Heatmap requires point features.', progress: null }
-            }));
-            return;
-          }
-
-          setSpatialSettings(prev => ({
-            ...prev,
-            gpStatus: { status: 'generating_results', message: 'Generating Results', progress: 85 }
-          }));
-
-          await new Promise(resolve => setTimeout(resolve, 350));
-
-          // Add invisible graphics so export works
-          pointFeatures.forEach(f => {
-             const graphic = new Graphic({
-               geometry: f.geometry,
-               symbol: { type: "simple-marker", color: [0,0,0,0], outline: { width: 0 } },
-               attributes: { ...f.attributes, title: `Heatmap Point`, runId: lastRun }
-             });
-             graphic.visible = false;
-             spatialGraphicsLayer.current.add(graphic);
-          });
-
-          // Create actual FeatureLayer for heatmap renderer
-          const heatmapRenderer = {
-            type: "heatmap",
-            colorStops: [
-              { color: "rgba(63, 40, 102, 0)", ratio: 0 },
-              { color: "#472b77", ratio: 0.083 },
-              { color: "#4e2d87", ratio: 0.166 },
-              { color: "#563098", ratio: 0.25 },
-              { color: "#5d32a8", ratio: 0.333 },
-              { color: "#6735be", ratio: 0.416 },
-              { color: "#7139d4", ratio: 0.5 },
-              { color: "#7b3ce9", ratio: 0.583 },
-              { color: "#853fff", ratio: 0.666 },
-              { color: "#a46fbf", ratio: 0.75 },
-              { color: "#c29f80", ratio: 0.833 },
-              { color: "#e0cf40", ratio: 0.916 },
-              { color: "#ffff00", ratio: 1 }
-            ],
-            maxPixelIntensity: 100,
-            minPixelIntensity: 0
-          };
-
-          const heatmapLayer = new FeatureLayer({
-            id: `heatmap-${lastRun}`,
-            title: `Heatmap: ${title}`,
-            source: pointFeatures.map((f, i) => new Graphic({ geometry: f.geometry, attributes: { ObjectID: i } })),
-            objectIdField: "ObjectID",
-            geometryType: "point",
-            spatialReference: view.spatialReference,
-            fields: [{ name: "ObjectID", alias: "ObjectID", type: "oid" }],
-            renderer: heatmapRenderer
-          });
-
-          view.map.add(heatmapLayer);
-          
-          let fullExtent = null;
-          if (pointFeatures.length > 0) {
-            const xs = pointFeatures.map(f => f.geometry.x).filter(x => typeof x === 'number');
-            const ys = pointFeatures.map(f => f.geometry.y).filter(y => typeof y === 'number');
-            if (xs.length > 0 && ys.length > 0) {
-              fullExtent = {
-                xmin: Math.min(...xs), ymin: Math.min(...ys),
-                xmax: Math.max(...xs), ymax: Math.max(...ys),
-                spatialReference: view.spatialReference
-              };
-              view.goTo({ target: fullExtent });
-            }
-          }
-
-          setSpatialSettings(prev => ({
-            ...prev,
-            gpStatus: { status: 'succeeded', message: 'Completed', progress: 100 }
-          }));
-
-          if (typeof onSpatialResult === 'function') {
-             onSpatialResult({
-               id: lastRun,
-               title: `${title} - Heatmap`,
-               count: pointFeatures.length,
-               inputFeatureCount: pointFeatures.length,
-               outputFeatureCount: pointFeatures.length,
-               geometryType: 'Polygon',
-               color: resultColour,
-               analysisType: subTool,
-               executionTime: Math.round(performance.now() - startTime)
-             });
-          }
-        }
         else if (subTool === 'Proximity (Nearest)') {
            view.cursor = 'crosshair';
            view.once('click', async (event) => {
@@ -2270,6 +2452,7 @@ const ArcGISMap = ({
            });
         }
       } catch (err) {
+        console.log('Analysis Completed:', spatialSettings.subTool || 'Unknown Tool', 'Status: Failed, Error:', err.message || err);
         console.error('Spatial Analysis run error:', err);
         setSpatialSettings(prev => ({
           ...prev,

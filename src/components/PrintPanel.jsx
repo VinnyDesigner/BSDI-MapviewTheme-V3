@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CustomSelect from './CustomSelect';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -673,17 +674,17 @@ const PrintPanel = ({ view, t, lang }) => {
 
             <div className="form-group">
               <label>{t('printTemplateLabel')}</label>
-              <select 
-                className="tool-select"
+              <CustomSelect 
+                options={[
+                  { id: 'A4 Portrait', title: 'A4 Portrait' },
+                  { id: 'A4 Landscape', title: 'A4 Landscape' },
+                  { id: 'A3 Portrait', title: 'A3 Portrait' },
+                  { id: 'A3 Landscape', title: 'A3 Landscape' }
+                ]}
                 value={template}
-                onChange={(e) => setTemplate(e.target.value)}
-              >
-                <option value="" disabled>{t('printSelectTemplate')}</option>
-                <option>A4 Portrait</option>
-                <option>A4 Landscape</option>
-                <option>A3 Portrait</option>
-                <option>A3 Landscape</option>
-              </select>
+                onChange={setTemplate}
+                placeholder={t('printSelectTemplate')}
+              />
             </div>
 
             <div className="form-checkbox-group">
@@ -728,15 +729,15 @@ const PrintPanel = ({ view, t, lang }) => {
 
             <div className="form-group">
               <label>{t('printFormat')}</label>
-              <select 
-                className="tool-select"
+              <CustomSelect 
+                options={[
+                  { id: 'PNG', title: 'PNG' },
+                  { id: 'PDF', title: 'PDF' },
+                  { id: 'JPG', title: 'JPG' }
+                ]}
                 value={format}
-                onChange={(e) => setFormat(e.target.value)}
-              >
-                <option>PNG</option>
-                <option>PDF</option>
-                <option>JPG</option>
-              </select>
+                onChange={setFormat}
+              />
             </div>
 
             {/* Advanced Section */}
@@ -833,15 +834,15 @@ const PrintPanel = ({ view, t, lang }) => {
 
                   <div className="form-group">
                     <label>{t('printDpiLabel')}</label>
-                    <select 
-                      className="tool-select"
+                    <CustomSelect 
+                      options={[
+                        { id: '96', title: '96' },
+                        { id: '150', title: '150' },
+                        { id: '300', title: '300' }
+                      ]}
                       value={dpi}
-                      onChange={(e) => setDpi(e.target.value)}
-                    >
-                      <option>96</option>
-                      <option>150</option>
-                      <option>300</option>
-                    </select>
+                      onChange={setDpi}
+                    />
                   </div>
 
                   <div className="form-group">

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import CustomSelect from './CustomSelect';
 import {
   Upload, File, Trash2, Maximize2, AlertCircle,
   CheckCircle2, RefreshCw, Database, Eye, EyeOff,
@@ -25,9 +26,25 @@ const TYPE_EXTS = {
   Shapefile: ['.zip'],
   CSV:       ['.csv'],
   Excel:     ['.xlsx', '.xls'],
+  KML:       ['.kml'],
+  GPX:       ['.gpx'],
+  DWG:       ['.dwg'],
+  DGN:       ['.dgn'],
+  DXF:       ['.dxf']
 };
 
-const UNSUPPORTED_FORMATS = ['KML', 'DXF', 'DWG', 'DGN'];
+const UNSUPPORTED_FORMATS = ['DWG', 'DGN', 'DXF'];
+
+// Helper to auto-detect file type from extension
+const detectFileType = (fileName) => {
+  const ext = '.' + fileName.split('.').pop().toLowerCase();
+  for (const [type, exts] of Object.entries(TYPE_EXTS)) {
+    if (exts.includes(ext)) {
+      return type;
+    }
+  }
+  return null;
+};
 
 // Vibrant, curated color palette for symbology and tree rendering
 const LAYER_COLORS = [
@@ -153,6 +170,7 @@ const AddDataPanel = ({
   const [wkid,         setWkid]         = useState('4326');
   const [isUploading,  setIsUploading]  = useState(false);
   const [error,        setError]        = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Excel column-picker state
   const [excelPicker,  setExcelPicker]  = useState(null); // { columns, data, fileName }
@@ -234,22 +252,23 @@ const AddDataPanel = ({
 
   const processFile = async (file) => {
     setError(null);
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-
-    // Unsupported format gate
-    if (UNSUPPORTED_FORMATS.includes(fileType)) {
-      setError(`${fileType} is not currently supported for direct upload. Please convert to GeoJSON or Shapefile first.`);
+    const detectedType = detectFileType(file.name);
+    if (!detectedType) {
+      setError(`Unsupported file format.`);
       return;
     }
 
-    const allowed = TYPE_EXTS[fileType] || [];
-    if (!allowed.includes(ext)) {
-      setError(`Wrong file extension for ${fileType}. Expected: ${allowed.join(', ')} — got: ${ext}`);
+    setFileType(detectedType);
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+    // Unsupported format gate
+    if (UNSUPPORTED_FORMATS.includes(detectedType)) {
+      setError(`${detectedType} is not currently supported for direct upload. Please convert to GeoJSON or Shapefile first.`);
       return;
     }
 
     // Excel: show column picker first
-    if (fileType === 'Excel') {
+    if (detectedType === 'Excel') {
       setIsUploading(true);
       try {
         const ab = await file.arrayBuffer();
@@ -274,7 +293,7 @@ const AddDataPanel = ({
 
     setIsUploading(true);
     try {
-      await ingestFile(file, file.name, ext);
+      await ingestFile(file, file.name, ext, detectedType);
     } catch (err) {
       console.error(err);
       setError(err.message || 'Failed to load file.');
@@ -285,10 +304,10 @@ const AddDataPanel = ({
 
   /* ── ingest non-Excel files ──────────────────────────────────────── */
 
-  const ingestFile = async (file, fileName, ext) => {
+  const ingestFile = async (file, fileName, ext, detectedType) => {
     let srWkid = parseInt(wkid, 10) || 4326;
 
-    if (fileType === 'GeoJSON' && (ext === '.geojson' || ext === '.json')) {
+    if (detectedType === 'GeoJSON' && (ext === '.geojson' || ext === '.json')) {
       const text = await file.text();
       let geojson;
       try { geojson = JSON.parse(text); } catch { throw new Error('File is not valid JSON/GeoJSON.'); }
@@ -303,15 +322,322 @@ const AddDataPanel = ({
       
       await addGeoJSONLayer(geojson, fileName, srWkid);
     }
-    else if (fileType === 'CSV' && ext === '.csv') {
+    else if (detectedType === 'KML' && ext === '.kml') {
+      await addKMLLayer(file, fileName);
+    }
+    else if (detectedType === 'GPX' && ext === '.gpx') {
+      await addGPXLayer(file, fileName);
+    }
+    else if (detectedType === 'CSV' && ext === '.csv') {
       await addCSVLayer(file, fileName, srWkid);
     }
-    else if (fileType === 'Shapefile' && ext === '.zip') {
+    else if (detectedType === 'Shapefile' && ext === '.zip') {
       await addShapefile(file, fileName, srWkid);
     }
     else {
-      throw new Error(`Unsupported format combination: ${fileType} / ${ext}`);
+      throw new Error(`Unsupported format combination: ${detectedType} / ${ext}`);
     }
+  };
+
+  /* ── GPX layer ───────────────────────────────────────────────────── */
+
+  const addGPXLayer = async (file, title) => {
+    const text = await file.text();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(text, "text/xml");
+    
+    // Check for parse error
+    const parseError = xmlDoc.getElementsByTagName("parsererror");
+    if (parseError.length > 0) {
+      throw new Error("Invalid XML/GPX format.");
+    }
+
+    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+    const wpts = xmlDoc.getElementsByTagName("wpt");
+    
+    const graphics = [];
+    const sourceSR = new SpatialReference({ wkid: 4326 });
+    const mapSR = view.spatialReference;
+    let objectIdCounter = 1;
+    let detectedGeomType = 'point';
+
+    // 1. Process trackpoints as a single polyline track
+    if (trkpts.length > 0) {
+      const coordLines = [];
+      for (let i = 0; i < trkpts.length; i++) {
+        const pt = trkpts[i];
+        const lat = parseFloat(pt.getAttribute("lat"));
+        const lon = parseFloat(pt.getAttribute("lon"));
+        if (!isNaN(lat) && !isNaN(lon)) {
+          coordLines.push([lon, lat]);
+        }
+      }
+      
+      if (coordLines.length > 0) {
+        let geom = new Polyline({ paths: [coordLines], spatialReference: sourceSR });
+        let projectedGeom = geom;
+        if (mapSR.wkid !== 4326) {
+          projectedGeom = projectOperator.execute(geom, mapSR);
+        }
+        graphics.push(new Graphic({
+          geometry: projectedGeom,
+          attributes: {
+            ObjectID: objectIdCounter++,
+            Name: title || 'Track',
+            Description: `Track with ${trkpts.length} points`
+          }
+        }));
+        detectedGeomType = 'polyline';
+      }
+    }
+
+    // 2. Process waypoints as individual point features
+    for (let i = 0; i < wpts.length; i++) {
+      const pt = wpts[i];
+      const lat = parseFloat(pt.getAttribute("lat"));
+      const lon = parseFloat(pt.getAttribute("lon"));
+      const nameEl = pt.getElementsByTagName("name")[0];
+      
+      if (!isNaN(lat) && !isNaN(lon)) {
+        let geom = new Point({ x: lon, y: lat, spatialReference: sourceSR });
+        let projectedGeom = geom;
+        if (mapSR.wkid !== 4326) {
+          projectedGeom = projectOperator.execute(geom, mapSR);
+        }
+        graphics.push(new Graphic({
+          geometry: projectedGeom,
+          attributes: {
+            ObjectID: objectIdCounter++,
+            Name: nameEl ? nameEl.textContent : `Waypoint ${i + 1}`,
+            Description: 'Waypoint'
+          }
+        }));
+        if (trkpts.length === 0) {
+          detectedGeomType = 'point';
+        }
+      }
+    }
+
+    if (graphics.length === 0) {
+      throw new Error("Could not parse any trackpoints or waypoints from the GPX file.");
+    }
+
+    const defaultColor = nextColor();
+    const symbol = createSymbol(detectedGeomType, defaultColor);
+    const fields = [
+      { name: "ObjectID", alias: "ObjectID", type: "oid" },
+      { name: "Name", alias: "Name", type: "string" },
+      { name: "Description", alias: "Description", type: "string" }
+    ];
+
+    const childLayerId = `uploaded-gpx-child-${crypto.randomUUID()}`;
+    const layer = new FeatureLayer({
+      id: childLayerId,
+      title: title,
+      source: graphics,
+      geometryType: detectedGeomType,
+      objectIdField: "ObjectID",
+      fields: fields,
+      renderer: {
+        type: 'simple',
+        symbol
+      },
+      spatialReference: mapSR,
+      visible: true
+    });
+
+    view.map.add(layer);
+    view.map.reorder(layer, view.map.layers.length - 1);
+    registerLayerInPanel(layer, childLayerId);
+
+    const childObj = {
+      id: childLayerId,
+      name: title.substring(0, title.lastIndexOf('.')) || title,
+      visible: true,
+      layer,
+      color: defaultColor,
+      geometryType: detectedGeomType,
+      featureCount: graphics.length
+    };
+
+    const resultObj = {
+      id: `uploaded-gpx-parent-${crypto.randomUUID()}`,
+      name: title,
+      date: new Date().toLocaleString(),
+      featureCount: graphics.length,
+      visible: true,
+      type: 'multi-file',
+      children: [childObj]
+    };
+
+    addTreeResult(resultObj);
+    zoomTo(layer, title);
+  };
+
+  /* ── KML layer ───────────────────────────────────────────────────── */
+
+  const addKMLLayer = async (file, title) => {
+    const text = await file.text();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(text, "text/xml");
+    
+    // Check for parse error
+    const parseError = xmlDoc.getElementsByTagName("parsererror");
+    if (parseError.length > 0) {
+      throw new Error("Invalid XML/KML format.");
+    }
+
+    const placemarks = xmlDoc.getElementsByTagName("Placemark");
+    if (placemarks.length === 0) {
+      throw new Error("No placemarks found in the KML file.");
+    }
+
+    const graphics = [];
+    const sourceSR = new SpatialReference({ wkid: 4326 });
+    const mapSR = view.spatialReference;
+    let objectIdCounter = 1;
+    let detectedGeomType = 'point';
+
+    for (let i = 0; i < placemarks.length; i++) {
+      const pm = placemarks[i];
+      
+      // Get properties/attributes
+      const nameEl = pm.getElementsByTagName("name")[0];
+      const descEl = pm.getElementsByTagName("description")[0];
+      const properties = {
+        ObjectID: objectIdCounter++,
+        Name: nameEl ? nameEl.textContent : `Placemark ${i + 1}`,
+        Description: descEl ? descEl.textContent : ''
+      };
+
+      // Handle Point
+      const points = pm.getElementsByTagName("Point");
+      if (points.length > 0) {
+        const coordNode = points[0].getElementsByTagName("coordinates")[0];
+        if (coordNode) {
+          const coordsStr = coordNode.textContent.trim();
+          const parts = coordsStr.split(/[\s,]+/);
+          if (parts.length >= 2) {
+            const lon = parseFloat(parts[0]);
+            const lat = parseFloat(parts[1]);
+            if (!isNaN(lon) && !isNaN(lat)) {
+              let geom = new Point({ x: lon, y: lat, spatialReference: sourceSR });
+              let projectedGeom = geom;
+              if (mapSR.wkid !== 4326) {
+                projectedGeom = projectOperator.execute(geom, mapSR);
+              }
+              graphics.push(new Graphic({
+                geometry: projectedGeom,
+                attributes: properties
+              }));
+              detectedGeomType = 'point';
+            }
+          }
+        }
+      }
+
+      // Handle LineString
+      const lines = pm.getElementsByTagName("LineString");
+      if (lines.length > 0) {
+        const coordNode = lines[0].getElementsByTagName("coordinates")[0];
+        if (coordNode) {
+          const coordsStr = coordNode.textContent.trim();
+          const coordLines = coordsStr.split(/\s+/).map(pt => pt.split(',').map(parseFloat)).filter(pt => pt.length >= 2 && !isNaN(pt[0]) && !isNaN(pt[1]));
+          if (coordLines.length > 0) {
+            let geom = new Polyline({ paths: [coordLines], spatialReference: sourceSR });
+            let projectedGeom = geom;
+            if (mapSR.wkid !== 4326) {
+              projectedGeom = projectOperator.execute(geom, mapSR);
+            }
+            graphics.push(new Graphic({
+              geometry: projectedGeom,
+              attributes: properties
+            }));
+            detectedGeomType = 'polyline';
+          }
+        }
+      }
+
+      // Handle Polygon
+      const polygons = pm.getElementsByTagName("Polygon");
+      if (polygons.length > 0) {
+        const outerBoundary = polygons[0].getElementsByTagName("outerBoundaryIs")[0];
+        if (outerBoundary) {
+          const coordNode = outerBoundary.getElementsByTagName("coordinates")[0];
+          if (coordNode) {
+            const coordsStr = coordNode.textContent.trim();
+            const coordRings = coordsStr.split(/\s+/).map(pt => pt.split(',').map(parseFloat)).filter(pt => pt.length >= 2 && !isNaN(pt[0]) && !isNaN(pt[1]));
+            if (coordRings.length > 0) {
+              let geom = new Polygon({ rings: [coordRings], spatialReference: sourceSR });
+              let projectedGeom = geom;
+              if (mapSR.wkid !== 4326) {
+                projectedGeom = projectOperator.execute(geom, mapSR);
+              }
+              graphics.push(new Graphic({
+                geometry: projectedGeom,
+                attributes: properties
+              }));
+              detectedGeomType = 'polygon';
+            }
+          }
+        }
+      }
+    }
+
+    if (graphics.length === 0) {
+      throw new Error("Could not parse any valid geometries from the KML file.");
+    }
+
+    const defaultColor = nextColor();
+    const symbol = createSymbol(detectedGeomType, defaultColor);
+    const fields = [
+      { name: "ObjectID", alias: "ObjectID", type: "oid" },
+      { name: "Name", alias: "Name", type: "string" },
+      { name: "Description", alias: "Description", type: "string" }
+    ];
+
+    const childLayerId = `uploaded-kml-child-${crypto.randomUUID()}`;
+    const layer = new FeatureLayer({
+      id: childLayerId,
+      title: title,
+      source: graphics,
+      geometryType: detectedGeomType,
+      objectIdField: "ObjectID",
+      fields: fields,
+      renderer: {
+        type: 'simple',
+        symbol
+      },
+      spatialReference: mapSR,
+      visible: true
+    });
+
+    view.map.add(layer);
+    view.map.reorder(layer, view.map.layers.length - 1);
+    registerLayerInPanel(layer, childLayerId);
+
+    const childObj = {
+      id: childLayerId,
+      name: title.substring(0, title.lastIndexOf('.')) || title,
+      visible: true,
+      layer,
+      color: defaultColor,
+      geometryType: detectedGeomType,
+      featureCount: graphics.length
+    };
+
+    const resultObj = {
+      id: `uploaded-kml-parent-${crypto.randomUUID()}`,
+      name: title,
+      date: new Date().toLocaleString(),
+      featureCount: graphics.length,
+      visible: true,
+      type: 'multi-file',
+      children: [childObj]
+    };
+
+    addTreeResult(resultObj);
+    zoomTo(layer, title);
   };
 
   /* ── GeoJSON layer ───────────────────────────────────────────────── */
@@ -880,27 +1206,43 @@ const AddDataPanel = ({
         {activeTab === 'add' ? (
           <div className="add-data-form">
 
-            {/* File type */}
-            <div className="form-group">
-              <label>{t('addDataFileType')}</label>
-              <div className="select-wrapper">
-                <select className="tool-select" value={fileType} onChange={e => { setFileType(e.target.value); setError(null); setExcelPicker(null); setXCol(''); setYCol(''); setExcelError(''); }}>
-                  <option>GeoJSON</option>
-                  <option>Shapefile</option>
-                  <option>CSV</option>
-                  <option>Excel</option>
-                  <option disabled>──────────</option>
-                  <option>KML</option>
-                  <option>DXF</option>
-                  <option>DWG</option>
-                  <option>DGN</option>
-                </select>
-                <ChevronDown size={14} className="select-chevron" />
+            {/* Drop zone / Upload container */}
+            <div
+              className={`upload-zone ${isUploading ? 'uploading' : ''}`}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={onFileChange}
+                accept={Object.values(TYPE_EXTS).flat().join(',')}
+              />
+              <div className="upload-content">
+                <div className="upload-icon-wrapper">
+                  {isUploading
+                    ? <RefreshCw size={24} color="#df261c" className="spinning" />
+                    : <Upload size={24} color="#df261c" />
+                  }
+                </div>
+                <p className="upload-title">
+                  {isUploading ? t('addDataDropProcessing') : t('addDataDropTitle')}
+                </p>
+                <p className="upload-formats">
+                  {t('addDataAccepted') || 'Supported formats:'} Shapefile (.zip), GeoJSON, CSV, Excel, KML, GPX
+                </p>
+                {!isUploading && (
+                  <button className="browse-btn tertiary" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+                    {t('addDataBrowse')}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Unsupported banner */}
-            {isUnsupported ? (
+            {/* Unsupported banner (if CAD or unsupported format detected) */}
+            {isUnsupported && (
               <div className="unsupported-banner">
                 <AlertCircle size={16} />
                 <div>
@@ -908,95 +1250,99 @@ const AddDataPanel = ({
                   <p>{t('addDataUnsupportedHint')}</p>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* Inline Excel Column Picker */}
+            {fileType === 'Excel' && excelPicker && (
               <>
-                {/* Drop zone */}
-                <div
-                  className={`upload-zone ${isUploading ? 'uploading' : ''}`}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: 'none' }}
-                    onChange={onFileChange}
-                    accept={TYPE_EXTS[fileType]?.join(',') ?? '*'}
-                  />
-                  <div className="upload-content">
-                    <div className="upload-icon-wrapper">
-                      {isUploading
-                        ? <RefreshCw size={24} color="#df261c" className="spinning" />
-                        : <Upload size={24} color="#df261c" />
-                      }
-                    </div>
-                    <p className="upload-title">
-                      {isUploading ? t('addDataDropProcessing') : t('addDataDropTitle')}
-                    </p>
-                    <p className="upload-formats">{t('addDataAccepted')} {allowedExts}</p>
-                    {!isUploading && (
-                      <button className="browse-btn tertiary" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-                        {t('addDataBrowse')}
-                      </button>
-                    )}
+                <div className="excel-col-row">
+                  <div className="form-group">
+                    <label>{t('addDataXCoord')}</label>
+                    <CustomSelect 
+                      options={excelPicker.columns.map(c => ({ id: c, title: c }))} 
+                      value={xCol} 
+                      onChange={setXCol} 
+                      placeholder={t('addDataSelectX')}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>{t('addDataYCoord')}</label>
+                    <CustomSelect 
+                      options={excelPicker.columns.map(c => ({ id: c, title: c }))} 
+                      value={yCol} 
+                      onChange={setYCol} 
+                      placeholder={t('addDataSelectY')}
+                    />
                   </div>
                 </div>
-
-                {/* Inline Excel Column Picker */}
-                {fileType === 'Excel' && excelPicker && (
-                  <>
-                    <div className="excel-col-row">
-                      <div className="form-group">
-                        <label>{t('addDataXCoord')}</label>
-                        <div className="select-wrapper">
-                          <select className="tool-select" value={xCol} onChange={e => setXCol(e.target.value)}>
-                            <option value="">{t('addDataSelectX')}</option>
-                            {excelPicker.columns.map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} className="select-chevron" />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label>{t('addDataYCoord')}</label>
-                        <div className="select-wrapper">
-                          <select className="tool-select" value={yCol} onChange={e => setYCol(e.target.value)}>
-                            <option value="">{t('addDataSelectY')}</option>
-                            {excelPicker.columns.map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} className="select-chevron" />
-                        </div>
-                      </div>
-                    </div>
-                    {excelError && (
-                      <div className="error-alert">
-                        <AlertCircle size={14} />
-                        <span>{excelError}</span>
-                      </div>
-                    )}
-                  </>
+                {excelError && (
+                  <div className="error-alert">
+                    <AlertCircle size={14} />
+                    <span>{excelError}</span>
+                  </div>
                 )}
-
-
-                {/* WKID */}
-                <div className="form-group">
-                  <label>{t('addDataWkid')}</label>
-                  <input
-                    type="text"
-                    className="tool-input"
-                    placeholder="e.g. 4326"
-                    value={wkid}
-                    onChange={e => setWkid(e.target.value)}
-                  />
-                  <span className="form-hint">
-                    {t('addDataWkidHint')}
-                  </span>
-                </div>
               </>
+            )}
+
+            {/* Advanced Options expandable section (rendered for Shapefile, CSV, Excel, CAD) */}
+            {['Shapefile', 'CSV', 'Excel', 'DWG', 'DGN', 'DXF'].includes(fileType) && (
+              <div className="advanced-options-section">
+                <button
+                  type="button"
+                  className="advanced-toggle-btn"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                >
+                  <span>{t('addDataAdvancedOptions') || 'Advanced Options'}</span>
+                  <ChevronDown size={16} className={`chevron-icon ${showAdvanced ? 'expanded' : ''}`} />
+                </button>
+                
+                {showAdvanced && (
+                  <div className="advanced-options-content">
+                    {/* File Type override option */}
+                    <div className="form-group">
+                      <label>{t('addDataFileType')}</label>
+                      <CustomSelect 
+                        options={[
+                          { id: 'GeoJSON', title: 'GeoJSON' },
+                          { id: 'Shapefile', title: 'Shapefile' },
+                          { id: 'CSV', title: 'CSV' },
+                          { id: 'Excel', title: 'Excel' },
+                          { id: 'divider-1', title: '──────────', isHeader: true },
+                          { id: 'KML', title: 'KML' },
+                          { id: 'GPX', title: 'GPX' },
+                          { id: 'DXF', title: 'DXF' },
+                          { id: 'DWG', title: 'DWG' },
+                          { id: 'DGN', title: 'DGN' }
+                        ]}
+                        value={fileType}
+                        onChange={val => { 
+                          setFileType(val); 
+                          setError(null); 
+                          setExcelPicker(null); 
+                          setXCol(''); 
+                          setYCol(''); 
+                          setExcelError(''); 
+                        }}
+                      />
+                    </div>
+
+                    {/* WKID input field */}
+                    <div className="form-group">
+                      <label>{t('addDataWkid')}</label>
+                      <input
+                        type="text"
+                        className="tool-input"
+                        placeholder="e.g. 4326"
+                        value={wkid}
+                        onChange={e => setWkid(e.target.value)}
+                      />
+                      <span className="form-hint">
+                        {t('addDataWkidHint')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {error && (

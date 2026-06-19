@@ -271,6 +271,13 @@ export class GPExecutionEngine {
 
     const executionTime = `${(Date.now() - this._startTime).toFixed(0)} ms`;
 
+    console.log('=== BUFFER ANALYSIS RESULT VALIDATION ===');
+    console.log('Selected feature count:', features.length);
+    console.log('Buffer result count:', serializedFeatures.length);
+    console.log('Dissolve type:', dissolveType);
+    console.log('Geometry type:', detectedGeomType);
+    console.log('=========================================');
+
     console.log('[GP Service Client Buffer] Completed successfully. Total buffered features:', serializedFeatures.length);
     console.log('[GP Service Client Buffer] Output FeatureSet:', outputFeatureSet);
 
@@ -286,6 +293,8 @@ export class GPExecutionEngine {
       raw: {
         Input_Features: layerTitle,
         Output_Layer_Name: paramValues.Output_Layer_Name || `${layerTitle}_Buffer`,
+        Input_Count: features.length,
+        Output_Count: serializedFeatures.length,
         Distance: distance,
         Unit: unit,
         Method: method,
@@ -824,6 +833,8 @@ export class GPExecutionEngine {
       raw: {
         Input_Observation_Point: layerTitle,
         Output_Layer_Name: outputLayerName,
+        Input_Count: validPointGeometries.length,
+        Output_Count: viewshedGraphics.length,
         Observer_Height: `${observerHeightVal} ${observerHeightUnit}`,
         Target_Height: `${targetHeightVal} ${targetHeightUnit}`,
         Maximum_Distance: `${maxDistanceVal} ${distanceUnit}`,
@@ -844,6 +855,9 @@ export class GPExecutionEngine {
     }
     if (!clipLayerId) {
       throw new Error('Clip Boundary Layer is required. Please select a boundary polygon layer.');
+    }
+    if (inputLayerId === clipLayerId) {
+      throw new Error('Input Layer and Clip Boundary Layer must be different layers.');
     }
 
     onStatusUpdate({ status: 'submitted', message: 'Fetching layers data…', progress: 30 });
@@ -971,15 +985,38 @@ export class GPExecutionEngine {
       clipBoundary = geometryEngine.union(clipGeometries);
     }
 
+    const clip = (inputGeometry, clipBoundaryGeometry) => {
+      return geometryEngine.intersect(inputGeometry, clipBoundaryGeometry);
+    };
+
+    const getGeometryArea = (geom) => {
+      if (!geom || geom.type !== 'polygon') return 0;
+      try {
+        return Math.abs(geometryEngine.geodesicArea(geom, "square-meters"));
+      } catch (e) {
+        try {
+          return Math.abs(geometryEngine.planarArea(geom, "square-meters"));
+        } catch (_) {
+          return 0;
+        }
+      }
+    };
+
+    let totalInputArea = 0;
+    let totalOutputArea = 0;
     const clippedGraphics = [];
+
     for (const feat of projectedInputFeatures) {
       const inputGeom = feat.geometry;
       if (!inputGeom) continue;
 
+      totalInputArea += getGeometryArea(inputGeom);
+
       try {
         if (geometryEngine.intersects(inputGeom, clipBoundary)) {
-          const clippedGeom = geometryEngine.intersect(inputGeom, clipBoundary);
+          const clippedGeom = clip(inputGeom, clipBoundary);
           if (clippedGeom) {
+            totalOutputArea += getGeometryArea(clippedGeom);
             clippedGraphics.push({
               geometry: clippedGeom.toJSON(),
               attributes: { ...(feat.attributes || {}) }
@@ -1031,14 +1068,30 @@ export class GPExecutionEngine {
     const clipExtent = getExtent(clipFeatures.map(f => f.geometry));
 
     // Log diagnostic diagnostics
-    console.log('--- Clip Operation Validation Diagnostics ---');
-    console.log('Input Layer Feature Count:', inputFeatures.length);
-    console.log('Input Layer WKID:', inputLayer.spatialReference?.wkid || 'unknown');
-    console.log('Input Layer Extent:', inputExtent);
+    console.log('--- Clip Operation Validation Logs ---');
+    console.log('Input Layer Name:', inputLayerTitle);
+    console.log('Clip Boundary Layer Name:', clipLayerTitle);
+    console.log('Input Feature Count:', inputFeatures.length);
     console.log('Clip Boundary Feature Count:', clipFeatures.length);
-    console.log('Clip Boundary WKID:', clipLayer.spatialReference?.wkid || 'unknown');
-    console.log('Clip Boundary Extent:', clipExtent);
-    console.log('Output Clipped Features Count:', clippedGraphics.length);
+    console.log('Confirm different layers: YES (checked that input and clip boundary layers are not identical)');
+    console.log('Total Area Before Clip:', totalInputArea.toFixed(2), 'sq m');
+    console.log('Total Area After Clip:', totalOutputArea.toFixed(2), 'sq m');
+    
+    const isAreaBased = projectedInputFeatures.some(f => f.geometry && f.geometry.type === 'polygon');
+    let warningMessage = "";
+    if (isAreaBased && totalInputArea > 0 && Math.abs(totalInputArea - totalOutputArea) < 1e-3) {
+      warningMessage = "Clip operation produced no change.";
+      console.warn("WARNING:", warningMessage);
+    }
+
+    const areaReductionPercent = totalInputArea > 0 
+      ? (((totalInputArea - totalOutputArea) / totalInputArea) * 100).toFixed(2) 
+      : "0.00";
+
+    console.log('--- Geometry Diagnostics ---');
+    console.log('Geometry Before Clip (JSON):', projectedInputFeatures.map(f => f.geometry?.toJSON()));
+    console.log('Geometry After Clip (JSON):', clippedGraphics.map(g => g.geometry));
+    console.log('Area Reduction Percentage:', areaReductionPercent + '%');
     console.log('--------------------------------------------');
 
     if (clippedGraphics.length === 0) {
@@ -1055,11 +1108,12 @@ export class GPExecutionEngine {
       spatialReference: targetSR.toJSON()
     };
 
-    onStatusUpdate({ status: 'succeeded', message: 'Completed', progress: 100 });
+    onStatusUpdate({ status: 'succeeded', message: warningMessage ? `Warning: ${warningMessage}` : 'Completed', progress: 100 });
     const executionTime = `${(Date.now() - this._startTime).toFixed(0)} ms`;
 
     return {
       success: true,
+      warning: warningMessage || undefined,
       outputs: [
         {
           name: 'Out_Feature_Class',
@@ -1071,8 +1125,14 @@ export class GPExecutionEngine {
         Input_Layer: inputLayerTitle,
         Clip_Boundary_Layer: clipLayerTitle,
         Output_Layer_Name: finalOutputName,
+        Input_Count: inputFeatures.length,
+        Output_Count: clippedGraphics.length,
         Clipped_Features_Count: clippedGraphics.length,
-        Execution_Time: executionTime
+        Execution_Time: executionTime,
+        Area_Before_Clip: totalInputArea,
+        Area_After_Clip: totalOutputArea,
+        Area_Reduction_Percentage: areaReductionPercent,
+        Warning: warningMessage || 'None'
       }
     };
   }
@@ -1281,6 +1341,37 @@ export class GPExecutionEngine {
       });
     }
 
+    // Summarized values aggregator
+    let totalSummarizedCount = 0;
+    const allStatValues = [];
+    for (const g of summarizedGraphics) {
+      totalSummarizedCount += g.attributes.Feature_Count;
+      if (g.attributes[dynamicFieldName] !== undefined && g.attributes[dynamicFieldName] !== null) {
+        allStatValues.push(g.attributes[dynamicFieldName]);
+      }
+    }
+
+    let summaryResultText = "";
+    if (statType === 'Count') {
+      summaryResultText = `${totalSummarizedCount}`;
+    } else if (allStatValues.length > 0) {
+      if (statType === 'Sum') {
+        const sumVal = allStatValues.reduce((s, v) => s + v, 0);
+        summaryResultText = `${sumVal.toFixed(2)}`;
+      } else if (statType === 'Average') {
+        const avgVal = allStatValues.reduce((s, v) => s + v, 0) / allStatValues.length;
+        summaryResultText = `${avgVal.toFixed(2)}`;
+      } else if (statType === 'Minimum') {
+        const minVal = Math.min(...allStatValues);
+        summaryResultText = `${minVal.toFixed(2)}`;
+      } else if (statType === 'Maximum') {
+        const maxVal = Math.max(...allStatValues);
+        summaryResultText = `${maxVal.toFixed(2)}`;
+      }
+    } else {
+      summaryResultText = '0.00';
+    }
+
     onStatusUpdate({ status: 'esriJobExecuting', message: 'Generating output layer…', progress: 85 });
 
     const finalOutputName = outputLayerName || `${boundaryLayerTitle}_Summary`;
@@ -1309,8 +1400,16 @@ export class GPExecutionEngine {
         Statistic_Field: statField || 'N/A',
         Statistic_Type: statType,
         Output_Layer_Name: finalOutputName,
+        Input_Count: summaryFeatures.length,
+        Output_Count: summarizedGraphics.length,
         Summarized_Features_Count: summarizedGraphics.length,
-        Execution_Time: executionTime
+        Execution_Time: executionTime,
+        // Tool-specific fields
+        Boundary_Features: boundaryFeatures.length,
+        Features_Summarized: totalSummarizedCount,
+        Summary_Field: statField || 'N/A',
+        Statistic: statType,
+        Summary_Result: summaryResultText
       }
     };
   }
@@ -1507,6 +1606,8 @@ export class GPExecutionEngine {
       ],
       raw: {
         Output_Layer_Name: finalOutputName,
+        Input_Count: addressList.length,
+        Output_Count: matchedCount,
         Total_Addresses: addressList.length,
         Matched_Addresses: matchedCount,
         Unmatched_Addresses: unmatchedCount,

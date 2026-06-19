@@ -319,7 +319,8 @@
 }
 
 .inline-edit-input:focus {
-  border-color: #1e3c72;
+  border-color: #df261c;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.05);
 }
 
 .bookmark-actions {

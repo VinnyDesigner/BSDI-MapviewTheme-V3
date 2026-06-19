@@ -1848,7 +1848,7 @@ const AdvancedQueryPanel = ({
                       )}
                     </div>
 
-                    <div className="aq-clause-controls-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1.2fr', gap: '8px', alignItems: 'end' }}>
+                    <div className="aq-clause-controls-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr', gap: '8px', alignItems: 'end' }}>
                       <div className="aq-field-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <label className="aq-sublabel" style={{ fontSize: '11px', fontWeight: 600 }}>{isRTL ? 'الحقل' : 'Field'}</label>
                         <CustomSelect 
@@ -2110,113 +2110,7 @@ const AdvancedQueryPanel = ({
           {/* Results Screen Scrollable Content */}
           <div style={{ flex: 1, padding: '0px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }} className="aq-scrollable-content">
             
-            {/* Bulk Export Options */}
-            {results.length > 0 && (
-              <div style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                marginBottom: '4px',
-                flexShrink: 0
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e293b' }}>
-                    {isRTL ? "خيارات التصدير الجماعي" : "Bulk Export Options"}
-                  </span>
-                  <button
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#df261c',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      padding: 0
-                    }}
-                    onClick={() => {
-                      const oidField = selectedLayerItem?.rawLayer?.objectIdField || 'OBJECTID';
-                      if (checkedOids.length === results.length) {
-                        setCheckedOids([]);
-                      } else {
-                        setCheckedOids(results.map(f => f.attributes[oidField]).filter(id => id !== undefined && id !== null));
-                      }
-                    }}
-                  >
-                    {checkedOids.length === results.length 
-                      ? (isRTL ? "إلغاء تحديد الكل" : "Deselect All") 
-                      : (isRTL ? "تحديد الكل" : "Select All")}
-                  </button>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 500, color: '#475569', userSelect: 'none' }}>
-                    <input 
-                      type="checkbox"
-                      checked={mergeSelected}
-                      onChange={(e) => setMergeSelected(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    {isRTL ? "دمج في طبقة واحدة" : "Merge into single layer"}
-                  </label>
-                  
-                  {isBulkAdded() ? (
-                    <button
-                      disabled
-                      style={{
-                        background: '#10b981',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        cursor: 'not-allowed',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'background-color 0.2s',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                    >
-                      <Check size={12} />
-                      <span>
-                        {isRTL ? "تمت الإضافة للموقع" : "Added to Map"}
-                      </span>
-                    </button>
-                  ) : (
-                    <button
-                      style={{
-                        background: '#df261c',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'background-color 0.2s',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onClick={handleAddSelectedFeatures}
-                    >
-                      <Plus size={12} />
-                      <span>
-                        {isRTL 
-                          ? `إضافة المحدد (${checkedOids.length})` 
-                          : `Add Selected (${checkedOids.length})`}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+
 
             {/* Results List */}
             {results.length === 0 ? (

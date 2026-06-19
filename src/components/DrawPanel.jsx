@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
 import { useLanguage } from '../context/LanguageContext';
+import CustomSelect from './CustomSelect';
 import './DrawPanel.css';
 
 const DRAW_TOOLS = [
@@ -662,20 +663,20 @@ const DrawPanel = ({ view }) => {
                           <div className="form-row">
                             <div className="property-group">
                               <label>{t('drawMarkerShapeLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.markerStyle || 'circle'} 
-                                onChange={(e) => handleUpdateStyle({ markerStyle: e.target.value })}
-                              >
-                                <option value="circle">{t('drawMarkerShapeCircle')}</option>
-                                <option value="square">{t('drawMarkerShapeSquare')}</option>
-                                <option value="triangle">{t('drawMarkerShapeTriangle')}</option>
-                                <option value="diamond">{t('drawMarkerShapeDiamond')}</option>
-                                <option value="cross">{t('drawMarkerShapeCross')}</option>
-                                <option value="x">{t('drawMarkerShapeX')}</option>
-                                <option value="pin">{t('drawMarkerShapePin')}</option>
-                                <option value="star">{t('drawMarkerShapeStar')}</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ markerStyle: val })}
+                                options={[
+                                  { id: 'circle', title: t('drawMarkerShapeCircle') },
+                                  { id: 'square', title: t('drawMarkerShapeSquare') },
+                                  { id: 'triangle', title: t('drawMarkerShapeTriangle') },
+                                  { id: 'diamond', title: t('drawMarkerShapeDiamond') },
+                                  { id: 'cross', title: t('drawMarkerShapeCross') },
+                                  { id: 'x', title: t('drawMarkerShapeX') },
+                                  { id: 'pin', title: t('drawMarkerShapePin') },
+                                  { id: 'star', title: t('drawMarkerShapeStar') }
+                                ]}
+                              />
                             </div>
                             <div className="property-group">
                               <label>{t('drawMarkerSizeLabel')}</label>
@@ -749,16 +750,16 @@ const DrawPanel = ({ view }) => {
                           <div className="form-row">
                             <div className="property-group">
                               <label>{t('drawLineStyleLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.lineStyle || 'solid'} 
-                                onChange={(e) => handleUpdateStyle({ lineStyle: e.target.value })}
-                              >
-                                <option value="solid">{t('drawStyleSolid')}</option>
-                                <option value="dash">{t('drawStyleDashed')}</option>
-                                <option value="dot">{t('drawStyleDotted')}</option>
-                                <option value="dash-dot">{t('drawStyleDashDot')}</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ lineStyle: val })}
+                                options={[
+                                  { id: 'solid', title: t('drawStyleSolid') },
+                                  { id: 'dash', title: t('drawStyleDashed') },
+                                  { id: 'dot', title: t('drawStyleDotted') },
+                                  { id: 'dash-dot', title: t('drawStyleDashDot') }
+                                ]}
+                              />
                             </div>
                             <div className="property-group">
                               <label>{t('drawOutlineWidthLabel')}</label>
@@ -837,16 +838,16 @@ const DrawPanel = ({ view }) => {
                           <div className="form-row">
                             <div className="property-group">
                               <label>{t('drawOutlineStyleLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.outlineStyle || 'solid'} 
-                                onChange={(e) => handleUpdateStyle({ outlineStyle: e.target.value })}
-                              >
-                                <option value="solid">{t('drawStyleSolid')}</option>
-                                <option value="dash">{t('drawStyleDashed')}</option>
-                                <option value="dot">{t('drawStyleDotted')}</option>
-                                <option value="dash-dot">{t('drawStyleDashDot')}</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ outlineStyle: val })}
+                                options={[
+                                  { id: 'solid', title: t('drawStyleSolid') },
+                                  { id: 'dash', title: t('drawStyleDashed') },
+                                  { id: 'dot', title: t('drawStyleDotted') },
+                                  { id: 'dash-dot', title: t('drawStyleDashDot') }
+                                ]}
+                              />
                             </div>
                             <div className="property-group">
                               <label>{t('drawOutlineWidthLabel')}</label>
@@ -889,18 +890,18 @@ const DrawPanel = ({ view }) => {
                             </div>
                             <div className="property-group">
                               <label>{t('drawFontFamilyLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.fontFamily || 'Inter'} 
-                                onChange={(e) => handleUpdateStyle({ fontFamily: e.target.value })}
-                              >
-                                <option value="Inter">Inter</option>
-                                <option value="Arial">Arial</option>
-                                <option value="Times New Roman">Times New Roman</option>
-                                <option value="Courier New">Courier New</option>
-                                <option value="Georgia">Georgia</option>
-                                <option value="Trebuchet MS">Trebuchet MS</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ fontFamily: val })}
+                                options={[
+                                  { id: 'Inter', title: 'Inter' },
+                                  { id: 'Arial', title: 'Arial' },
+                                  { id: 'Times New Roman', title: 'Times New Roman' },
+                                  { id: 'Courier New', title: 'Courier New' },
+                                  { id: 'Georgia', title: 'Georgia' },
+                                  { id: 'Trebuchet MS', title: 'Trebuchet MS' }
+                                ]}
+                              />
                             </div>
                           </div>
 
@@ -938,25 +939,25 @@ const DrawPanel = ({ view }) => {
                           <div className="form-row">
                             <div className="property-group">
                               <label>{t('drawFontWeightLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.fontWeight || 'normal'} 
-                                onChange={(e) => handleUpdateStyle({ fontWeight: e.target.value })}
-                              >
-                                <option value="normal">{t('drawFontWeightNormal')}</option>
-                                <option value="bold">{t('drawFontWeightBold')}</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ fontWeight: val })}
+                                options={[
+                                  { id: 'normal', title: t('drawFontWeightNormal') },
+                                  { id: 'bold', title: t('drawFontWeightBold') }
+                                ]}
+                              />
                             </div>
                             <div className="property-group">
                               <label>{t('drawFontStyleLabel')}</label>
-                              <select 
-                                className="tool-select" 
+                              <CustomSelect
                                 value={styleConfig.fontStyle || 'normal'} 
-                                onChange={(e) => handleUpdateStyle({ fontStyle: e.target.value })}
-                              >
-                                <option value="normal">{t('drawFontStyleNormal')}</option>
-                                <option value="italic">{t('drawFontStyleItalic')}</option>
-                              </select>
+                                onChange={(val) => handleUpdateStyle({ fontStyle: val })}
+                                options={[
+                                  { id: 'normal', title: t('drawFontStyleNormal') },
+                                  { id: 'italic', title: t('drawFontStyleItalic') }
+                                ]}
+                              />
                             </div>
                           </div>
 

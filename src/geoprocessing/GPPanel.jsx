@@ -269,6 +269,8 @@ const GPPanel = ({
         visible: true,
         rendered,
         totalFeatures,
+        inputFeatureCount: result.raw?.Input_Count ?? result.raw?.Total_Addresses,
+        outputFeatureCount: result.raw?.Output_Count ?? result.raw?.Clipped_Features_Count ?? result.raw?.Summarized_Features_Count ?? result.raw?.Matched_Addresses ?? totalFeatures,
         jobId: result.jobId,
         metadata: result.raw,
         hasFeaturesButNoGeom,
@@ -709,7 +711,7 @@ const GPPanel = ({
         );
       })() : (
         // Regular scroll container for Browse and Results tabs
-        <div className="panel-content-scroll" style={{ flex: 1, padding: '6px 0', overflow: 'auto' }}>
+        <div className="panel-content-scroll" style={{ flex: 1, padding: '6px 0', overflowY: 'auto', overflowX: 'hidden' }}>
           {/* ── Browse tab ── */}
           {activeTab === 'browse' && (
             <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>

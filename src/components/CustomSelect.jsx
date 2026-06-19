@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, Check } from 'lucide-react';
 import './CustomSelect.css';
 
-const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label, multi = false }) => {
+const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label, multi = false, disabled = false, maxHeight }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
@@ -49,8 +49,11 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
   return (
     <div className="custom-select-container" ref={containerRef}>
       <div 
-        className={`custom-select-trigger ${isOpen ? 'active' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        className={`custom-select-trigger ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+        onClick={() => {
+          if (disabled) return;
+          setIsOpen(!isOpen);
+        }}
       >
         <span className="selected-value">{displayLabel}</span>
         <ChevronDown size={16} className={`chevron ${isOpen ? 'open' : ''}`} />
@@ -71,7 +74,7 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
               />
             </div>
           )}
-          <div className="options-list">
+          <div className="options-list" style={maxHeight ? { maxHeight } : {}}>
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, index) => {
                 const label = opt.title || opt.label || opt;

@@ -121,6 +121,18 @@ function AppInner() {
     history: []
   });
 
+  useEffect(() => {
+    // Clear temporary analysis state when switching tools/panels while keeping history intact
+    setSpatialSettings(prev => ({
+      ...prev,
+      lastRun: null,
+      gpStatus: null,
+      status: '',
+      distanceResult: null,
+      isWaitingForClick: false
+    }));
+  }, [activeTool]);
+
   const [dynamicMapServerData, setDynamicMapServerData] = useState({});
 
   const [activeLayerMenu, setActiveLayerMenu] = useState(null); // { id: string, type: 'root'|'sub' }
@@ -1225,29 +1237,37 @@ function AppInner() {
               const dist = typeof data === 'string' ? data : data.distance;
               setSpatialSettings(prev => ({ ...prev, distanceResult: dist, status: 'Nearest feature identified' }));
             } else if (data?.id) {
-              setSpatialSettings(prev => ({ 
-                ...prev, 
-                history: [
-                  ...(prev.history || []), 
-                  { 
-                    id: data.id, 
-                    title: data.title, 
-                    count: data.count, 
-                    inputFeatureCount: data.inputFeatureCount,
-                    outputFeatureCount: data.outputFeatureCount,
-                    geometryType: data.geometryType,
-                    distance: data.distance, 
-                    unit: data.unit,
-                    date: new Date().toLocaleString(),
-                    visible: true,
-                    color: data.color,
-                    analysisType: data.analysisType,
-                    executionTime: data.executionTime
-                  }
-                ],
-                distanceResult: data.distanceResult !== undefined ? data.distanceResult : prev.distanceResult,
-                status: 'Analysis complete' 
-              }));
+              setSpatialSettings(prev => {
+                const history = prev.history || [];
+                if (history.some(item => item.id === data.id)) {
+                  return prev; // Prevent duplicate entries for the same execution
+                }
+                console.log('Result Added:', data.title, 'ID:', data.id);
+                return { 
+                  ...prev, 
+                  history: [
+                    ...history, 
+                    { 
+                      id: data.id, 
+                      title: data.title, 
+                      count: data.count, 
+                      inputFeatureCount: data.inputFeatureCount,
+                      outputFeatureCount: data.outputFeatureCount,
+                      geometryType: data.geometryType,
+                      distance: data.distance, 
+                      unit: data.unit,
+                      date: new Date().toLocaleString(),
+                      visible: true,
+                      color: data.color,
+                      analysisType: data.analysisType,
+                      executionTime: data.executionTime,
+                      raw: data.raw
+                    }
+                  ],
+                  distanceResult: data.distanceResult !== undefined ? data.distanceResult : prev.distanceResult,
+                  status: 'Analysis complete' 
+                };
+              });
             }
           }}
           onArcadePreview={(val, debug) => setArcadeSettings(prev => ({ ...prev, preview: val, debugInfo: debug }))}

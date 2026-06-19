@@ -468,10 +468,10 @@ export const BlendPanel = ({
           />
         </div>
 
-        <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none' }}>
+        <div className="form-group" style={{ marginBottom: '12px', opacity: isOverlaySelected ? 1 : 0.5, pointerEvents: isOverlaySelected ? 'auto' : 'none', paddingRight: '2px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <label style={{ fontWeight: '600', color: '#1a2f4d', fontSize: '13px' }}>{t('Opacity')}</label>
-            <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
+            <span style={{ fontWeight: '700', color: '#DF261C', fontSize: '13px', paddingRight: '1px' }}>{Math.round(blendSettings.opacity * 100)}%</span>
           </div>
           <input 
             type="range" 
@@ -484,7 +484,8 @@ export const BlendPanel = ({
             style={{ 
               width: '100%', 
               accentColor: '#DF261C',
-              cursor: isOverlaySelected ? 'pointer' : 'default'
+              cursor: isOverlaySelected ? 'pointer' : 'default',
+              paddingRight: '1px'
             }}
           />
         </div>
@@ -495,21 +496,22 @@ export const BlendPanel = ({
           </label>
           <CustomSelect 
             options={[
-              { id: 'normal', title: 'normal' },
-              { id: 'multiply', title: 'multiply' },
-              { id: 'screen', title: 'screen' },
-              { id: 'overlay', title: 'overlay' },
-              { id: 'darken', title: 'darken' },
-              { id: 'lighten', title: 'lighten' },
-              { id: 'soft-light', title: 'soft-light' },
-              { id: 'hard-light', title: 'hard-light' },
-              { id: 'color-burn', title: 'color-burn' },
-              { id: 'color-dodge', title: 'color-dodge' }
+              { id: 'normal', title: 'Normal' },
+              { id: 'multiply', title: 'Multiply' },
+              { id: 'screen', title: 'Screen' },
+              { id: 'overlay', title: 'Overlay' },
+              { id: 'darken', title: 'Darken' },
+              { id: 'lighten', title: 'Lighten' },
+              { id: 'soft-light', title: 'Soft Light' },
+              { id: 'hard-light', title: 'Hard Light' },
+              { id: 'color-burn', title: 'Color Burn' },
+              { id: 'color-dodge', title: 'Color Dodge' }
             ]}
             value={blendSettings.blendMode}
             disabled={!isOverlaySelected}
             onChange={(val) => setBlendSettings(prev => ({ ...prev, blendMode: val }))}
             placeholder={t('Select blend mode') + "..."}
+            maxHeight="80px"
           />
         </div>
       </div>
@@ -555,6 +557,7 @@ export const SpatialAnalysisPanel = ({
     if (subTool === 'Clip Features') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_clip');
     if (subTool === 'Summarize Within') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_summarize_within');
     if (subTool === 'Viewshed Analysis') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_viewshed');
+    if (subTool === 'Heatmap Density') return DEFAULT_MANIFESTS.find(m => m.toolId === 'gp_heatmap_density');
     return null;
   };
 
@@ -703,6 +706,8 @@ export const SpatialAnalysisPanel = ({
   };
 
   const handleDelete = (runId) => {
+    const targetResults = (spatialSettings.history || []).find(r => r.id === runId);
+    console.log('Result Removed:', targetResults?.title || 'Unknown', 'ID:', runId);
     setSpatialSettings(prev => ({
       ...prev,
       history: (prev.history || []).filter(r => r.id !== runId)
@@ -820,26 +825,17 @@ export const SpatialAnalysisPanel = ({
               <label>{t('Select Analysis Tool')}</label>
               <CustomSelect 
                 options={[
-                  { label: t('2D Analysis') || '2D Analysis', isHeader: true },
                   { label: t('Buffer Analysis'), value: "Buffer Analysis" },
                   { label: t('Clip Features') || 'Clip Features', value: "Clip Features" },
                   { label: t('Summarize Within') || 'Summarize Within', value: "Summarize Within" },
                   { label: t('Select by Location'), value: "Select by Location" },
                   { label: t('Overlay (Intersect)'), value: "Overlay (Intersect)" },
                   { label: t('Proximity (Nearest)'), value: "Proximity (Nearest)" },
-                  { label: t('Heatmap Density'), value: "Heatmap Density" },
-                  { label: t('3D Analysis') || '3D Analysis', isHeader: true },
-                  { label: t('Viewshed Analysis') || 'Viewshed Analysis', value: "Viewshed Analysis" }
+                  { label: t('Heatmap Density'), value: "Heatmap Density" }
                 ]}
                 value={spatialSettings.subTool}
                 placeholder={t('Choose Analysis...') || 'Choose Analysis...'}
                 onChange={(val) => {
-                  if (val === 'Viewshed Analysis') {
-                    if (!is3D) {
-                      setIs3D(true);
-                    }
-                  }
-                  
                   // Initialize/fill target layer if selected
                   const manifest = getGpManifest(val);
                   const nextGpValues = { ...(spatialSettings.gpValues || {}) };
@@ -854,7 +850,11 @@ export const SpatialAnalysisPanel = ({
                     ...prev,
                     subTool: val,
                     gpValues: nextGpValues,
-                    gpStatus: null
+                    gpStatus: null,
+                    status: '',
+                    distanceResult: null,
+                    isWaitingForClick: false,
+                    lastRun: null
                   }));
                 }}
               />
@@ -907,35 +907,46 @@ export const SpatialAnalysisPanel = ({
 
             {spatialSettings.gpStatus && (
               <div className="gp-running-card" style={{
-                marginTop: '16px',
-                background: 'rgba(30, 60, 114, 0.05)',
-                border: '1px solid rgba(30, 60, 114, 0.1)',
-                borderRadius: '8px',
-                padding: '12px',
+                marginTop: '12px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '10px 12px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px'
+                gap: '8px',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
               }}>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e3c72' }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: '#1e293b' }}>
                   {t(spatialSettings.subTool)}
                 </div>
-                <div style={{ fontSize: '12px', color: '#475569' }}>
-                  Status: <span style={{ fontWeight: '600', color: '#1e3c72' }}>{t(spatialSettings.gpStatus.message)}</span>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  fontSize: '11px', 
+                  color: '#475569' 
+                }}>
+                  <div>
+                    Status: <span style={{ fontWeight: '600', color: '#0f172a' }}>{t(spatialSettings.gpStatus.message)}</span>
+                  </div>
+                  {spatialSettings.gpStatus.progress !== null && (
+                    <div>
+                      Progress: <span style={{ fontWeight: '600', color: '#0f172a' }}>{spatialSettings.gpStatus.progress}%</span>
+                    </div>
+                  )}
                 </div>
+
                 {spatialSettings.gpStatus.progress !== null && (
-                  <>
-                    <div style={{ fontSize: '12px', color: '#475569' }}>
-                      Progress: <span style={{ fontWeight: '600', color: '#1e3c72' }}>{spatialSettings.gpStatus.progress}%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden', marginTop: '4px' }}>
-                      <div style={{
-                        width: `${spatialSettings.gpStatus.progress}%`,
-                        height: '100%',
-                        background: 'linear-gradient(90deg, #df261c, #002D5D)',
-                        transition: 'width 0.3s ease'
-                      }} />
-                    </div>
-                  </>
+                  <div style={{ width: '100%', height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${spatialSettings.gpStatus.progress}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, #df261c, #002D5D)',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
                 )}
               </div>
             )}
@@ -1039,7 +1050,7 @@ export const SpatialAnalysisPanel = ({
                             {item.title}
                           </span>
                           <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
-                            {item.outputFeatureCount ?? item.count} {t('Features') || 'Features'}
+                            {item.outputFeatureCount ?? 'N/A'} {t('Features') || 'Features'}
                           </span>
                         </div>
                       </div>
@@ -1095,18 +1106,107 @@ export const SpatialAnalysisPanel = ({
                         boxSizing: 'border-box'
                       }}>
                         <div className="attributes-grid" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
-                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
-                          </div>
-                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
-                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.outputFeatureCount ?? item.count}</span>
-                          </div>
-                          <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Geometry Type') || 'Geometry Type'}</span>
-                            <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.geometryType ?? 'Polygon'}</span>
-                          </div>
+                          {/* Tool-specific Fields */}
+                          {item.analysisType === 'Buffer Analysis' && (
+                            <>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.outputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Geometry Type') || 'Geometry Type'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.geometryType ?? 'Polygon'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {item.analysisType === 'Clip Features' && (
+                            <>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.outputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Area Reduction') || 'Area Reduction'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>
+                                  {item.raw?.Area_Reduction_Percentage ? `${item.raw.Area_Reduction_Percentage}%` : '0.00%'}
+                                </span>
+                              </div>
+                            </>
+                          )}
+
+                          {item.analysisType === 'Summarize Within' && (
+                            <>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Boundary Features') || 'Boundary Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Boundary_Features ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Features Summarized') || 'Features Summarized'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Features_Summarized ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Summary Field') || 'Summary Field'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Summary_Field || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Statistic') || 'Statistic'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Statistic || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Summary Result') || 'Summary Result'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Summary_Result || 'N/A'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {item.analysisType === 'Heatmap Density' && (
+                            <>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Points') || 'Input Points'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Heatmap Radius') || 'Heatmap Radius'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Heatmap_Radius ? `${item.raw.Heatmap_Radius} px` : 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Color Ramp') || 'Color Ramp'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Color_Ramp || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Density Method') || 'Density Method'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.raw?.Density_Method || 'N/A'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {!['Buffer Analysis', 'Clip Features', 'Summarize Within', 'Heatmap Density'].includes(item.analysisType) && (
+                            <>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.inputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.outputFeatureCount ?? 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Geometry Type') || 'Geometry Type'}</span>
+                                <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{item.geometryType ?? 'Polygon'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Common Metadata Fields */}
                           <div style={{ display: 'flex', fontSize: '11px', borderBottom: '1px solid #f7fafc', padding: '4px 0', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                             <span style={{ color: '#64748b', width: '45%', flexShrink: 0, fontWeight: '500', textAlign: isRTL ? 'right' : 'left' }}>{t('Analysis Type') || 'Analysis Type'}</span>
                             <span style={{ color: '#1e293b', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flexGrow: 1 }}>{t(item.analysisType) || item.analysisType || 'N/A'}</span>
@@ -1170,6 +1270,9 @@ export const SpatialAnalysisPanel = ({
             className="secondary-btn"
             disabled={spatialSettings.gpStatus && ['submitting', 'executing', 'generating_results'].includes(spatialSettings.gpStatus.status)}
             onClick={() => {
+              (spatialSettings.history || []).forEach(r => {
+                console.log('Result Removed:', r.title, 'ID:', r.id);
+              });
               setSpatialSettings({
                 ...spatialSettings,
                 status: '',
@@ -1255,7 +1358,7 @@ export const SwipePanel = ({
 
   return (
     <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1 }}>
+      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '20px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
           <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
             {isSplitModePersistent ? t('Swipe Active') : t('Enable Swipe')}
@@ -1348,6 +1451,7 @@ export const SwipePanel = ({
                 placeholder={t('Select right layers') + "..."}
                 multi={true}
                 showAllOption={false}
+                openDirection="up"
               />
             </div>
             <button 
@@ -1406,7 +1510,7 @@ export const SplitViewPanel = ({
 
   return (
     <div className="tool-content" style={{ direction: isRTL ? 'rtl' : 'ltr', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1 }}>
+      <div className="panel-content-scroll" style={{ padding: '0 8px 16px 8px', flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(30, 60, 114, 0.05)', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(30, 60, 114, 0.1)' }}>
           <span style={{ fontWeight: '700', color: '#1a2f4d', fontSize: '14px' }}>
             {isSplitView ? 'Split View Active' : 'Enable Split View'}

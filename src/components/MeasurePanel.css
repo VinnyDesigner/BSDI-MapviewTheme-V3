@@ -6,6 +6,7 @@
   height: 100%;
   position: relative;
   background: transparent;
+  font-family: 'Outfit', sans-serif;
 }
 
 .measure-content-scroll {
@@ -20,8 +21,8 @@
 }
 
 .measure-footer-wrapper {
-  padding: 16px 0;
-  border-top: 1px solid #f1f5f9;
+  padding: 16px 0 0 0;
+  border-top: none;
   background: transparent;
   margin-top: auto;
 }
@@ -125,7 +126,7 @@
   font-size: 13px;
   font-weight: 600;
   color: #1a2f4d;
-  margin-bottom: 6px; /* Reduced from 8px */
+  margin-bottom: 8px;
 }
 
 /* Unit Select */
@@ -170,17 +171,17 @@
 
 /* Results Card */
 .results-card {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  margin-top: 16px;
   padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .results-list {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Reduced from 12px */
-  margin-top: 4px; /* Reduced from 8px */
+  gap: 8px;
 }
 
 .result-item {
@@ -200,12 +201,14 @@
   font-size: 13px;
   color: #64748b;
   font-weight: 500;
+  font-family: 'Outfit', sans-serif;
 }
 
 .res-value {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
-  color: #df261c;
+  color: #1a2f4d;
+  font-family: 'Outfit', sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
@@ -213,6 +216,7 @@
   font-size: 12px;
   color: #94a3b8;
   font-weight: 500;
+  font-family: 'Outfit', sans-serif;
 }
 
 /* Footer */

@@ -10,7 +10,7 @@ export const toolsConfig = {
   spatial: {
     defaults: {
       subTool: 'Buffer Analysis',
-      layerId: 'sample-data-1',
+      layerId: 'iga-soil-classification-2019',
       bufferDistance: 100,
       bufferUnit: 'meters',
       isWaitingForClick: false,
@@ -33,13 +33,13 @@ export const toolsConfig = {
   },
   timelapse: {
     defaults: {
-      layerId: 'sample-data-1',
-      timeField: 'SURVEY_YEAR',
-      currentYear: 2024,
-      fromYear: 2018,
-      toYear: 2024,
-      startYear: 2018,
-      endYear: 2024,
+      layerId: 'governorate-date',
+      timeField: 'Updated_Year',
+      currentYear: 2005,
+      fromYear: 2000,
+      toYear: 2005,
+      startYear: 2000,
+      endYear: 2005,
       isPlaying: false,
       speed: 'Medium',
       loop: true,
@@ -50,8 +50,8 @@ export const toolsConfig = {
   },
   arcade: {
     defaults: {
-      layerId: 'gov-time-date',
-      expression: '// Write your Arcade expression\n$feature.date',
+      layerId: 'governorate-date',
+      expression: '// Write your Arcade expression\n$feature.Updated_Year',
       preview: '',
       debugInfo: ''
     }

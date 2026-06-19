@@ -294,40 +294,50 @@
 /* 🧪 Global Form Controls */
 .tool-select, .tool-input {
   width: 100%;
-  height: 40px !important;
-  padding: 0 40px 0 12px !important;
-  border-radius: 10px !important;
-  border: none !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+  height: 36px !important;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
   font-size: 13px !important;
+  font-weight: 500 !important;
   color: #1a2f4d !important;
   background: white !important;
   transition: all 0.2s ease !important;
   appearance: none !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 12px center !important;
   box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+.tool-select {
+  padding-right: 32px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
 }
 
 .tool-input {
   background-image: none !important;
-  padding: 0 12px !important;
 }
 
 [dir="rtl"] .tool-select {
-  background-position: left 12px center !important;
-  padding: 0 12px 0 40px !important;
-}
-
-.tool-select:focus, .tool-input:focus {
-  outline: none !important;
-  border: none !important;
-  box-shadow: 0 0 0 2px rgba(30, 60, 114, 0.1) !important;
+  padding-right: 12px !important;
+  padding-left: 32px !important;
+  background-position: left 10px center !important;
 }
 
 .tool-select:hover, .tool-input:hover {
   border-color: #cbd5e1 !important;
+}
+
+.tool-select:focus, .tool-input:focus {
+  outline: none !important;
+  border-color: #df261c !important;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.05) !important;
+}
+
+.tool-input::placeholder {
+  color: #94a3b8 !important;
 }
 
 /* 🗂️ Improved Layer Card UI */
@@ -2881,3 +2891,181 @@
   visibility: visible !important;
   opacity: 1 !important;
 }
+
+/* ==========================================
+   HIGH-FIDELITY LAYERS PANEL UI REFINEMENTS
+   ========================================== */
+
+/* Consistent Row Height & Base Layout */
+.layer-card-main, 
+.tree-row {
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  padding: 0 8px !important;
+  padding-right: 36px !important; /* Space for action menu */
+  box-sizing: border-box !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+/* Equal Spacing Between Row Content Elements */
+.layer-row-content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important; /* Equal gap between handle, checkbox, expander, and title */
+  flex: 1 !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  padding-right: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* Service & Sublayer Names Text Constraints (Single Line + Ellipsis) */
+.layer-card-name, 
+.tree-label {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: block !important;
+}
+
+.tree-label-root {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  color: #1a2f4d !important;
+}
+
+.tree-label-category {
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  color: #1e293b !important;
+}
+
+.tree-label-leaf {
+  font-weight: 400 !important;
+  font-size: 11.5px !important;
+  color: #475569 !important;
+}
+
+/* Consistent Checkbox Dimensions (16px x 16px) */
+.custom-checkbox {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+/* Drag Handle Styling & Width matching Checkbox alignment */
+.layer-drag-handle {
+  width: 16px !important;
+  height: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: grab !important;
+  color: #94a3b8 !important;
+}
+
+.layer-drag-handle svg {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+
+/* Expander, Placeholder, and Symbol Column Alignment */
+.layer-accordion-btn,
+.layer-accordion-btn-placeholder,
+.tree-symbol-wrapper {
+  width: 16px !important;
+  height: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.layer-accordion-btn svg {
+  width: 14px !important;
+  height: 14px !important;
+  display: block !important;
+}
+
+/* Sublayer Indentation Spacing */
+.tree-indentation {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  height: 100% !important;
+  gap: 0 !important; /* No gap between line connectors themselves */
+}
+
+.tree-line-spacer {
+  width: 16px !important;
+  height: 36px !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+
+/* Action Menu Trigger Button Alignment */
+.layer-card-more {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 100 !important;
+}
+
+.more-btn {
+  width: 24px !important;
+  height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+}
+
+/* RTL Support */
+[dir="rtl"] .layer-card-main,
+[dir="rtl"] .tree-row {
+  padding-right: 8px !important;
+  padding-left: 36px !important;
+}
+
+[dir="rtl"] .layer-card-more {
+  right: auto !important;
+  left: 6px !important;
+}
+
+[dir="rtl"] .layer-row-content {
+  padding-right: 0 !important;
+  padding-left: 8px !important;
+}
+

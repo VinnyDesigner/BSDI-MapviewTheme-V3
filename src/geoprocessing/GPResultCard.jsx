@@ -95,7 +95,7 @@ const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
         {/* Row 2 — metadata summary */}
         <div className="result-row-second" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingLeft: isRTL ? 0 : 26, paddingRight: isRTL ? 26 : 0 }}>
           <span className="result-feature-count" style={{ fontSize: '11px', color: '#64748b' }}>
-            {run.totalFeatures != null ? `${run.totalFeatures} ${t('gpFeatures')}` : run.status}
+            {run.outputFeatureCount !== undefined ? `${run.outputFeatureCount} ${t('gpFeatures') || 'Features'}` : (run.totalFeatures != null ? `${run.totalFeatures} ${t('gpFeatures')}` : run.status)}
           </span>
           <span className="result-upload-date" style={{ fontSize: '10.5px', color: '#94a3b8' }}>
             {run.date}
@@ -114,40 +114,61 @@ const GPResultCard = ({ run, onToggle, onDelete, onZoom, onExport }) => {
             flexDirection: 'column'
           }}>
             {(() => {
-              const entries = Object.entries(run.metadata).filter(([_, val]) => val !== null && val !== undefined && val !== '');
-              return entries.map(([key, val], idx) => {
-                const displayKey = key.replace(/_/g, ' ');
-                return (
-                  <div key={key} style={{
-                    display: 'flex',
-                    fontSize: '11px',
-                    borderBottom: idx === entries.length - 1 ? 'none' : '1px solid #e2e8f0',
-                    padding: '6px 0',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}>
-                    <span style={{
-                      color: '#64748b',
-                      fontWeight: '500',
-                      width: '45%',
-                      flexShrink: 0,
-                      textAlign: isRTL ? 'right' : 'left'
-                    }}>
-                      {t(displayKey) || displayKey}
-                    </span>
-                    <span style={{
-                      color: '#1a2f4d',
-                      fontWeight: '600',
-                      wordBreak: 'break-all',
-                      flex: 1,
-                      textAlign: isRTL ? 'left' : 'right'
-                    }}>
-                      {String(val)}
-                    </span>
-                  </div>
-                );
-              });
+              const inputCount = run.inputFeatureCount ?? run.metadata?.Input_Count ?? run.metadata?.Total_Addresses;
+              const outputCount = run.outputFeatureCount ?? run.metadata?.Output_Count ?? run.metadata?.Clipped_Features_Count ?? run.metadata?.Summarized_Features_Count ?? run.metadata?.Matched_Addresses;
+              
+              const excludeKeys = ['Input_Count', 'Output_Count', 'Clipped_Features_Count', 'Summarized_Features_Count', 'Matched_Addresses', 'Total_Addresses'];
+              const entries = Object.entries(run.metadata).filter(([key, val]) => !excludeKeys.includes(key) && val !== null && val !== undefined && val !== '');
+              
+              return (
+                <>
+                  {inputCount !== undefined && (
+                    <div style={{ display: 'flex', fontSize: '11px', borderBottom: (outputCount !== undefined || entries.length > 0) ? '1px solid #e2e8f0' : 'none', padding: '6px 0', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                      <span style={{ color: '#64748b', fontWeight: '500', width: '45%', flexShrink: 0, textAlign: isRTL ? 'right' : 'left' }}>{t('Input Features') || 'Input Features'}</span>
+                      <span style={{ color: '#1a2f4d', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flex: 1 }}>{inputCount}</span>
+                    </div>
+                  )}
+                  {outputCount !== undefined && (
+                    <div style={{ display: 'flex', fontSize: '11px', borderBottom: entries.length > 0 ? '1px solid #e2e8f0' : 'none', padding: '6px 0', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                      <span style={{ color: '#64748b', fontWeight: '500', width: '45%', flexShrink: 0, textAlign: isRTL ? 'right' : 'left' }}>{t('Output Features') || 'Output Features'}</span>
+                      <span style={{ color: '#1a2f4d', fontWeight: '600', textAlign: isRTL ? 'left' : 'right', flex: 1 }}>{outputCount}</span>
+                    </div>
+                  )}
+                  {entries.map(([key, val], idx) => {
+                    const displayKey = key.replace(/_/g, ' ');
+                    return (
+                      <div key={key} style={{
+                        display: 'flex',
+                        fontSize: '11px',
+                        borderBottom: idx === entries.length - 1 ? 'none' : '1px solid #e2e8f0',
+                        padding: '6px 0',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px'
+                      }}>
+                        <span style={{
+                          color: '#64748b',
+                          fontWeight: '500',
+                          width: '45%',
+                          flexShrink: 0,
+                          textAlign: isRTL ? 'right' : 'left'
+                        }}>
+                          {t(displayKey) || displayKey}
+                        </span>
+                        <span style={{
+                          color: '#1a2f4d',
+                          fontWeight: '600',
+                          wordBreak: 'break-all',
+                          flex: 1,
+                          textAlign: isRTL ? 'left' : 'right'
+                        }}>
+                          {String(val)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </>
+              );
             })()}
           </div>
         )}

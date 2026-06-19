@@ -1,50 +1,39 @@
 export const layersConfig = [
   {
-    id: 'sample-data-1',
-    title: 'Sample Data 1',
-    url: 'https://gis9.smartgeoapps.com/server/rest/services/SampleData1/MapServer',
+    id: 'iga-soil-classification',
+    title: 'BSDI/IGA_Soil_Classification_2019_Map_Viewer',
+    url: 'https://gis15.smartgeoapps.com/server/rest/services/BSDI/IGA_Soil_Classification_2019_Map_Viewer/MapServer',
     visible: false,
-    type: 'map-image',
-    timeField: 'SURVEY_YEAR'   // hint: pre-selects this field in the Timelapse panel
+    type: 'map-image'
   },
   {
-    id: 'service-2',
-    title: 'Service 2',
-    url: 'https://gis9.smartgeoapps.com/server/rest/services/Service2/MapServer',
+    id: 'iga-crushers-quarriers',
+    title: 'BSDI/IGA_CRUSHERS_QUARRIERS_Map_Viewer',
+    url: 'https://gis15.smartgeoapps.com/server/rest/services/BSDI/IGA_CRUSHERS_QUARRIERS_Map_Viewer/MapServer',
     visible: false,
-    type: 'map-image',
-    timeField: 'YEAR'
+    type: 'map-image'
   },
   {
-    id: 'service-3',
-    title: 'Service 3',
-    url: 'https://gis9.smartgeoapps.com/server/rest/services/Service3/MapServer',
+    id: 'iga-cancer-data',
+    title: 'BSDI/IGA_CancerData_MapViewer',
+    url: 'https://gis15.smartgeoapps.com/server/rest/services/BSDI/IGA_CancerData_MapViewer/MapServer',
     visible: false,
-    type: 'map-image',
-    timeField: 'Record_Year'
+    type: 'map-image'
   },
   {
-    id: 'sample-data-time-mil1',
-    title: 'Sample Data Time MIL1',
-    url: 'https://gis12.smartgeoapps.com/server/rest/services/SampleData_Time_MIL1/MapServer',
+    id: 'iga-admin-units',
+    title: 'BSDI/IGA_AdminUnits_Map_viewer',
+    url: 'https://gis15.smartgeoapps.com/server/rest/services/BSDI/IGA_AdminUnits_Map_viewer/MapServer',
     visible: false,
-    type: 'map-image',
-    timeField: 'datecreated'
+    type: 'map-image'
   },
   {
-    id: 'gov-time-date',
+    id: 'governorate-date',
     title: 'Governorate Date',
-    url: 'https://gis12.smartgeoapps.com/server/rest/services/Hosted/Gov_Time_Date/FeatureServer',
+    url: 'https://gis15.smartgeoapps.com/server/rest/services/BSDI/Governorate_Date/MapServer',
     visible: false,
-    type: 'feature',
-    timeField: 'date'
-  },
-  {
-    id: 'bsdi-test-1',
-    title: 'BSDI Test 1',
-    url: 'https://gis12.smartgeoapps.com/server/rest/services/Hosted/BSDITest1/FeatureServer',
-    visible: false,
-    type: 'feature'
+    type: 'map-image',
+    timeField: 'Updated_Year'
   }
 ];
 

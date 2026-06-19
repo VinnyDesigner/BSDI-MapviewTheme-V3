@@ -97,8 +97,61 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
       }
     }
 
+    // 3. Handle Summarize Within "Field" (Summary Field) parameter
+    const summaryFieldParam = nextParams.find(p => p.name === 'Field');
+    const selectedSummaryLayerId = values.Summary_Layer;
+    const selectedStatType = values.Statistics_Type || 'Count';
+
+    if (summaryFieldParam) {
+      if (selectedStatType === 'Count') {
+        filteredParams = filteredParams.filter(p => p.name !== 'Field');
+      } else {
+        // Prevent manual entry: enforce Select widget type
+        summaryFieldParam.widgetType = 'Select';
+        summaryFieldParam.choiceList = [];
+
+        if (selectedSummaryLayerId && view) {
+          let targetLayer = null;
+          if (view.map) {
+            if (selectedSummaryLayerId.includes('_sub_')) {
+              const [parentId, subId] = selectedSummaryLayerId.split('_sub_');
+              const parent = view.map.findLayerById(parentId);
+              if (parent && parent.allSublayers) {
+                targetLayer = parent.allSublayers.find(s => s.id === parseInt(subId));
+              }
+            } else {
+              targetLayer = view.map.findLayerById(selectedSummaryLayerId);
+            }
+          }
+
+          const NUMERIC_FIELD_TYPES = ['small-integer', 'integer', 'single', 'double', 'long', 'number', 'oid'];
+          let numericFields = [];
+          if (targetLayer) {
+            if (targetLayer.fields) {
+              numericFields = targetLayer.fields
+                .filter(f => NUMERIC_FIELD_TYPES.includes(f.type?.toLowerCase()))
+                .map(f => f.name);
+            } else if (targetLayer.layer?.fields) {
+              numericFields = targetLayer.layer.fields
+                .filter(f => NUMERIC_FIELD_TYPES.includes(f.type?.toLowerCase()))
+                .map(f => f.name);
+            } else if (targetLayer.graphics && targetLayer.graphics.length > 0) {
+              const firstGraphic = targetLayer.graphics.getItemAt(0);
+              if (firstGraphic && firstGraphic.attributes) {
+                numericFields = Object.keys(firstGraphic.attributes).filter(key => {
+                  const val = firstGraphic.attributes[key];
+                  return typeof val === 'number';
+                });
+              }
+            }
+          }
+          summaryFieldParam.choiceList = numericFields;
+        }
+      }
+    }
+
     return filteredParams;
-  }, [params, values.Input_Features, values.Dissolve_Type, view]);
+  }, [params, values.Input_Features, values.Dissolve_Type, values.Summary_Layer, values.Statistics_Type, view]);
 
   const inputParams = modifiedParameters.filter(p => p.direction !== 'esriGPParameterDirectionOutput');
 
@@ -109,6 +162,16 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
     if (!grouped[cat]) grouped[cat] = [];
     grouped[cat].push(p);
   });
+
+  const handleWidgetChange = (name, val) => {
+    if (name === 'Statistics_Type' && val === 'Count') {
+      onChange('Field', '');
+    }
+    if (name === 'Summary_Layer') {
+      onChange('Field', '');
+    }
+    onChange(name, val);
+  };
 
   return (
     <div className="gp-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -131,7 +194,9 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
               (n1 === 'Target_Height' && n2 === 'Target_Height_Unit') ||
               (n1 === 'Min_Distance' && n2 === 'Max_Distance') ||
               (n1 === 'Horizontal_Angle' && n2 === 'Vertical_Angle') ||
-              (n1 === 'Distance_Unit' && n2 === 'Method')
+              (n1 === 'Distance_Unit' && n2 === 'Method') ||
+              (n1 === 'Radius' && n2 === 'Intensity') ||
+              (n1 === 'Color_Ramp' && n2 === 'Density_Method')
             ) {
               shouldGroup = true;
             }
@@ -163,7 +228,7 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
                     <ParamWidget
                       param={param}
                       value={values[param.name] ?? param.defaultValue ?? ''}
-                      onChange={(val) => onChange(param.name, val)}
+                      onChange={(val) => handleWidgetChange(param.name, val)}
                       treeData={treeData}
                     />
                   </div>
@@ -180,7 +245,7 @@ const GPFormRenderer = ({ params, values, onChange, treeData = [], view }) => {
                         <ParamWidget
                           param={param}
                           value={values[param.name] ?? param.defaultValue ?? ''}
-                          onChange={(val) => onChange(param.name, val)}
+                          onChange={(val) => handleWidgetChange(param.name, val)}
                           treeData={treeData}
                         />
                       </div>
@@ -264,6 +329,8 @@ function SelectWidget({ param, value, onChange, t }) {
     placeholderStr = t('selectDissolveType');
   } else if (param.name === 'Dissolve_Field') {
     placeholderStr = t('selectDissolveField');
+  } else if (param.name === 'Field') {
+    placeholderStr = t('selectSummaryField') || 'Select Summary Field';
   }
 
   return (

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ChevronDown, Search } from 'lucide-react';
+import CustomSelect from './CustomSelect';
 
 // Custom 4-dot drag handle (2×2 grid)
 const DragHandle = () => (
@@ -57,13 +58,18 @@ export const LayersPanel = ({
   handleDrop,
   handleDragEnd
 }) => {
+  const [symbologyType, setSymbologyType] = useState('simple');
+  const [lineStyle, setLineStyle] = useState('solid');
+  const [fillStyle, setFillStyle] = useState('solid');
+  const [attributeField, setAttributeField] = useState('PROJECT_CODE');
 
   if (layerPanelMode === 'effects-layer') {
     const target = activeLayerEdit?.target;
     const fullId = activeLayerEdit ? (activeLayerEdit.subId !== null ? `${activeLayerEdit.layerId}_sub_${activeLayerEdit.subId}` : activeLayerEdit.layerId) : null;
     const state = fullId ? (layerStates[fullId] || { opacity: 1, labels: true, visible: true, renderer: true, activeEffect: null }) : { opacity: 1, labels: true, visible: true, renderer: true, activeEffect: null };
     
-    const layerTitle = target?.title || layersConfig.find(l => l.id === activeLayerEdit?.layerId)?.title || 'Layer';
+    const rawTitle = target?.title || layersConfig.find(l => l.id === activeLayerEdit?.layerId)?.title || 'Layer';
+    const layerTitle = rawTitle.replace(/\s*\(MapServer\)/gi, '');
 
     const EFFECTS_CONFIG = [
       {
@@ -381,16 +387,25 @@ export const LayersPanel = ({
             
             setLayerPanelMode('layers');
           }}>
+            <input type="hidden" name="symbologyType" value={symbologyType} />
+            <input type="hidden" name="lineStyle" value={lineStyle} />
+            <input type="hidden" name="fillStyle" value={fillStyle} />
+            <input type="hidden" name="attributeField" value={attributeField} />
 
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Symbology Type</label>
-              <select name="symbologyType" defaultValue="simple" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }} onChange={(e) => {
-                document.getElementById('simpleOptions').style.display = e.target.value === 'simple' ? 'block' : 'none';
-                document.getElementById('attributeOptions').style.display = e.target.value === 'attribute' ? 'block' : 'none';
-              }}>
-                <option value="simple">Simple</option>
-                <option value="attribute">Attribute</option>
-              </select>
+              <CustomSelect 
+                options={[
+                  { id: 'simple', title: 'Simple' },
+                  { id: 'attribute', title: 'Attribute' }
+                ]}
+                value={symbologyType}
+                onChange={(val) => {
+                  setSymbologyType(val);
+                  document.getElementById('simpleOptions').style.display = val === 'simple' ? 'block' : 'none';
+                  document.getElementById('attributeOptions').style.display = val === 'attribute' ? 'block' : 'none';
+                }}
+              />
             </div>
 
             <div id="simpleOptions" style={{ paddingBottom: '16px' }}>
@@ -422,25 +437,33 @@ export const LayersPanel = ({
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Line Style</label>
-                  <select name="lineStyle" defaultValue="solid" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
-                    <option value="solid">Solid</option>
-                    <option value="dash">Dash</option>
-                    <option value="dot">Dot</option>
-                    <option value="dash-dot">Dash Dot</option>
-                    <option value="none">None</option>
-                  </select>
+                  <CustomSelect 
+                    options={[
+                      { id: 'solid', title: 'Solid' },
+                      { id: 'dash', title: 'Dash' },
+                      { id: 'dot', title: 'Dot' },
+                      { id: 'dash-dot', title: 'Dash Dot' },
+                      { id: 'none', title: 'None' }
+                    ]}
+                    value={lineStyle}
+                    onChange={setLineStyle}
+                  />
                 </div>
 
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Fill Style</label>
-                  <select name="fillStyle" defaultValue="solid" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
-                    <option value="solid">Solid</option>
-                    <option value="cross">Cross</option>
-                    <option value="diagonal-cross">Diagonal Cross</option>
-                    <option value="forward-diagonal">Forward Diagonal</option>
-                    <option value="backward-diagonal">Backward Diagonal</option>
-                    <option value="none">None</option>
-                  </select>
+                  <CustomSelect 
+                    options={[
+                      { id: 'solid', title: 'Solid' },
+                      { id: 'cross', title: 'Cross' },
+                      { id: 'diagonal-cross', title: 'Diagonal Cross' },
+                      { id: 'forward-diagonal', title: 'Forward Diagonal' },
+                      { id: 'backward-diagonal', title: 'Backward Diagonal' },
+                      { id: 'none', title: 'None' }
+                    ]}
+                    value={fillStyle}
+                    onChange={setFillStyle}
+                  />
                 </div>
               </div>
             </div>
@@ -448,11 +471,15 @@ export const LayersPanel = ({
             <div id="attributeOptions" style={{ display: 'none', paddingBottom: '16px' }}>
               <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>Pick an attribute to symbolize</label>
-                <select name="attributeField" className="tool-select" style={{ width: '100%', boxSizing: 'border-box' }}>
-                  <option value="PROJECT_CODE">PROJECT_CODE</option>
-                  <option value="STATUS">STATUS</option>
-                  <option value="TYPE">TYPE</option>
-                </select>
+                <CustomSelect 
+                  options={[
+                    { id: 'PROJECT_CODE', title: 'PROJECT_CODE' },
+                    { id: 'STATUS', title: 'STATUS' },
+                    { id: 'TYPE', title: 'TYPE' }
+                  ]}
+                  value={attributeField}
+                  onChange={setAttributeField}
+                />
               </div>
               
               <div className="form-group" style={{ marginBottom: '16px' }}>
@@ -514,6 +541,7 @@ export const LayersPanel = ({
 
     if (!layerMenuTriggerRect) return null;
 
+    const layer = layersConfig.find(l => l.id === id);
     const isMapServer = layer && (layer.type === 'map-image' || (layer.url && layer.url.toLowerCase().includes('featureserver')));
 
     let hierarchyType = 'feature';
@@ -756,9 +784,11 @@ export const LayersPanel = ({
                       >
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
-                    ) : <div style={{ width: 22 }} />}
+                    ) : <div className="layer-accordion-btn-placeholder" />}
                     
-                    <span className="layer-card-name tree-label-root" title={layer.title}>{layer.title}</span>
+                    <span className="layer-card-name tree-label-root" title={layer.title ? layer.title.replace(/\s*\(MapServer\)/gi, '') : ''}>
+                      {layer.title ? layer.title.replace(/\s*\(MapServer\)/gi, '') : ''}
+                    </span>
                   </div>
 
                   <div className="layer-card-more" style={{ zIndex: activeLayerMenu === layer.id ? 9999 : undefined }}>
@@ -803,16 +833,17 @@ export const LayersPanel = ({
                             onDragEnd={handleDragEnd}
                           >
                             <div className="layer-row-content">
-                              {[...Array(depth)].map((_, i) => (
-                                <div key={i} className="tree-line-spacer">
-                                  <div className="tree-line-v" />
-                                  {i === depth - 1 && <div className="tree-line-h" />}
-                                </div>
-                              ))}
+                              <div className="tree-indentation">
+                                {[...Array(depth)].map((_, i) => (
+                                  <div key={i} className="tree-line-spacer">
+                                    <div className="tree-line-v" />
+                                    {i === depth - 1 && <div className="tree-line-h" />}
+                                  </div>
+                                ))}
+                              </div>
                               
                               <span 
                                 className="layer-drag-handle" 
-                                style={{ marginRight: '4px', display: 'flex', alignItems: 'center' }} 
                                 draggable
                                 onDragStart={(e) => {
                                   const row = e.currentTarget.closest('.tree-row');

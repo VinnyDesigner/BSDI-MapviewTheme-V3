@@ -405,6 +405,75 @@ const DEFAULT_MANIFESTS = [
       },
     ],
   },
+
+  // ── 6. Heatmap Density ───────────────────────────────────────────────
+  {
+    toolId: 'gp_heatmap_density',
+    meta: {
+      name: 'Heatmap Density',
+      description: 'Calculates density-based rendering of point features.',
+      category: 'Visualization',
+      icon: '🔥',
+      tags: ['heatmap', 'density', 'points'],
+    },
+    execution: {
+      mode: 'client',
+      serviceUrl: '',
+      executionType: 'esriExecutionTypeAsynchronous',
+    },
+    parameters: [
+      {
+        name: 'Input_Points',
+        label: 'Input Point Layer',
+        widgetType: 'LayerPicker',
+        required: true,
+      },
+      {
+        name: 'Radius',
+        label: 'Heatmap Radius',
+        widgetType: 'NumberInput',
+        required: false,
+        defaultValue: 25,
+        min: 1,
+        max: 100,
+        description: 'Radius of influence (pixels)',
+      },
+      {
+        name: 'Intensity',
+        label: 'Intensity',
+        widgetType: 'NumberInput',
+        required: false,
+        defaultValue: 100,
+        min: 1,
+        max: 1000,
+        description: 'Maximum intensity value',
+      },
+      {
+        name: 'Color_Ramp',
+        label: 'Color Ramp',
+        widgetType: 'Select',
+        required: false,
+        defaultValue: 'Blue to Red',
+        choiceList: ['Blue to Red', 'Purple to Yellow'],
+      },
+      {
+        name: 'Density_Method',
+        label: 'Density Method',
+        widgetType: 'Select',
+        required: false,
+        defaultValue: 'Kernel Density',
+        choiceList: ['Kernel Density', 'Simple Density'],
+      },
+    ],
+    outputs: [
+      {
+        name: 'Output_Layer',
+        label: 'Heatmap Layer',
+        outputType: 'FeatureSet',
+        renderMode: 'MapLayer',
+      },
+    ],
+  },
 ];
 
 export default DEFAULT_MANIFESTS;

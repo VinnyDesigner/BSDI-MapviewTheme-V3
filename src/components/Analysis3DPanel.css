@@ -127,27 +127,30 @@
 
 .measure-select {
   width: 100%;
-  padding: 10px 16px;
+  padding: 8px 32px 8px 12px !important;
+  height: 36px !important;
   background: white !important;
   border: 1px solid #e2e8f0 !important;
-  border-radius: 12px !important;
-  font-size: 14px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
   color: #1a2f4d !important;
-  font-weight: 500;
-  appearance: none;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s;
-  box-sizing: border-box;
+  font-weight: 500 !important;
+  appearance: none !important;
+  cursor: pointer !important;
+  outline: none !important;
+  transition: all 0.2s !important;
+  box-sizing: border-box !important;
+  font-family: inherit !important;
 }
 
 .measure-select:focus {
   border-color: #df261c !important;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.05) !important;
 }
 
 .select-arrow {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   color: #64748b;
@@ -155,10 +158,10 @@
 }
 
 .results-card {
-  margin: 12px 0; /* Removed horizontal 16px margin as requested */
+  margin-top: 0;
   padding: 16px;
   background: #f8fafc;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
 
@@ -178,17 +181,19 @@
   font-size: 13px;
   color: #64748b;
   font-weight: 500;
+  font-family: 'Outfit', sans-serif;
 }
 
 .res-value {
   font-size: 15px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a2f4d;
+  font-family: 'Outfit', sans-serif;
 }
 
 .measure-footer-wrapper {
   margin-top: auto;
-  padding: 0 16px 16px 16px !important; /* Keep only side/bottom padding for the button */
+  padding: 16px 0 0 0 !important;
   background: transparent !important;
   border-top: none !important;
   display: flex;
@@ -278,28 +283,32 @@
   border-bottom: none !important;
 }
 
-/* Unit selector dropdown (Matching 2D exactly) */
 .a3d-widget-mount .esri-select,
 .a3d-widget-mount select {
   font-family: inherit !important;
   width: 100% !important;
-  padding: 10px 16px !important;
+  height: 36px !important;
+  padding: 8px 32px 8px 12px !important;
   background: #ffffff !important;
   background-color: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
-  border-radius: 12px !important;
-  font-size: 14px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
   color: #1a2f4d !important;
   font-weight: 500 !important;
   appearance: none !important;
   cursor: pointer !important;
   outline: none !important;
   box-sizing: border-box !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
 }
 
 .a3d-widget-mount .esri-select:focus,
 .a3d-widget-mount select:focus {
   border-color: #df261c !important;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.05) !important;
 }
 
 /* "New measurement" button — BSDI gradient */
@@ -346,3 +355,110 @@
     max-width: 220px !important;
   }
 }
+
+/* ── Viewshed custom styling ── */
+.viewshed-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.viewshed-row {
+  display: flex;
+  gap: 12px;
+}
+
+.viewshed-field-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.viewshed-field-group label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1a2f4d;
+  font-family: 'Outfit', sans-serif;
+  text-transform: capitalize;
+}
+
+.viewshed-input {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  font-family: 'Outfit', sans-serif;
+  outline: none;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.viewshed-input:focus {
+  border-color: #df261c;
+  box-shadow: 0 0 0 3px rgba(223, 38, 28, 0.1);
+}
+
+.viewshed-location-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.viewshed-location-container .viewshed-input {
+  flex: 1;
+}
+
+.viewshed-location-btn {
+  height: 36px;
+  width: 36px;
+  min-width: 36px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #1e3c72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewshed-location-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #df261c;
+}
+
+.viewshed-location-btn.active {
+  background-color: #df261c;
+  border-color: #df261c;
+  color: #ffffff;
+}
+
+.viewshed-clear-btn {
+  height: 36px;
+  padding: 0 24px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background-color: #f1f5f9;
+  color: #1a2f4d;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-end;
+  box-sizing: border-box;
+}
+
+.viewshed-clear-btn:hover {
+  background-color: #e2e8f0;
+}
+

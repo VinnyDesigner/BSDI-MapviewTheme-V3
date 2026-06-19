@@ -137,8 +137,8 @@
 
 .cat-label {
   font-size: 10px;
-  font-weight: 800;
-  color: #94a3b8;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.6);
   letter-spacing: 0.05em;
 }
 

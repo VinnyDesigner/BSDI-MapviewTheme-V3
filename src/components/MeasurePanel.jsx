@@ -15,6 +15,7 @@ import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel';
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine';
 import TextSymbol from '@arcgis/core/symbols/TextSymbol';
 import Graphic from '@arcgis/core/Graphic';
+import CustomSelect from './CustomSelect';
 import './MeasurePanel.css';
 
 const AREA_UNITS = [
@@ -258,50 +259,42 @@ const MeasurePanel = ({ view }) => {
               {/* Coordinate System */}
               <div className="measure-section">
                 <label className="section-label">{t('measureCoordSystem')}</label>
-                <div className="unit-select-wrapper">
-                  <select 
-                    className="measure-select"
-                    value={wkid}
-                    onChange={(e) => setWkid(e.target.value)}
-                    dir="ltr"
-                  >
-                    <option value="4326">WKID: 4326 Lat Long</option>
-                    <option value="20439">WKID: 20439 UTM 39N</option>
-                    <option value="3857">WKID: 3857 Web Mercator</option>
-                    <option value="102100">WKID: 102100 Web Mercator</option>
-                  </select>
-                  <ChevronDown className="select-arrow" size={16} />
-                </div>
+                <CustomSelect
+                  options={[
+                    { value: '4326', label: 'WKID: 4326 Lat Long' },
+                    { value: '20439', label: 'WKID: 20439 UTM 39N' },
+                    { value: '3857', label: 'WKID: 3857 Web Mercator' },
+                    { value: '102100', label: 'WKID: 102100 Web Mercator' }
+                  ]}
+                  value={wkid}
+                  onChange={(val) => setWkid(val)}
+                />
               </div>
 
               {/* Unit Selection */}
               <div className="measure-section">
                 <label className="section-label">{activeMode === 'area' ? t('measureAreaUnit') : t('measureDistUnit')}</label>
-                <div className="unit-select-wrapper">
-                  <select 
-                    className="measure-select"
-                    value={selectedUnit}
-                    onChange={(e) => {
-                      const newUnit = e.target.value;
-                      setSelectedUnit(newUnit);
-                      selectedUnitRef.current = newUnit;
-                      if (graphicsLayerRef.current && graphicsLayerRef.current.graphics.length > 0) {
-                        calculateMeasurements(graphicsLayerRef.current.graphics.getItemAt(0));
-                      }
-                    }}
-                    dir="ltr"
-                  >
-                    {(activeMode === 'area' ? AREA_UNITS : DISTANCE_UNITS).map(u => (
-                      <option key={u.id} value={u.unit}>{u.label}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="select-arrow" size={16} />
-                </div>
+                <CustomSelect
+                  options={(activeMode === 'area' ? AREA_UNITS : DISTANCE_UNITS).map(u => ({
+                    value: u.unit,
+                    label: u.label
+                  }))}
+                  value={selectedUnit}
+                  onChange={(newUnit) => {
+                    setSelectedUnit(newUnit);
+                    selectedUnitRef.current = newUnit;
+                    if (graphicsLayerRef.current && graphicsLayerRef.current.graphics.length > 0) {
+                      calculateMeasurements(graphicsLayerRef.current.graphics.getItemAt(0));
+                    }
+                  }}
+                />
               </div>
 
               {/* Results Display */}
               <div className="results-card">
-                <span className="section-label">{t('measureResults')}</span>
+                <span className="section-label" style={{ fontSize: '11.5px', fontWeight: '700', color: '#1a2f4d', textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: "'Outfit', sans-serif" }}>
+                  {t('measureResults')}
+                </span>
                 <div className="results-list">
                   {activeMode === 'area' ? (
                     <>
