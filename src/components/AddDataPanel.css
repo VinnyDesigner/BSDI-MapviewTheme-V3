@@ -845,3 +845,112 @@
   flex-direction: column;
   gap: 12px;
 }
+
+/* CAD WKID Picker Card styling */
+.cad-wkid-picker-card {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.cad-wkid-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1a2f4d;
+  font-family: 'Outfit', sans-serif;
+}
+
+.cad-wkid-picker-title strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cad-wkid-picker-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.4;
+}
+
+.cad-wkid-picker-card label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2f4d;
+  font-family: 'Outfit', sans-serif;
+  margin-bottom: 2px;
+  display: block;
+}
+
+/* Override CustomSelect trigger font-size inside the card */
+.cad-wkid-picker-card .custom-select-trigger .selected-value {
+  font-size: 16px;
+  font-weight: 400;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Override CustomSelect dropdown search input and option item font size inside the card */
+.cad-wkid-picker-card .select-search-input {
+  font-size: 16px;
+  font-weight: 400;
+  font-family: 'Outfit', sans-serif;
+}
+
+.cad-wkid-picker-card .option-item {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Outfit', sans-serif;
+  padding: 8px 12px;
+}
+
+.cad-wkid-picker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Outfit', sans-serif;
+  width: fit-content;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+/* Sticky action section at the bottom of the card */
+.cad-wkid-picker-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.cad-wkid-picker-actions-sticky button {
+  flex: 1;
+  height: 38px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+

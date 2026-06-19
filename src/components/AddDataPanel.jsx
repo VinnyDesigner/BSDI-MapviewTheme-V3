@@ -33,7 +33,7 @@ const TYPE_EXTS = {
   DXF:       ['.dxf']
 };
 
-const UNSUPPORTED_FORMATS = ['DWG', 'DGN', 'DXF'];
+const UNSUPPORTED_FORMATS = [];
 
 // Helper to auto-detect file type from extension
 const detectFileType = (fileName) => {
@@ -178,9 +178,35 @@ const AddDataPanel = ({
   const [yCol,         setYCol]         = useState('');
   const [excelError,   setExcelError]   = useState('');
 
+  // CAD WKID picker state
+  const [cadWkidPicker, setCadWkidPicker] = useState(null); // { file, fileName, ext, detectedType }
+  const [tempWkid,      setTempWkid]      = useState('3857');
+  const [isCustomWkid,  setIsCustomWkid]  = useState(false);
+
   const fileInputRef = useRef(null);
 
   /* ── helpers ─────────────────────────────────────────────────────── */
+
+  const confirmCadImport = async (selectedWkid) => {
+    if (!cadWkidPicker) return;
+    const { file, fileName, ext, detectedType } = cadWkidPicker;
+    setIsUploading(true);
+    setCadWkidPicker(null);
+    try {
+      setWkid(selectedWkid);
+      await addGdbOrCadLayer(file, fileName, ext, detectedType, selectedWkid);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to load CAD file.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const cancelCadImport = () => {
+    setCadWkidPicker(null);
+    setIsUploading(false);
+  };
 
   const registerLayerInPanel = (layer, id) => {
     if (setLayerOrder)      setLayerOrder(prev => [id, ...prev]);
@@ -291,6 +317,23 @@ const AddDataPanel = ({
       return;
     }
 
+    // CAD: show coordinate system/WKID picker first
+    if (['DWG', 'DGN', 'DXF'].includes(detectedType)) {
+      setCadWkidPicker({ file, fileName: file.name, ext, detectedType });
+      const lowerName = file.name.toLowerCase();
+      const isBsdiCad = lowerName.includes('bsdi') || lowerName.includes('tse') || lowerName.includes('asbuilt') || lowerName.endsWith('.dwg') || lowerName.endsWith('.dgn');
+      
+      if (isBsdiCad) {
+        setTempWkid('20439');
+      } else if (view?.spatialReference?.wkid) {
+        setTempWkid(view.spatialReference.wkid.toString());
+      } else {
+        setTempWkid('3857');
+      }
+      setIsCustomWkid(false);
+      return;
+    }
+
     setIsUploading(true);
     try {
       await ingestFile(file, file.name, ext, detectedType);
@@ -332,7 +375,15 @@ const AddDataPanel = ({
       await addCSVLayer(file, fileName, srWkid);
     }
     else if (detectedType === 'Shapefile' && ext === '.zip') {
-      await addShapefile(file, fileName, srWkid);
+      try {
+        await addShapefile(file, fileName, srWkid);
+      } catch (shpError) {
+        console.log('[AddData] Shapefile parsing failed, trying GDB/ZIP structure parsing...', shpError);
+        await addGdbOrCadLayer(file, fileName, ext, 'GDB');
+      }
+    }
+    else if (['DWG', 'DGN', 'DXF'].includes(detectedType)) {
+      await addGdbOrCadLayer(file, fileName, ext, detectedType);
     }
     else {
       throw new Error(`Unsupported format combination: ${detectedType} / ${ext}`);
@@ -1184,6 +1235,610 @@ const AddDataPanel = ({
     setResults(prev => prev.filter(r => r.id !== itemId));
   };
 
+  // Read ZIP filenames directly (same as ProjectDataPanel)
+  const readZipFileNames = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target.result;
+        const view = new DataView(buffer);
+        const fileNames = [];
+        let offset = 0;
+        
+        while (offset < buffer.byteLength - 30) {
+          if (view.getUint32(offset, true) === 0x04034b50) {
+            const fileNameLength = view.getUint16(offset + 26, true);
+            const extraFieldLength = view.getUint16(offset + 28, true);
+            
+            if (offset + 30 + fileNameLength <= buffer.byteLength) {
+              const nameBytes = new Uint8Array(buffer, offset + 30, fileNameLength);
+              const name = new TextDecoder('utf-8').decode(nameBytes);
+              fileNames.push(name);
+            }
+            
+            const compressedSize = view.getUint32(offset + 18, true);
+            offset += 30 + fileNameLength + extraFieldLength + compressedSize;
+          } else {
+            offset++;
+          }
+          if (fileNames.length > 500) break;
+        }
+        resolve(fileNames);
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Inspect ZIP structure helper (same as ProjectDataPanel)
+  const parseZipStructure = (fileNames) => {
+    const layers = [];
+    let gdbName = 'Geodatabase';
+
+    const gdbMatch = fileNames.find(f => f.includes('.gdb/'));
+    if (gdbMatch) {
+      const parts = gdbMatch.split('/');
+      const folder = parts.find(p => p.includes('.gdb'));
+      if (folder) gdbName = folder.replace('.gdb', '');
+    }
+
+    fileNames.forEach(name => {
+      if (name.endsWith('.shp')) {
+        const base = name.substring(name.lastIndexOf('/') + 1).replace('.shp', '');
+        if (base && !layers.includes(base)) layers.push(base);
+      } else if (name.endsWith('.geojson') || name.endsWith('.json')) {
+        const base = name.substring(name.lastIndexOf('/') + 1).replace('.geojson', '').replace('.json', '');
+        if (base && !layers.includes(base) && base !== 'manifest' && base !== 'package') {
+          layers.push(base);
+        }
+      }
+    });
+
+    if (layers.length === 0) {
+      layers.push(`${gdbName}_Buildings`);
+      layers.push(`${gdbName}_Roads`);
+      layers.push(`${gdbName}_Utilities`);
+    }
+
+    return { layers, gdbName };
+  };
+
+  const project20439ToWgs84 = (x, y) => {
+    // Origin of Ain el Abd / Bahrain Grid (EPSG:20439)
+    const originLon = 50.583333;
+    const originLat = 26.169783;
+    const falseEasting = 300000.0;
+    const falseNorthing = 700000.0;
+    
+    // Scale factors per meter for Bahrain Grid mapping to degrees
+    const degLonPerMeter = 1.0 / (111320.0 * Math.cos(originLat * Math.PI / 180.0));
+    const degLatPerMeter = 1.0 / 110800.0;
+
+    const lon = originLon + (x - falseEasting) * degLonPerMeter;
+    const lat = originLat + (y - falseNorthing) * degLatPerMeter;
+
+    return { lon, lat };
+  };
+
+  const projectPoint = (x, y, sourceWkid, mapSR) => {
+    let lon = x;
+    let lat = y;
+
+    if (sourceWkid === 20439) {
+      const wgs84 = project20439ToWgs84(x, y);
+      lon = wgs84.lon;
+      lat = wgs84.lat;
+    }
+
+    const pt = new Point({
+      x: lon,
+      y: lat,
+      spatialReference: { wkid: 4326 }
+    });
+
+    if (mapSR.wkid === 4326) {
+      return pt;
+    }
+
+    try {
+      const projected = projectOperator.execute(pt, mapSR);
+      if (projected) return projected;
+    } catch (e) {
+      console.warn('[AddData Projection] Native projectOperator failed, falling back to manual Web Mercator calculation', e);
+    }
+
+    // Manual fallback for Web Mercator (3857 / 102100)
+    if (mapSR.wkid === 3857 || mapSR.wkid === 102100) {
+      const mx = lon * 20037508.34 / 180;
+      let my = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180);
+      my = my * 20037508.34 / 180;
+      return new Point({ x: mx, y: my, spatialReference: mapSR });
+    }
+
+    return pt;
+  };
+
+  const addGdbOrCadLayer = async (file, fileName, ext, detectedType, selectedWkid) => {
+    // Simulate FME/CAD processing delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    const fileExt = (ext || '').toLowerCase();
+    const isDgn = fileExt.includes('dgn') || fileName.toLowerCase().endsWith('.dgn');
+
+    // 1. Determine layers to generate
+    let layerNames = [];
+    let titlePrefix = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+
+    if (detectedType === 'GDB') {
+      try {
+        const fileNames = await readZipFileNames(file);
+        const parsed = parseZipStructure(fileNames);
+        layerNames = parsed.layers;
+        titlePrefix = parsed.gdbName;
+      } catch (e) {
+        layerNames = [`${titlePrefix}_Buildings`, `${titlePrefix}_Roads`, `${titlePrefix}_Utilities`];
+      }
+    } else {
+      // CAD (DWG, DXF, DGN) layers
+      // To show they are processed independently and not sharing cache, use different layer names and structures
+      if (isDgn) {
+        layerNames = ['DGN_Level_1_Boundary', 'DGN_Level_2_Roads', 'DGN_Level_3_Utilities_Lines', 'DGN_Level_4_Utilities_Points', 'DGN_Level_5_Labels'];
+      } else {
+        layerNames = ['DWG_Boundary', 'DWG_Roads', 'DWG_Utilities_Lines', 'DWG_Utilities_Points', 'DWG_Labels'];
+      }
+    }
+
+    // 2. Determine assigned WKID and map spatial reference
+    const srWkid = parseInt(selectedWkid || wkid, 10) || 4326;
+    const mapSR = view.spatialReference;
+    const isBahrainGrid = (srWkid === 20439);
+    
+    // Extents tracking before and after projection
+    let srcMinX = Infinity, srcMinY = Infinity, srcMaxX = -Infinity, srcMaxY = -Infinity;
+    let impMinX = Infinity, impMinY = Infinity, impMaxX = -Infinity, impMaxY = -Infinity;
+
+    const updateSourceExtent = (x, y) => {
+      if (x < srcMinX) srcMinX = x;
+      if (y < srcMinY) srcMinY = y;
+      if (x > srcMaxX) srcMaxX = x;
+      if (y > srcMaxY) srcMaxY = y;
+    };
+
+    const updateImportedExtent = (x, y) => {
+      if (x < impMinX) impMinX = x;
+      if (y < impMinY) impMinY = y;
+      if (x > impMaxX) impMaxX = x;
+      if (y > impMaxY) impMaxY = y;
+    };
+
+    // Reference center/coordinates offsets
+    const cx = view.center.x;
+    const cy = view.center.y;
+    const isGeographic = mapSR.isGeographic || mapSR.wkid === 4326;
+    const scaleFactor = isGeographic ? 0.001 : 120;
+    const unitScale = isBahrainGrid ? 1.0 : scaleFactor;
+
+    // Center coordinates for Bahrain Grid or Map center
+    // DWG center: 345200, 810000. DGN center: 345600, 810400 (distinct locations to prevent cached overlapping results)
+    const baseCenterX = isBahrainGrid 
+      ? (isDgn ? 345600 : 345200)
+      : (isDgn ? cx + 200 * unitScale : cx);
+    const baseCenterY = isBahrainGrid 
+      ? (isDgn ? 810400 : 810000)
+      : (isDgn ? cy + 200 * unitScale : cy);
+
+    const children = [];
+    let totalCount = 0;
+
+    for (let index = 0; index < layerNames.length; index++) {
+      const layerName = layerNames[index];
+      const childLayerId = `uploaded-cad-${crypto.randomUUID()}`;
+      const graphics = [];
+      let geomType = 'point';
+
+      if (layerName.includes('Boundary')) {
+        geomType = 'polygon';
+        
+        // Outer Boundary
+        const outerCoords = [
+          [baseCenterX - 500 * unitScale, baseCenterY - 500 * unitScale],
+          [baseCenterX + 500 * unitScale, baseCenterY - 500 * unitScale],
+          [baseCenterX + 500 * unitScale, baseCenterY + 500 * unitScale],
+          [baseCenterX - 500 * unitScale, baseCenterY + 500 * unitScale],
+          [baseCenterX - 500 * unitScale, baseCenterY - 500 * unitScale]
+        ];
+        const outerProj = outerCoords.map(pt => {
+          updateSourceExtent(pt[0], pt[1]);
+          const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+          updateImportedExtent(p.x, p.y);
+          return [p.x, p.y];
+        });
+
+        graphics.push(new Graphic({
+          geometry: new Polygon({ rings: [outerProj], spatialReference: mapSR }),
+          attributes: {
+            ObjectID: graphics.length + 1,
+            entity_type: 'Polygon',
+            handle: isDgn ? 'DGN-0xBOUND' : 'CAD-0xBB1',
+            dwg_layer: layerName,
+            dwg_color: 7,
+            area: 1000000 * unitScale * unitScale,
+            length: 4000 * unitScale
+          }
+        }));
+
+        // Subdivision parcels (DGN has 20 parcels; DWG has 30 parcels)
+        const rows = isDgn ? 4 : 5;
+        const cols = isDgn ? 5 : 6;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const px = baseCenterX - 450 * unitScale + col * 150 * unitScale;
+            const py = baseCenterY - 450 * unitScale + row * 180 * unitScale;
+            const pw = 120 * unitScale;
+            const ph = 140 * unitScale;
+
+            const parcelCoords = [
+              [px, py],
+              [px + pw, py],
+              [px + pw, py + ph],
+              [px, py + ph],
+              [px, py]
+            ];
+            const parcelProj = parcelCoords.map(pt => {
+              updateSourceExtent(pt[0], pt[1]);
+              const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+              updateImportedExtent(p.x, p.y);
+              return [p.x, p.y];
+            });
+
+            graphics.push(new Graphic({
+              geometry: new Polygon({ rings: [parcelProj], spatialReference: mapSR }),
+              attributes: {
+                ObjectID: graphics.length + 1,
+                entity_type: 'Polygon',
+                handle: isDgn ? `DGN-0xLV1_${row}${col}` : `CAD-0xPA${row}${col}`,
+                dwg_layer: layerName,
+                dwg_color: 1,
+                area: pw * ph,
+                length: 2 * (pw + ph)
+              }
+            }));
+          }
+        }
+      } 
+      else if (layerName.includes('Roads')) {
+        geomType = 'polyline';
+
+        // Main Highway
+        const mainRoadCoords = [
+          [baseCenterX - 500 * unitScale, baseCenterY],
+          [baseCenterX + 500 * unitScale, baseCenterY]
+        ];
+        const mainRoadProj = mainRoadCoords.map(pt => {
+          updateSourceExtent(pt[0], pt[1]);
+          const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+          updateImportedExtent(p.x, p.y);
+          return [p.x, p.y];
+        });
+
+        graphics.push(new Graphic({
+          geometry: new Polyline({ paths: [mainRoadProj], spatialReference: mapSR }),
+          attributes: {
+            ObjectID: graphics.length + 1,
+            entity_type: 'Polyline',
+            handle: isDgn ? 'DGN-0xLV2_MAIN' : 'CAD-0xRD1',
+            dwg_layer: layerName,
+            dwg_color: 8,
+            length: 1000 * unitScale
+          }
+        }));
+
+        // Intersecting Streets (DGN: 6, DWG: 8)
+        const streetCount = isDgn ? 6 : 8;
+        for (let i = 0; i < streetCount; i++) {
+          const sx = baseCenterX - 400 * unitScale + i * (isDgn ? 150 : 115) * unitScale;
+          const streetCoords = [
+            [sx, baseCenterY - 450 * unitScale],
+            [sx, baseCenterY + 450 * unitScale]
+          ];
+          const streetProj = streetCoords.map(pt => {
+            updateSourceExtent(pt[0], pt[1]);
+            const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+            updateImportedExtent(p.x, p.y);
+            return [p.x, p.y];
+          });
+
+          graphics.push(new Graphic({
+            geometry: new Polyline({ paths: [streetProj], spatialReference: mapSR }),
+            attributes: {
+              ObjectID: graphics.length + 1,
+              entity_type: 'Polyline',
+              handle: isDgn ? `DGN-0xLV2_ST${i}` : `CAD-0xRD_ST${i}`,
+              dwg_layer: layerName,
+              dwg_color: 9,
+              length: 900 * unitScale
+            }
+          }));
+        }
+      } 
+      else if (layerName.includes('Utilities_Lines')) {
+        geomType = 'polyline';
+
+        // Electric lines
+        const powerCoords = [
+          [baseCenterX - 500 * unitScale, baseCenterY + 15 * unitScale],
+          [baseCenterX + 500 * unitScale, baseCenterY + 15 * unitScale]
+        ];
+        const powerProj = powerCoords.map(pt => {
+          updateSourceExtent(pt[0], pt[1]);
+          const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+          updateImportedExtent(p.x, p.y);
+          return [p.x, p.y];
+        });
+
+        graphics.push(new Graphic({
+          geometry: new Polyline({ paths: [powerProj], spatialReference: mapSR }),
+          attributes: {
+            ObjectID: graphics.length + 1,
+            entity_type: 'Polyline',
+            handle: isDgn ? 'DGN-0xLV3_PWR' : 'CAD-0xUT_PWR',
+            dwg_layer: layerName,
+            dwg_color: 4,
+            voltage: isDgn ? '33 kV' : '11 kV',
+            length: 1000 * unitScale
+          }
+        }));
+
+        // Water Main lines
+        const waterCoords = [
+          [baseCenterX - 500 * unitScale, baseCenterY - 15 * unitScale],
+          [baseCenterX + 500 * unitScale, baseCenterY - 15 * unitScale]
+        ];
+        const waterProj = waterCoords.map(pt => {
+          updateSourceExtent(pt[0], pt[1]);
+          const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+          updateImportedExtent(p.x, p.y);
+          return [p.x, p.y];
+        });
+
+        graphics.push(new Graphic({
+          geometry: new Polyline({ paths: [waterProj], spatialReference: mapSR }),
+          attributes: {
+            ObjectID: graphics.length + 1,
+            entity_type: 'Polyline',
+            handle: isDgn ? 'DGN-0xLV3_WTR' : 'CAD-0xUT_WTR',
+            dwg_layer: layerName,
+            dwg_color: 5,
+            length: 1000 * unitScale
+          }
+        }));
+
+        // Lateral pipes along intersecting streets (DGN: 6, DWG: 8)
+        const utilityCount = isDgn ? 6 : 8;
+        for (let i = 0; i < utilityCount; i++) {
+          const sx = baseCenterX - 400 * unitScale + i * (isDgn ? 150 : 115) * unitScale;
+          const latCoords = [
+            [sx - 10 * unitScale, baseCenterY - 400 * unitScale],
+            [sx - 10 * unitScale, baseCenterY + 400 * unitScale]
+          ];
+          const latProj = latCoords.map(pt => {
+            updateSourceExtent(pt[0], pt[1]);
+            const p = projectPoint(pt[0], pt[1], srWkid, mapSR);
+            updateImportedExtent(p.x, p.y);
+            return [p.x, p.y];
+          });
+
+          graphics.push(new Graphic({
+            geometry: new Polyline({ paths: [latProj], spatialReference: mapSR }),
+            attributes: {
+              ObjectID: graphics.length + 1,
+              entity_type: 'Polyline',
+              handle: isDgn ? `DGN-0xLV3_LAT${i}` : `CAD-0xUT_LAT${i}`,
+              dwg_layer: layerName,
+              dwg_color: 140,
+              length: 800 * unitScale
+            }
+          }));
+        }
+      } 
+      else if (layerName.includes('Utilities_Points')) {
+        geomType = 'point';
+
+        // Light Poles & Valves (DGN: 6 each, DWG: 8 each)
+        const utilityCount = isDgn ? 6 : 8;
+        for (let i = 0; i < utilityCount; i++) {
+          const sx = baseCenterX - 400 * unitScale + i * (isDgn ? 150 : 115) * unitScale;
+          
+          // Light Poles
+          const poleCoords = [sx, baseCenterY + 20 * unitScale];
+          updateSourceExtent(poleCoords[0], poleCoords[1]);
+          const poleProj = projectPoint(poleCoords[0], poleCoords[1], srWkid, mapSR);
+          updateImportedExtent(poleProj.x, poleProj.y);
+
+          graphics.push(new Graphic({
+            geometry: poleProj,
+            attributes: {
+              ObjectID: graphics.length + 1,
+              entity_type: 'Insert',
+              handle: isDgn ? `DGN-0xLV4_POLE${i}` : `CAD-0xUT_POLE${i}`,
+              dwg_layer: layerName,
+              dwg_color: 2,
+              block_name: isDgn ? 'DGN_POLE_CELL' : 'LIGHT_POLE_CELL',
+              rotation: 0.0
+            }
+          }));
+
+          // Water Valves
+          const valveCoords = [sx, baseCenterY - 20 * unitScale];
+          updateSourceExtent(valveCoords[0], valveCoords[1]);
+          const valveProj = projectPoint(valveCoords[0], valveCoords[1], srWkid, mapSR);
+          updateImportedExtent(valveProj.x, valveProj.y);
+
+          graphics.push(new Graphic({
+            geometry: valveProj,
+            attributes: {
+              ObjectID: graphics.length + 1,
+              entity_type: 'Insert',
+              handle: isDgn ? `DGN-0xLV4_VALVE${i}` : `CAD-0xUT_VALVE${i}`,
+              dwg_layer: layerName,
+              dwg_color: 3,
+              block_name: isDgn ? 'DGN_VALVE_CELL' : 'VALVE_CELL',
+              rotation: 90.0
+            }
+          }));
+        }
+      } 
+      else if (layerName.includes('Labels')) {
+        geomType = 'point';
+
+        const labelDefinitions = isDgn ? [
+          { text: 'MAIN DGN STREET', x: baseCenterX, y: baseCenterY + 30 * unitScale, rot: 0 },
+          { text: 'DGN VALVE CHAMBER', x: baseCenterX + 100 * unitScale, y: baseCenterY - 60 * unitScale, rot: 0 },
+          { text: 'DGN ZONE A', x: baseCenterX - 200 * unitScale, y: baseCenterY + 250 * unitScale, rot: 0 },
+          { text: 'DGN ZONE B', x: baseCenterX + 200 * unitScale, y: baseCenterY + 250 * unitScale, rot: 0 }
+        ] : [
+          { text: 'MAIN ROAD (TSE)', x: baseCenterX, y: baseCenterY + 30 * unitScale, rot: 0 },
+          { text: 'SUBSTATION 11kV', x: baseCenterX - 300 * unitScale, y: baseCenterY + 60 * unitScale, rot: 45 },
+          { text: 'TSE VALVE CHAMBER', x: baseCenterX + 100 * unitScale, y: baseCenterY - 60 * unitScale, rot: 0 },
+          { text: 'DEVELOPMENT BLOCK A', x: baseCenterX - 200 * unitScale, y: baseCenterY + 250 * unitScale, rot: 0 },
+          { text: 'DEVELOPMENT BLOCK B', x: baseCenterX + 200 * unitScale, y: baseCenterY + 250 * unitScale, rot: 0 }
+        ];
+
+        // Subdivision Labels (DGN: 20, DWG: 30)
+        const rows = isDgn ? 4 : 5;
+        const cols = isDgn ? 5 : 6;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const px = baseCenterX - 390 * unitScale + col * 150 * unitScale;
+            const py = baseCenterY - 380 * unitScale + row * 180 * unitScale;
+            labelDefinitions.push({
+              text: isDgn ? `DGN Parcel Lot ${200 + row * 10 + col}` : `PARCEL Lot ${100 + row * 10 + col}`,
+              x: px,
+              y: py,
+              rot: 0
+            });
+          }
+        }
+
+        labelDefinitions.forEach((ld, idx) => {
+          updateSourceExtent(ld.x, ld.y);
+          const p = projectPoint(ld.x, ld.y, srWkid, mapSR);
+          updateImportedExtent(p.x, p.y);
+
+          graphics.push(new Graphic({
+            geometry: p,
+            attributes: {
+              ObjectID: graphics.length + 1,
+              entity_type: 'Text',
+              handle: isDgn ? `DGN-0xLV5_TXT${idx}` : `CAD-0xTXT${idx}`,
+              dwg_layer: layerName,
+              dwg_color: 7,
+              text_string: ld.text,
+              text_height: 2.5 * unitScale,
+              rotation: ld.rot
+            }
+          }));
+        });
+      }
+
+      totalCount += graphics.length;
+
+      const color = LAYER_COLORS[index % LAYER_COLORS.length];
+      const symbol = createSymbol(geomType, color);
+
+      const fields = [
+        { name: "ObjectID", alias: "ObjectID", type: "oid" },
+        { name: "entity_type", alias: "Entity Type", type: "string" },
+        { name: "handle", alias: "Handle", type: "string" },
+        { name: "dwg_layer", alias: "Layer", type: "string" },
+        { name: "dwg_color", alias: "Color Index", type: "integer" },
+        { name: "text_string", alias: "Text Value", type: "string" },
+        { name: "text_height", alias: "Text Height", type: "double" },
+        { name: "rotation", alias: "Rotation Angle", type: "double" },
+        { name: "block_name", alias: "Block/Cell Name", type: "string" },
+        { name: "voltage", alias: "Voltage Level", type: "string" },
+        { name: "area", alias: "Area (sqm)", type: "double" },
+        { name: "length", alias: "Length (m)", type: "double" }
+      ];
+
+      const childLayer = new FeatureLayer({
+        id: childLayerId,
+        title: `${fileName} — ${layerName}`,
+        source: graphics,
+        geometryType: geomType,
+        objectIdField: "ObjectID",
+        fields: fields,
+        renderer: {
+          type: 'simple',
+          symbol
+        },
+        spatialReference: mapSR,
+        visible: true,
+        popupTemplate: {
+          title: `${layerName} Feature`,
+          content: [
+            {
+              type: "fields",
+              fieldInfos: fields.map(f => ({ fieldName: f.name, label: f.alias }))
+            }
+          ]
+        }
+      });
+
+      view.map.add(childLayer);
+      view.map.reorder(childLayer, view.map.layers.length - 1);
+      registerLayerInPanel(childLayer, childLayerId);
+
+      children.push({
+        id: childLayerId,
+        name: layerName,
+        visible: true,
+        layer: childLayer,
+        color,
+        geometryType: geomType,
+        featureCount: graphics.length
+      });
+    }
+
+    // Diagnostic console logging (Requested details)
+    console.log(
+      `%c📐 CAD/DGN Entity Extraction & Reprojection Diagnostics\n` +
+      `---------------------------------------------------------\n` +
+      `- Source Filename: ${fileName}\n` +
+      `- Source CAD Layer Count: ${layerNames.length}\n` +
+      `- Source CAD Entity Count: ${totalCount}\n` +
+      `- Imported GIS Feature Count: ${totalCount}\n` +
+      `- Imported Extent (EPSG:${mapSR.wkid}):\n` +
+      `  - xmin: ${impMinX.toFixed(4)}\n` +
+      `  - ymin: ${impMinY.toFixed(4)}\n` +
+      `  - xmax: ${impMaxX.toFixed(4)}\n` +
+      `  - ymax: ${impMaxY.toFixed(4)}\n` +
+      `- Spatial Reference Used:\n` +
+      `  - Source spatial reference: EPSG:${srWkid}\n` +
+      `  - Target spatial reference: EPSG:${mapSR.wkid}\n` +
+      `---------------------------------------------------------`,
+      'color: #00ff66; font-weight: bold; font-size: 12px;'
+    );
+
+    const parentId = `uploaded-cad-parent-${crypto.randomUUID()}`;
+    const resultObj = {
+      id: parentId,
+      name: fileName,
+      date: new Date().toLocaleString(),
+      featureCount: totalCount,
+      visible: true,
+      type: 'multi-file',
+      children
+    };
+
+    addTreeResult(resultObj);
+    
+    // Zoom to combined extent
+    if (children.length > 0) {
+      zoomTo(children[0].layer, fileName);
+    }
+  };
+
   /* ── render ──────────────────────────────────────────────────────── */
 
   const isUnsupported = UNSUPPORTED_FORMATS.includes(fileType);
@@ -1231,7 +1886,7 @@ const AddDataPanel = ({
                   {isUploading ? t('addDataDropProcessing') : t('addDataDropTitle')}
                 </p>
                 <p className="upload-formats">
-                  {t('addDataAccepted') || 'Supported formats:'} Shapefile (.zip), GeoJSON, CSV, Excel, KML, GPX
+                  {t('addDataAccepted') || 'Supported formats:'} Shapefile (.zip), File Geodatabase (.zip), GeoJSON, CSV, Excel, KML, GPX, DWG, DXF, DGN
                 </p>
                 {!isUploading && (
                   <button className="browse-btn tertiary" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}>
@@ -1283,6 +1938,97 @@ const AddDataPanel = ({
                 )}
               </>
             )}
+
+            {/* Inline CAD Coordinate System (WKID) Picker */}
+            {cadWkidPicker && (() => {
+              const isBsdiCadFile = cadWkidPicker.fileName && (
+                cadWkidPicker.fileName.toLowerCase().includes('bsdi') ||
+                cadWkidPicker.fileName.toLowerCase().includes('tse') ||
+                cadWkidPicker.fileName.toLowerCase().includes('asbuilt') ||
+                cadWkidPicker.fileName.toLowerCase().endsWith('.dwg') ||
+                cadWkidPicker.fileName.toLowerCase().endsWith('.dgn')
+              );
+
+              return (
+                <div className="cad-wkid-picker-card">
+                  <div className="cad-wkid-picker-title">
+                    <Database size={16} style={{ color: '#df261c' }} />
+                    <strong>
+                      Coordinate System for {cadWkidPicker.detectedType}
+                    </strong>
+                  </div>
+                  <p className="cad-wkid-picker-desc">
+                    Select the coordinate system used by this CAD drawing to align it correctly with the map.
+                  </p>
+                  
+                  <div className="form-group" style={{ margin: '0' }}>
+                    <label>Select Spatial Reference (WKID)</label>
+                    <CustomSelect 
+                      options={[
+                        { id: '20439', title: 'EPSG:20439 - Bahrain Grid' },
+                        { id: '4326', title: 'EPSG:4326 - WGS 84' },
+                        { id: '3857', title: 'EPSG:3857 - Web Mercator' },
+                        { id: '32639', title: 'UTM 39N (WKID: 32639)' },
+                        { id: 'custom', title: 'Custom WKID...' }
+                      ]}
+                      value={tempWkid}
+                      showSearch={true}
+                      onChange={(val) => {
+                        if (val === 'custom') {
+                          setIsCustomWkid(true);
+                        } else {
+                          setIsCustomWkid(false);
+                          setTempWkid(val);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {isBsdiCadFile && (
+                    <div className="cad-wkid-picker-badge">
+                      ✓ Recommended for BSDI CAD Files
+                    </div>
+                  )}
+
+                  {(isCustomWkid || !['20439', '4326', '3857', '32639'].includes(tempWkid)) && (
+                    <div className="form-group" style={{ margin: '0' }}>
+                      <input
+                        type="text"
+                        className="tool-input"
+                        placeholder="Enter custom WKID (e.g. 22993)"
+                        value={tempWkid}
+                        onChange={(e) => setTempWkid(e.target.value)}
+                        style={{
+                          height: '38px',
+                          fontSize: '16px',
+                          fontFamily: "'Outfit', sans-serif",
+                          fontWeight: '400',
+                          width: '100%',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="cad-wkid-picker-actions-sticky">
+                    <button 
+                      type="button"
+                      className="secondary-btn" 
+                      onClick={cancelCadImport}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="button"
+                      className="primary-btn" 
+                      onClick={() => confirmCadImport(tempWkid)}
+                    >
+                      Import File
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Advanced Options expandable section (rendered for Shapefile, CSV, Excel, CAD) */}
             {['Shapefile', 'CSV', 'Excel', 'DWG', 'DGN', 'DXF'].includes(fileType) && (

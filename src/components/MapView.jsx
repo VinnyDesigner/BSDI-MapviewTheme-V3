@@ -1288,8 +1288,23 @@ const ArcGISMap = ({
 
   // Tracks dynamically created Arcade overlay layers so we can remove/replace them
   const arcadeOverlayRef = useRef({});
+  // Tracks original sublayer visibility states so we can restore them when cleaning up
+  const originalSublayerVisibilityRef = useRef({});
 
   const getOrCreateFeatureLayer = async (view, parentId, subId, serviceUrl) => {
+    if (!subId) {
+      const fl = view.map.findLayerById(parentId) || view.map.allLayers.find(l => l.id === parentId);
+      if (fl) {
+        await fl.load();
+        if (!arcadeOverlayRef.current[parentId]) {
+          arcadeOverlayRef.current[parentId] = fl;
+        }
+        if (fl.renderer && !originalRenderersRef.current[fl.id]) {
+          originalRenderersRef.current[fl.id] = fl.renderer.clone ? fl.renderer.clone() : fl.renderer;
+        }
+        return fl;
+      }
+    }
     const overlayId = `arcade-overlay-${parentId}-${subId}`;
     let fl = view.map.findLayerById(overlayId);
     if (!fl) {
@@ -1303,32 +1318,156 @@ const ArcGISMap = ({
       await fl.load();
       arcadeOverlayRef.current[overlayId] = fl;
     }
-    // Always move overlay to top so it renders above MapImageLayers
+
+    if (fl && fl.renderer && !originalRenderersRef.current[fl.id]) {
+      originalRenderersRef.current[fl.id] = fl.renderer.clone ? fl.renderer.clone() : fl.renderer;
+    }
+
+    // Hide original MapImageLayer sublayer to avoid double rendering
+    const parentLayer = view.map.findLayerById(parentId) || view.map.allLayers.find(l => l.id === parentId);
+    if (parentLayer && parentLayer.findSublayerById) {
+      const sublayer = parentLayer.findSublayerById(Number(subId));
+      if (sublayer) {
+        const visKey = `${parentId}-${subId}`;
+        if (originalSublayerVisibilityRef.current[visKey] === undefined) {
+          originalSublayerVisibilityRef.current[visKey] = sublayer.visible;
+        }
+        sublayer.visible = false;
+      }
+    }
+
     view.map.reorder(fl, view.map.layers.length - 1);
     return fl;
   };
 
+  const resetArcadeProperties = (fl) => {
+    if (!fl) return;
+    if (originalRenderersRef.current[fl.id]) {
+      fl.renderer = originalRenderersRef.current[fl.id].clone ? originalRenderersRef.current[fl.id].clone() : originalRenderersRef.current[fl.id];
+    } else {
+      fl.renderer = null;
+    }
+    fl.labelingInfo = null;
+    fl.popupTemplate = null;
+    fl.definitionExpression = null;
+    fl.featureEffect = null;
+  };
+
   const applyArcadeStyling = async (view, parentId, subIdStr, serviceUrl, expression) => {
     try {
+      console.log('[Arcade Apply] Action Executed');
+      console.log('- Selected Layer:', parentId + (subIdStr ? ` (Sublayer: ${subIdStr})` : ''));
+      console.log('- Expression Type: Symbology / Renderer');
+      console.log('- Expression Content:', expression);
+
       const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
+      resetArcadeProperties(fl);
+
+      let uniqueValuesList = [];
+      try {
+        const query = fl.createQuery();
+        query.outFields = ["*"];
+        query.num = 100;
+        const featureSet = await fl.queryFeatures(query);
+
+        const arcade = await import("@arcgis/core/arcade");
+        const customProfile = {
+          variables: [
+            { name: "$feature", type: "feature" }
+          ]
+        };
+        const executor = await arcade.createArcadeExecutor(expression, customProfile);
+
+        const vals = new Set();
+        for (const feature of featureSet.features) {
+          const val = await executor.execute({ $feature: feature });
+          if (val !== undefined && val !== null) {
+            vals.add(String(val));
+          }
+        }
+        uniqueValuesList = Array.from(vals);
+      } catch (err) {
+        console.error("Failed to dynamically compute unique values from Arcade expression:", err);
+        uniqueValuesList = ["High", "Medium", "Low"];
+      }
+
+      const colors = [
+        '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd',
+        '#16a34a', '#22c55e', '#4ade80', '#86efac',
+        '#dc2626', '#ef4444', '#f87171', '#fca5a5',
+        '#d97706', '#f59e0b', '#fbbf24', '#fde047',
+        '#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd'
+      ];
+
+      const geomType = fl.geometryType;
+      let symbolCreator;
+      if (geomType === 'point' || geomType === 'multipoint') {
+        symbolCreator = (color) => ({
+          type: 'simple-marker',
+          style: 'circle',
+          color: color,
+          size: '8px',
+          outline: { color: 'white', width: 1 }
+        });
+      } else if (geomType === 'polyline') {
+        symbolCreator = (color) => ({
+          type: 'simple-line',
+          color: color,
+          width: '2px'
+        });
+      } else {
+        symbolCreator = (color) => ({
+          type: 'simple-fill',
+          color: color,
+          outline: { color: 'white', width: 1 }
+        });
+      }
+
+      const uniqueValueInfos = uniqueValuesList.map((val, idx) => {
+        const color = colors[idx % colors.length];
+        return {
+          value: val,
+          symbol: symbolCreator(color),
+          label: val
+        };
+      });
+
       fl.renderer = {
         type: 'unique-value',
         valueExpression: expression,
-        uniqueValueInfos: [
-          { value: 'High',   symbol: { type: 'simple-fill', color: '#df261c', outline: { width: 1, color: 'white' } } },
-          { value: 'Medium', symbol: { type: 'simple-fill', color: '#facc15', outline: { width: 1, color: 'white' } } },
-          { value: 'Low',    symbol: { type: 'simple-fill', color: '#22c55e', outline: { width: 1, color: 'white' } } }
-        ],
-        defaultSymbol: { type: 'simple-fill', color: [150, 150, 150, 0.5], outline: { color: 'white', width: 1 } }
+        uniqueValueInfos: uniqueValueInfos,
+        defaultSymbol: symbolCreator([150, 150, 150, 0.5])
       };
-    } catch (e) { console.error('Arcade Styling Error:', e); }
+      fl.visible = true;
+
+      if (typeof fl.refresh === 'function') {
+        fl.refresh();
+      }
+      const layerView = await view.whenLayerView(fl);
+      if (layerView && typeof layerView.refresh === 'function') {
+        layerView.refresh();
+      }
+      if (typeof view.requestUpdate === 'function') {
+        view.requestUpdate();
+      }
+
+      console.log('- Layer Updated Successfully: true');
+      console.log('- Renderer Object After Apply:', fl.renderer);
+    } catch (e) {
+      console.error('Arcade Styling Error:', e);
+    }
   };
 
   const applyArcadeLabels = async (view, parentId, subIdStr, serviceUrl, expression) => {
     try {
-      const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
+      console.log('[Arcade Apply] Action Executed');
+      console.log('- Selected Layer:', parentId + (subIdStr ? ` (Sublayer: ${subIdStr})` : ''));
+      console.log('- Expression Type: Labels');
+      console.log('- Expression Content:', expression);
 
-      // Sanitize: strip 'return' keyword — invalid in the label Arcade profile
+      const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
+      resetArcadeProperties(fl);
+
       const cleanExpr = expression.trim().replace(/^return\s+/i, '').replace(/;\s*$/g, '').trim();
 
       const geomType = fl.geometryType;
@@ -1340,7 +1479,7 @@ const ArcGISMap = ({
         where: '1=1',
         symbol: {
           type: 'text',
-          color: [30, 41, 59, 1],          // #1e293b as RGBA
+          color: [30, 41, 59, 1],
           haloColor: [255, 255, 255, 1],
           haloSize: 2,
           font: { size: 13, weight: 'bold', family: 'sans-serif' }
@@ -1352,33 +1491,222 @@ const ArcGISMap = ({
       fl.labelsVisible = true;
       fl.visible = true;
 
-      console.log('[Arcade] Labels applied to:', fl.url, '| expression:', cleanExpr);
-    } catch (e) { console.error('Arcade Labels Error:', e); }
+      if (typeof fl.refresh === 'function') {
+        fl.refresh();
+      }
+      const layerView = await view.whenLayerView(fl);
+      if (layerView && typeof layerView.refresh === 'function') {
+        layerView.refresh();
+      }
+      if (typeof view.requestUpdate === 'function') {
+        view.requestUpdate();
+      }
+
+      console.log('- Layer Updated Successfully: true');
+      console.log('- LabelingInfo Object After Apply:', fl.labelingInfo);
+    } catch (e) {
+      console.error('Arcade Labels Error:', e);
+    }
   };
 
   const applyArcadePopup = async (view, parentId, subIdStr, serviceUrl, expression) => {
     try {
+      console.log('[Arcade Apply] Action Executed');
+      console.log('- Selected Layer:', parentId + (subIdStr ? ` (Sublayer: ${subIdStr})` : ''));
+      console.log('- Expression Type: Pop-up');
+      console.log('- Expression Content:', expression);
+
       const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
-      fl.popupTemplate = {
+      resetArcadeProperties(fl);
+
+      const PopupTemplateModule = await import('@arcgis/core/PopupTemplate');
+      const PopupTemplate = PopupTemplateModule.default || PopupTemplateModule;
+
+      fl.popupTemplate = new PopupTemplate({
         title: 'Arcade Analysis Result',
-        content: [{ type: 'text', text: 'Computed Value: <b style="color:#df261c">{expression/custom-arcade}</b>' }],
+        content: 'Computed Value: <b style="color:#df261c">{expression/custom-arcade}</b>',
         expressionInfos: [{ name: 'custom-arcade', title: 'Result', expression }]
-      };
+      });
+      fl.popupEnabled = true;
       fl.visible = true;
-    } catch (e) { console.error('Arcade Popup Error:', e); }
+
+      view.popupEnabled = true;
+      view.closePopup();
+
+      if (typeof fl.refresh === 'function') {
+        fl.refresh();
+      }
+      if (typeof view.requestUpdate === 'function') {
+        view.requestUpdate();
+      }
+
+      console.log('- Layer Updated Successfully: true');
+      console.log('- PopupTemplate Object After Apply:', fl.popupTemplate);
+    } catch (e) {
+      console.error('Arcade Popup Error:', e);
+    }
+  };
+
+  const applyArcadeFilter = async (view, parentId, subIdStr, serviceUrl, expression) => {
+    try {
+      console.log('[Arcade Apply] Action Executed');
+      console.log('- Selected Layer:', parentId + (subIdStr ? ` (Sublayer: ${subIdStr})` : ''));
+      console.log('- Expression Type: Filter');
+      console.log('- Expression Content:', expression);
+
+      const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
+      resetArcadeProperties(fl);
+
+      const query = fl.createQuery();
+      query.outFields = ["*"];
+      const featureSet = await fl.queryFeatures(query);
+
+      const arcade = await import("@arcgis/core/arcade");
+      const customProfile = {
+        variables: [
+          { name: "$feature", type: "feature" }
+        ]
+      };
+      const executor = await arcade.createArcadeExecutor(expression, customProfile);
+
+      const passingOids = [];
+      const oidField = fl.objectIdField || 'OBJECTID';
+
+      for (const feature of featureSet.features) {
+        const val = await executor.execute({ $feature: feature });
+        const isTruthy = val === true || val === 1 || String(val).toLowerCase() === 'true' || String(val).toLowerCase() === 'yes';
+        if (isTruthy) {
+          passingOids.push(feature.attributes[oidField]);
+        }
+      }
+
+      if (passingOids.length > 0) {
+        fl.definitionExpression = `${oidField} IN (${passingOids.join(',')})`;
+      } else {
+        fl.definitionExpression = '1=2';
+      }
+      fl.visible = true;
+
+      if (typeof fl.refresh === 'function') {
+        fl.refresh();
+      }
+      const layerView = await view.whenLayerView(fl);
+      if (layerView && typeof layerView.refresh === 'function') {
+        layerView.refresh();
+      }
+      if (typeof view.requestUpdate === 'function') {
+        view.requestUpdate();
+      }
+
+      console.log('- Layer Updated Successfully: true');
+      console.log('- DefinitionExpression After Apply:', fl.definitionExpression);
+    } catch (e) {
+      console.error('Arcade Filter Error:', e);
+    }
+  };
+
+  const applyArcadeVisibility = async (view, parentId, subIdStr, serviceUrl, expression) => {
+    try {
+      console.log('[Arcade Apply] Action Executed');
+      console.log('- Selected Layer:', parentId + (subIdStr ? ` (Sublayer: ${subIdStr})` : ''));
+      console.log('- Expression Type: Visibility');
+      console.log('- Expression Content:', expression);
+
+      const fl = await getOrCreateFeatureLayer(view, parentId, subIdStr, serviceUrl);
+      resetArcadeProperties(fl);
+
+      const query = fl.createQuery();
+      query.outFields = ["*"];
+      const featureSet = await fl.queryFeatures(query);
+
+      const arcade = await import("@arcgis/core/arcade");
+      const customProfile = {
+        variables: [
+          { name: "$feature", type: "feature" }
+        ]
+      };
+      const executor = await arcade.createArcadeExecutor(expression, customProfile);
+
+      const passingOids = [];
+      const oidField = fl.objectIdField || 'OBJECTID';
+
+      for (const feature of featureSet.features) {
+        const val = await executor.execute({ $feature: feature });
+        const isTruthy = val === true || val === 1 || String(val).toLowerCase() === 'true' || String(val).toLowerCase() === 'yes';
+        if (isTruthy) {
+          passingOids.push(feature.attributes[oidField]);
+        }
+      }
+
+      const FeatureEffectModule = await import('@arcgis/core/layers/support/FeatureEffect');
+      const FeatureFilterModule = await import('@arcgis/core/layers/support/FeatureFilter');
+      const FeatureEffect = FeatureEffectModule.default || FeatureEffectModule;
+      const FeatureFilter = FeatureFilterModule.default || FeatureFilterModule;
+
+      fl.featureEffect = new FeatureEffect({
+        filter: new FeatureFilter({
+          objectIds: passingOids
+        }),
+        excludedEffect: "opacity(0%)"
+      });
+      fl.visible = true;
+
+      if (typeof fl.refresh === 'function') {
+        fl.refresh();
+      }
+      const layerView = await view.whenLayerView(fl);
+      if (layerView && typeof layerView.refresh === 'function') {
+        layerView.refresh();
+      }
+      if (typeof view.requestUpdate === 'function') {
+        view.requestUpdate();
+      }
+
+      console.log('- Layer Updated Successfully: true');
+      console.log('- FeatureEffect Object After Apply:', fl.featureEffect);
+    } catch (e) {
+      console.error('Arcade Visibility Error:', e);
+    }
   };
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !arcadeSettings?.lastRun) return;
+    if (!view) return;
+
+    if (!arcadeSettings?.lastRun || activeTool !== 'arcade') {
+      // Clean up all arcade overlays
+      Object.keys(arcadeOverlayRef.current).forEach(overlayId => {
+        const fl = view.map.findLayerById(overlayId);
+        if (fl) {
+          if (overlayId.startsWith('arcade-overlay-')) {
+            view.map.remove(fl);
+          } else {
+            resetArcadeProperties(fl);
+          }
+        }
+        delete arcadeOverlayRef.current[overlayId];
+      });
+
+      // Restore sublayers visibility
+      Object.keys(originalSublayerVisibilityRef.current).forEach(visKey => {
+        const [pId, sId] = visKey.split('-');
+        const parentLayer = view.map.findLayerById(pId) || view.map.allLayers.find(l => l.id === pId);
+        if (parentLayer && parentLayer.findSublayerById) {
+          const sublayer = parentLayer.findSublayerById(Number(sId));
+          if (sublayer) {
+            sublayer.visible = originalSublayerVisibilityRef.current[visKey];
+          }
+        }
+      });
+      originalSublayerVisibilityRef.current = {};
+      return;
+    }
 
     const runArcade = async () => {
       try {
         const rawId = arcadeSettings.layerId || '';
 
         // ── Resolve target ─────────────────────────────────────────
-        // IDs from ArcadePanel are in format: "parentLayerId:::sub:::subLayerId"
-        // or just "parentLayerId" for simple feature layers
         let parentId, subIdStr, serviceUrl, targetFL;
 
         if (rawId.includes(':::sub:::')) {
@@ -1415,6 +1743,36 @@ const ArcGISMap = ({
           serviceUrl = targetFL.url;
         }
 
+        const currentOverlayId = subIdStr ? `arcade-overlay-${parentId}-${subIdStr}` : parentId;
+
+        // Clean up other arcade overlays
+        Object.keys(arcadeOverlayRef.current).forEach(overlayId => {
+          if (overlayId !== currentOverlayId) {
+            const fl = view.map.findLayerById(overlayId);
+            if (fl) {
+              if (overlayId.startsWith('arcade-overlay-')) {
+                view.map.remove(fl);
+              } else {
+                resetArcadeProperties(fl);
+              }
+            }
+            delete arcadeOverlayRef.current[overlayId];
+
+            const visKey = overlayId.replace('arcade-overlay-', '');
+            if (originalSublayerVisibilityRef.current[visKey] !== undefined) {
+              const [pId, sId] = visKey.split('-');
+              const parentLayer = view.map.findLayerById(pId) || view.map.allLayers.find(l => l.id === pId);
+              if (parentLayer && parentLayer.findSublayerById) {
+                const sublayer = parentLayer.findSublayerById(Number(sId));
+                if (sublayer) {
+                  sublayer.visible = originalSublayerVisibilityRef.current[visKey];
+                }
+              }
+              delete originalSublayerVisibilityRef.current[visKey];
+            }
+          }
+        });
+
         // ── Focus only (layer selection step) ─────────────────────
         if (arcadeSettings.focusOnly) {
           const focusLayer = view.map.findLayerById(parentId);
@@ -1438,6 +1796,10 @@ const ArcGISMap = ({
           await applyArcadeLabels(view, parentId, subIdStr, serviceUrl, expression);
         } else if (applyTo === 'Popup') {
           await applyArcadePopup(view, parentId, subIdStr, serviceUrl, expression);
+        } else if (applyTo === 'Filter') {
+          await applyArcadeFilter(view, parentId, subIdStr, serviceUrl, expression);
+        } else if (applyTo === 'Visibility') {
+          await applyArcadeVisibility(view, parentId, subIdStr, serviceUrl, expression);
         }
       } catch (err) {
         console.error('Arcade Engine Error:', err);
@@ -1445,7 +1807,42 @@ const ArcGISMap = ({
     };
 
     runArcade();
-  }, [arcadeSettings?.lastRun]);
+  }, [arcadeSettings?.lastRun, activeTool]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    let clickHandler;
+    if (activeTool === 'arcade') {
+      view.popupEnabled = true;
+      clickHandler = view.on('click', async (event) => {
+        try {
+          const response = await view.hitTest(event);
+          const results = response.results.filter(r => r.type === 'graphic' && r.graphic.layer);
+          if (results.length > 0) {
+            const clickedGraphic = results[0].graphic;
+            const layer = clickedGraphic.layer;
+            if (layer.popupTemplate) {
+              view.popup.open({
+                features: [clickedGraphic],
+                location: event.mapPoint
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Arcade Manual Popup Trigger Error:', err);
+        }
+      });
+    } else {
+      view.popupEnabled = false;
+      view.closePopup();
+    }
+    return () => {
+      if (clickHandler) {
+        clickHandler.remove();
+      }
+    };
+  }, [activeTool]);
 
 
   // ── Spatial Analysis Engine ──────────────────────────────────────────────

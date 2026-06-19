@@ -81,12 +81,42 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
     }
   }, [fields]);
 
+  const selectedLayerName = useMemo(() => {
+    if (!selectedLayerId || !view) return '';
+    let parentId = selectedLayerId;
+    let subIdStr = null;
+
+    if (selectedLayerId.includes(':::sub:::')) {
+      const parts = selectedLayerId.split(':::sub:::');
+      parentId = parts[0];
+      subIdStr = parts[1];
+    } else if (selectedLayerId.includes('_sub_')) {
+      const parts = selectedLayerId.split('_sub_');
+      parentId = parts[0];
+      subIdStr = parts[1];
+    } else if (selectedLayerId.includes(':::')) {
+      const parts = selectedLayerId.split(':::');
+      parentId = parts[0];
+      subIdStr = parts[2];
+    }
+
+    const parentLayer = view.map.allLayers?.find(l => l.id === parentId) || view.map.findLayerById(parentId);
+    if (!parentLayer) return '';
+
+    if (subIdStr && parentLayer.allSublayers) {
+      const sublayer = parentLayer.allSublayers.find(s => String(s.id) === String(subIdStr));
+      if (sublayer) {
+        return `${parentLayer.title || parentLayer.name} - ${sublayer.title || sublayer.name}`;
+      }
+    }
+    return parentLayer.title || parentLayer.name || parentId;
+  }, [selectedLayerId, view]);
+
   const expressionTypes = [
     { value: 'Styling',    title: t('Symbology / Renderer') || 'Symbology / Renderer' },
     { value: 'Labels',     title: t('Labels') || 'Labels' },
     { value: 'Popup',      title: t('Pop-up') || 'Pop-up' },
     { value: 'Filter',     title: t('Filter') || 'Filter' },
-    { value: 'FieldCalc',  title: t('Field Calculation') || 'Field Calculation' },
     { value: 'Visibility', title: t('Visibility') || 'Visibility' }
   ];
 
@@ -232,17 +262,27 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
     }
   };
 
-  const handleValidate = () => {
+  const handleValidate = async () => {
     setIsValidating(true);
     setValidationResult(null);
-    setTimeout(() => {
-      if (!expression.includes('$feature')) {
-        setValidationResult({ status: 'error', message: 'Missing $feature reference.' });
-      } else {
-        setValidationResult({ status: 'success', message: 'Expression Valid.' });
+    try {
+      if (!expression || !expression.includes('$feature')) {
+        throw new Error('Missing $feature reference.');
       }
+      const arcade = await import("@arcgis/core/arcade");
+      const customProfile = {
+        variables: [
+          { name: "$feature", type: "feature" }
+        ]
+      };
+      await arcade.createArcadeExecutor(expression, customProfile);
+      setValidationResult({ status: 'success', message: 'Expression compiles successfully.' });
+    } catch (err) {
+      console.error("Arcade validation failed:", err);
+      setValidationResult({ status: 'error', message: err.message || 'Validation error.' });
+    } finally {
       setIsValidating(false);
-    }, 600);
+    }
   };
 
   const handleApply = () => {
@@ -397,7 +437,7 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
           </div>
           <div className="monaco-unified-wrapper" style={{ direction: 'ltr' /* Monaco stays LTR */ }}>
             <Editor
-              height="180px"
+              height="120px"
               defaultLanguage="javascript"
               theme="vs-light"
               value={expression}
@@ -413,6 +453,39 @@ const ArcadePanel = ({ view, layersConfig, settings, onSettingsChange, treeData 
                 padding: { top: 12, bottom: 12 }
               }}
             />
+          </div>
+        </div>
+
+        {/* Diagnostics Info */}
+        <div className="editor-section-v3">
+          <div className="diagnostics-card">
+            <div className="diagnostics-header">
+              <span>{t('Diagnostics') || 'Diagnostics'}</span>
+            </div>
+            <div className="diagnostics-grid">
+              <div className="diag-item">
+                <span className="diag-label">{t('Selected Layer') || 'Selected Layer'}:</span>
+                <span className="diag-value" title={selectedLayerName}>{selectedLayerName || '--'}</span>
+              </div>
+              <div className="diag-item">
+                <span className="diag-label">{t('Total Fields') || 'Total Fields'}:</span>
+                <span className="diag-value">{fields.length}</span>
+              </div>
+              <div className="diag-item">
+                <span className="diag-label">{t('Compatible Fields') || 'Compatible Fields'}:</span>
+                <span className="diag-value">{fields.filter(f => f.type !== 'geometry').length}</span>
+              </div>
+              <div className="diag-item">
+                <span className="diag-label">{t('Expression Type') || 'Expression Type'}:</span>
+                <span className="diag-value">{expressionType}</span>
+              </div>
+              <div className="diag-item">
+                <span className="diag-label">{t('Validation Result') || 'Validation Result'}:</span>
+                <span className={`diag-value val-status ${validationResult?.status || ''}`} title={validationResult?.message || ''}>
+                  {validationResult ? validationResult.message : (t('Not Validated') || 'Not Validated')}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

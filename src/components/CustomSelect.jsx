@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, Check } from 'lucide-react';
 import './CustomSelect.css';
 
-const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label, multi = false, disabled = false, maxHeight }) => {
+const CustomSelect = ({ options, value, onChange, placeholder = "Select...", label, multi = false, disabled = false, maxHeight, showSearch = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
@@ -61,7 +61,7 @@ const CustomSelect = ({ options, value, onChange, placeholder = "Select...", lab
 
       {isOpen && (
         <div className="custom-select-dropdown">
-          {options.length > 10 && (
+          {(options.length > 10 || showSearch) && (
             <div className="select-search-wrapper">
               <Search size={14} className="search-icon" />
               <input 

@@ -3069,3 +3069,125 @@
   padding-left: 8px !important;
 }
 
+/* Custom ESRI Popup Redesign to match BSDI Smart Map Viewer */
+.esri-popup {
+  font-family: 'Outfit', 'Inter', sans-serif !important;
+}
+
+.esri-popup__main-container {
+  width: 320px !important;
+  max-width: 340px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 25px -5px rgba(26, 47, 77, 0.1), 0 8px 10px -6px rgba(26, 47, 77, 0.1) !important;
+  border: 1px solid #e2e8f0 !important;
+  overflow: hidden !important;
+  background-color: #ffffff !important;
+}
+
+.esri-popup__header {
+  background-color: #ffffff !important;
+  border: none !important;
+  padding: 16px 16px 4px 16px !important;
+  min-height: auto !important;
+}
+
+.esri-popup__header-title {
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #1A2F4D !important;
+  line-height: 1.2 !important;
+}
+
+/* Hide ArcGIS default dock button */
+.esri-popup__button--dock {
+  display: none !important;
+}
+
+/* Style ArcGIS close button */
+.esri-popup__button--close {
+  color: #64748b !important;
+  background-color: transparent !important;
+  border-radius: 50% !important;
+  padding: 4px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+}
+
+.esri-popup__button--close:hover {
+  color: #1A2F4D !important;
+  background-color: #f1f5f9 !important;
+}
+
+/* Content Area styling */
+.esri-popup__content {
+  padding: 8px 16px 16px 16px !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #1A2F4D !important;
+  margin: 0 !important;
+  line-height: 1.5 !important;
+}
+
+.esri-popup__content b {
+  font-weight: 600 !important;
+  color: #df261c !important; /* Keep computed value highlighted */
+}
+
+/* Footer & Actions */
+.esri-popup__footer {
+  background-color: #ffffff !important;
+  border-top: 1px solid #f1f5f9 !important;
+  padding: 12px 16px !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  min-height: auto !important;
+}
+
+/* Redesign Zoom To button to match BSDI secondary button */
+.esri-popup__action, 
+.esri-popup__action--zoom-to {
+  height: 32px !important;
+  padding: 6px 16px !important;
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #1A2F4D !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.esri-popup__action:hover, 
+.esri-popup__action--zoom-to:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1A2F4D !important;
+}
+
+.esri-popup__action-icon {
+  margin: 0 !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+.esri-popup__pointer-value {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+
